@@ -1,0 +1,13 @@
+* КР140УД8Б, behavioural, for the VCO (A6, A7).  EST throughout:
+* GBW 1 MHz, Av 2e5, swing +-11 V on +-12.5 V.
+* sr   = slew rate in V/us (datasheet range 2-5; 2 used)
+* isc  = output short-circuit current (20 mA)
+.subckt UD8S inp inm vp vn out params: sr=2 isc=20m
+B1 0 n1 I = (sr*10u)*tanh(62.8u*(v(inp)-v(inm))/(sr*10u))
+C1 n1 0 10p
+R1 n1 0 3.2meg
+B2 n2 0 V = max(min(v(n1), 11), -11)
+Bo 0 out I = isc*tanh((v(n2)-v(out))/(50*isc))
+Ro out 0 1meg
+Co out 0 20p
+.ends UD8S
