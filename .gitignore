@@ -1,2 +1,4 @@
 demo.wav
 spice/vco/sw.cir
+spice/kybd/kb.cir
+spice/kybd/kb_tran.txt

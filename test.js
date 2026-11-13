@@ -1,4 +1,4 @@
-const { PolivoksEngine } = require('./dsp.js');
+const { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct } = require('./dsp.js');
 const fs = require('fs');
 const SR = 48000;
 
@@ -32,6 +32,40 @@ for (const c of [0.3, 0.5, 0.7]) {
   let pk = 0; for (let i = SR; i < out.length; i++) pk = Math.max(pk, Math.abs(out[i]));
   console.log('cutoff', c, 'osc f', freqOf(out, SR).toFixed(1), 'peak', pk.toFixed(3));
 }
+console.log('--- keyboard board (sheet 3) ---');
+{
+  const f1 = (set, play) => {     // frequency of each VCO alone after play(e)
+    const r = [];
+    for (const solo of [{ mix1: 0.6, mix2: 0 }, { mix1: 0, mix2: 0.6 }]) {
+      const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
+      const s0 = Object.assign({}, open, { o2wave: 1 }, set, solo);
+      for (const k in s0) { e.setParam(k, s0[k]); e.ps[k] = s0[k]; }
+      const out = new Float32Array(SR); play(e, out);
+      r.push(freqOf(out, SR));
+    }
+    return r.map(f => (69 + 12 * Math.log2(f / 440)).toFixed(2));
+  };
+  const blocks = (e, out, a, b) => { for (let i = a; i < b; i += 128) e.render(out.subarray(i, i + 128), 128); };
+  console.log('2-voice, keys 45+60 held:  VCO I / II notes', f1({ voice: 1 }, (e, o) => { e.noteOn(60); e.noteOn(45); blocks(e, o, 0, o.length); }).join(' / '));
+  console.log('1-voice, keys 45+60 held:  VCO I / II notes', f1({ voice: 0 }, (e, o) => { e.noteOn(60); e.noteOn(45); blocks(e, o, 0, o.length); }).join(' / '));
+  console.log('2-voice, 45+60 released:   VCO I / II notes', f1({ voice: 1 }, (e, o) => { e.noteOn(60); e.noteOn(45); blocks(e, o, 0, 4800); e.allOff(); blocks(e, o, 4800, o.length); }).join(' / '));
+  const kb = new Keyboard(1 / SR); kb.press(53); for (let i = 0; i < SR; i++) kb.step(0, true);
+  kb.release(53); kb.press(65); let t50 = -1, t1 = -1;
+  for (let i = 0; i < SR; i++) { kb.step(0, true); const k = 53 - kb.v12 / 0.125; if (t50 < 0 && k > 59) t50 = i; if (t1 < 0 && k > 64.88) t1 = i; }
+  console.log(`track-and-hold 53→65: half-way ${(t50 / SR * 1e6).toFixed(0)} µs, 1 % left ${(t1 / SR * 1e6).toFixed(0)} µs (SPICE 374 / 2325 µs incl. gate delay)`);
+  kb.release(65); let toff = -1; for (let i = 0; i < 100; i++) { kb.step(0, true); if (toff < 0 && !kb.gate) toff = i; }
+  console.log(`gate off ${(toff / SR * 1e6).toFixed(0)} µs after release (SPICE 262 µs)`);
+  const kb2 = new Keyboard(1 / SR); kb2.press(53); for (let i = 0; i < SR; i++) kb2.step(1e6, true);
+  kb2.press(41); kb2.release(53); let tg = -1;
+  for (let i = 0; i < SR; i++) { kb2.step(1e6, true); if (tg < 0 && 53 - kb2.cv1 / 0.125 < 47) tg = i; }
+  console.log(`glide at full (R48 1 MΩ): half-way ${(tg / SR * 1e3).toFixed(1)} ms (RC·ln2 = ${(1.001e6 * 0.22e-6 * Math.LN2 * 1e3).toFixed(1)} ms)`);
+  const e = new PolivoksEngine(SR); e.setParam('power', 1); const o = new Float32Array(128); let rises = 0, last = false;
+  e.noteOn(48); for (let b = 0; b < 40; b++) { e.render(o, 128); if (e.gate && !last) rises++; last = e.gate; if (b === 20) { e.noteOn(50); e.noteOff(48); } }
+  console.log(`legato 48→50: gate rises ${rises} (no retrigger)`);
+}
+console.log('--- VCO summer (sheet 5), octaves; SPICE in spice/vco/summer.txt ---');
+console.log('mod bus +1.43 V, pot 0.1/0.25/0.5/0.75/1:', [0.1, 0.25, 0.5, 0.75, 1].map(a => modOct(a, 1.43).toFixed(4)).join(' '));
+console.log('FM per volt, pot 0.25/0.5/1:', [0.25, 0.5, 1].map(a => fmOctPerVolt(a).toFixed(4)).join(' '), ' detune -1/0/+1:', [-1, 0, 1].map(d => detuneOct(d).toFixed(4)).join(' '));
 console.log('--- stability sweep ---');
 {
   const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;

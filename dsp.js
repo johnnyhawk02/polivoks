@@ -2,7 +2,7 @@
 //  Polivoks circuit model — DSP core
 //  Every block is solved from the equations of its circuit, not from
 //  "musical" approximations. Values come from the factory schematics
-//  (sheets 1, 5, 7, 8, 9, 10, 11) and the uA776 / К140УД12 datasheet.
+//  (sheets 1, 3, 5, 7, 8, 9, 10, 11) and the uA776 / К140УД12 datasheet.
 //  Where a value is unreadable or unpublished it is marked EST (estimated).
 // ============================================================================
 
@@ -457,6 +457,90 @@ class Modulator {
 }
 
 // ============================================================================
+//  Keyboard (sheet 3, У1, with the key string and panel from sheet 1).
+//  The 48 keys tap a string of R1…R47 100 Ω.  R5 10k (0.5 %) from +12.5 V
+//  feeds 1.25 mA into the top of the string, which A2 holds at 0 V by
+//  sinking the current at the bottom, so key k sits at −0.125·k V
+//  (1.5 V/octave, the same scale as the "Регистры" ladder and the 100k CV
+//  inputs).  All key contacts share one bus.  Two keys short the string
+//  between them, so the bus reads the lower key (voice 1) and the bottom of
+//  the string rises by 0.125 V per shorted step; A4 (all 22.1k, C11 0.01 µF)
+//  outputs voice 1 − (bottom − its single-key value), i.e. the upper key
+//  (voice 2).  A3/R6 trims that offset.
+//  Key detect: A1 runs a ≈16…23 kHz pilot (R3 100k / C1 1000 pF, R4/R2
+//  hysteresis) into the string through R1 100k; a pressed key puts it on the
+//  bus, A6 (×36 through C5) and V1/V2/R20/C10 rectify it and A8 flips
+//  ("Имп. запуск": −12 V pressed).  SPICE: gate on within 8…31 µs, off 262 µs
+//  after the last key lifts.
+//  Track-and-hold: bus → R21 1k → C9 0.22 µF → V6 КП303В (gate bootstrapped by
+//  R29 to A7 while a key is down, pulled to −12 V by V7/V3 when not) → C12
+//  0.22 µF → A7.  It settles in ≈0.4 ms half-way, 2.3 ms to 1 % (SPICE).
+//  With no key down both outputs hold, and since the bottom of the string is
+//  back at its single-key value, voice 2 falls to voice 1.
+//  Panel: VCO I is always fed through the glide RC (R24 1k + "Глиссандо"
+//  R48 1 MΩ rheostat, C4 0.22 µF, A5); S49 gives VCO II voice 1 ("1-ГОЛ.")
+//  or voice 2 ("2-ГОЛ."), both without glide.
+//  EST: the A2 input wiring (the scan draws it as positive feedback; the
+//  stable reading is used, checked in spice/kybd/), КП303В on-resistance
+//  333 Ω, key contact resistance, R48 taper (log).
+//  Voltages here are string volts; a MIDI note n is key n − 53 (F).
+// ============================================================================
+class Keyboard {
+  constructor(h) {
+    this.h = h; this.held = [];
+    this.v9 = 0; this.v12 = 0; this.d2 = 0; this.c4 = 0;
+    this.gate = false; this.offT = 0;
+    this.lo = 0; this.hi = 0;
+  }
+  static volts(n) { return -0.125 * (n - 53); }
+  press(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); this.held.push(n); }
+  release(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); }
+  // rGlide: R48 setting in ohms; returns nothing, read cv1 / cv2 / gate
+  step(rGlide, twoVoice) {
+    const H = this.held, h = this.h, keys = H.length > 0;
+    if (keys) {
+      let lo = 1e9, hi = -1e9; for (const n of H) { if (n < lo) lo = n; if (n > hi) hi = n; }
+      this.lo = lo; this.hi = hi; this.gate = true; this.offT = 262e-6;
+    } else if (this.gate) { this.offT -= h; if (this.offT <= 0) this.gate = false; }
+    // C9 / V6 / C12, backward Euler in 4 substeps
+    const C = 0.22e-6, g1 = keys ? 1 / 1e3 : 0, gJ = this.gate ? 1 / 333 : 0, vb = Keyboard.volts(this.lo);
+    const hs = h / 4, k = C / hs;
+    for (let i = 0; i < 4; i++) {
+      const a11 = k + g1 + gJ, a22 = k + gJ, b1 = k * this.v9 + g1 * vb, b2 = k * this.v12;
+      const det = a11 * a22 - gJ * gJ;
+      this.v9 = (b1 * a22 + gJ * b2) / det; this.v12 = (a11 * b2 + gJ * b1) / det;
+    }
+    // A4: the shorted steps come through R11 with C11 across R13 (221 µs)
+    const d = keys ? -0.125 * (this.hi - this.lo) : 0;
+    this.d2 += (d - this.d2) * (1 - Math.exp(-h / 221e-6));
+    // glide: R24 1k + R48 into C4 0.22 µF, A5 follower
+    this.c4 += (this.v12 - this.c4) * (1 - Math.exp(-h / ((1e3 + rGlide) * 0.22e-6)));
+    this.cv1 = this.c4;
+    this.cv2 = twoVoice ? this.v12 + this.d2 : this.v12;
+  }
+}
+
+// ============================================================================
+//  VCO CV summer (sheet 5, A1/A2) and its panel inputs (sheet 1).
+//  A2's inverting input (X2 pins 3/4, "Вход эксп.") sums currents; R2 22.1k
+//  turns them into the expo drive.  The keyboard and register inputs are
+//  100k at 1.5 V/octave, so 15 µA into the node is one octave and positive
+//  current lowers the pitch (32' sits at the positive end of the ladder).
+//  Checked in spice/vco/summer.cir (summer.js).
+//    "Модуляция" R67 / R80 100k: bus on the top, wiper through R62 / R76 47k
+//    "Генератор II" (VCO I): VCO II triangle through R64 100k onto R66 100k,
+//        wiper through R63* 100k (* = selected on test, EST)
+//    "Расстройка" (VCO II): R79 100k across ±12.5 V, wiper through R77 1.0 MΩ
+//  Pot tapers linear EST; which way the detune turns is EST (kept sharp to
+//  the right).
+// ============================================================================
+const I_OCT = 1.5 / 100e3;
+// wiper at a (0…1 from the ground end) of a 100k pot with v on top, then rs
+function modOct(a, v) { return -(a * v) / (47e3 + 100e3 * a * (1 - a)) / I_OCT; }
+function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; return -(a / 2) / (100e3 + rth) / I_OCT; }
+function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
+
+// ============================================================================
 //  Engine
 // ============================================================================
 const OUT_SCALE = 1 / 6;
@@ -486,8 +570,8 @@ class PolivoksEngine {
     this.fcv = new FilterCV();
     this.p = Object.assign({}, PARAM_DEFAULTS); this.ps = Object.assign({}, PARAM_DEFAULTS);
     this.Tchip = 303;
-    this.held = []; this.gate = false; this.n1 = 57; this.n2 = 57;
-    this.cv1 = 57; this.cv2 = 57;
+    this.kb = new Keyboard(hb); this.kb.lo = this.kb.hi = 57;
+    this.kb.v9 = this.kb.v12 = this.kb.c4 = Keyboard.volts(57);
     this.T1 = 303; this.T2 = 303; this.drift1 = 0; this.drift2 = 0;
     this.noiseLP = 0;
     this.hpX = 0; this.hpY = 0; this.vcaHpX = 0; this.vcaHpY = 0;
@@ -511,20 +595,11 @@ class PolivoksEngine {
   setParam(id, v) { if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
   setExt(data) { this.ext = data; this.extPos = 0; }
 
-  // Keyboard assignment: 1-ГОЛ → both VCOs follow the last key;
-  // 2-ГОЛ → Generator I takes the lowest held key, Generator II the highest.
-  assign() {
-    const H = this.held;
-    if (!H.length) { this.gate = false; return; }
-    this.gate = true;
-    if (this.p.voice >= 0.5) {
-      let lo = 1e9, hi = -1e9; for (const n of H) { if (n < lo) lo = n; if (n > hi) hi = n; }
-      this.n1 = lo; this.n2 = hi;
-    } else { this.n1 = this.n2 = H[H.length - 1]; }
-  }
-  noteOn(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); this.held.push(n); this.assign(); this.egF.trigger(); this.egA.trigger(); }
-  noteOff(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); this.assign(); }
-  allOff() { this.held.length = 0; this.assign(); }
+  // keys go to the keyboard board; the envelopes follow its gate
+  noteOn(n) { this.kb.press(n); }
+  noteOff(n) { this.kb.release(n); }
+  allOff() { this.kb.held.length = 0; }
+  get held() { return this.kb.held; }
 
   render(out, n) {
     const p = this.p, ps = this.ps, OS = this.OS, ho = this.ho, hb = this.hb;
@@ -540,12 +615,11 @@ class PolivoksEngine {
       //   R21 4.3k + "Частота" R107 100k rheostat; lfo = modulation bus volts
       const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, 100e3);
       const lfo = this.lfo.step(lfoR, p.lfoMode | 0, this.nzAvg);
-      const lfoN = lfo / 1.43;          // bus scaled to the old ±1 for the VCO depth
 
-      // glide: RC lag on the key CV (R = pot, C = 0.47 µF)
-      const tg = potA(ps.glide, 100, 2.2e6) * 0.47e-6;
-      const gk = 1 - Math.exp(-hb / tg);
-      this.cv1 += (this.n1 - this.cv1) * gk; this.cv2 += (this.n2 - this.cv2) * gk;
+      // keyboard board: gate, track-and-hold, voice 2, glide (sheet 3)
+      const kb = this.kb;
+      kb.step(potA(ps.glide, 0, 1e6), p.voice >= 0.5);
+      this.gate = kb.gate;
 
       // envelopes
       const ef = this.egF.step(this.gate, potA(p.fA, 200, 1e6), potA(p.fD, 1e3, 2e6), ps.fS, potA(p.fR, 1e3, 2e6), p.fEgMode >= 0.5);
@@ -557,12 +631,13 @@ class PolivoksEngine {
 
       // pitch CVs (octaves relative to A4 at 8')
       const tune = ps.tune * 2 / 12;
-      const oct1 = (this.cv1 - 69) / 12 + rangeOct[p.o1range | 0] + tune + lfoN * ps.o1mod * ps.o1mod + vco1.mismatch;
-      const oct2 = (this.cv2 - 69) / 12 + rangeOct[p.o2range | 0] + tune + lfoN * ps.o2mod * ps.o2mod + ps.o2detune * 7 / 12 + vco2.mismatch;
+      //   key CV −1.5 V/oct (key 53 − 69 = −16 semitones at 0 V), summer inputs
+      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + vco1.mismatch;
+      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.narrow = p.o1wave === 3; vco2.narrow = p.o2wave === 3;
       const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
-      const fmk = ps.o1fm * ps.o1fm * 2 * LN2 / 5;
+      const fmk = fmOctPerVolt(ps.o1fm) * LN2;      // nepers per volt of VCO II triangle
 
       // filter Iset: currents into A1's summing node (sheet 7 + panel, sheet 11)
       //   cutoff pot log taper EST; amount pots linear EST; modulation bus
@@ -622,4 +697,4 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };

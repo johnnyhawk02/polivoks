@@ -104,3 +104,34 @@ So about a third of the flattening comes from the reset and two thirds from
 the expo pair's series resistance, which rests on the estimated КР198НТ1А
 values. The sheet has no high-frequency compensation, so the real unit should
 go flat by about this much unless it was trimmed on the CV side.
+
+## CV summer and panel inputs (`summer.cir`, `node summer.js`)
+
+A2's inverting input (X2 pins 3/4) is a virtual earth; R2 22.1k feedback,
+R3 1k on (+). A1 buffers "Регистры" (X2 pin 1) into R1 100k. From sheet 1,
+VCO I's node takes the keyboard bus through R65 100k, "Модуляция" R67 100k
+(modulation bus on the top, ground on the bottom) through R62 47k, and
+"Генератор II": VCO II's triangle through R64 100k onto R66 100k, wiper through
+R63* 100k (* = selected on test, **EST**). VCO II's node takes its bus through
+R78 100k, "Модуляция" R80 / R76 47k, and "Расстройка" R79 100k across ±12.5 V
+through R77 1.0 MΩ. "Настройка" (R57, through the selected R54 / R81) and the
+"Смещ." trims (R118 / R124 with R128 / R129 20k, through R120 / R126 360k) are
+left at the JS's ±2 semitone tune and zero.
+
+The keyboard is 1.5 V/octave into 100k, so 15 µA is one octave; a positive
+current lowers the pitch (the 32' end of the register ladder is positive).
+SPICE against the JS formulas (`summer.txt`):
+
+| case | SPICE oct | JS oct |
+|---|---|---|
+| register step 1.49 V | −0.993 | (−1, ladder) |
+| mod pot 0.25, bus +1.43 V | −0.3625 | −0.3625 |
+| mod pot 0.5 | −0.6620 | −0.6620 |
+| mod pot 1 | −2.0283 | −2.0284 |
+| FM pot 1, triangle +1 V | −0.2222 | −0.2222 |
+| detune ends | ±0.8333 | ±0.8333 |
+
+So full modulation is ±2.03 octaves for the ±1.43 V triangle (it was scaled
+to ±1 octave before), full FM ±0.38 octave for VCO II's ±1.7 V triangle, and
+detune ±10 semitones (was ±7). Pot tapers linear **EST**; which way detune
+turns is not on the sheet (kept sharp to the right, **EST**).

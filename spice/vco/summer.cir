@@ -1,0 +1,79 @@
+* VCO CV summer, sheet 5 (A1, A2) with the panel inputs from sheet 1.
+* A2 КР140УД8Б: R2 22.1k feedback, (+) on R3 1k to ground; X2 pins 3/4
+* ("Вход эксп.") are its summing node.  Panel inputs into that node:
+*   keyboard bus (glide out / S49)  R65 100k  (Gen II: R78 100k)
+*   "Модуляция" R67 100k pot, bus on pin 3, ground on pin 1, wiper via
+*   R62 47k  (Gen II: R80 / R76 47k)
+*   "Генератор II" FM: Gen II triangle via R64 100k onto R66 100k pot,
+*   wiper via R63* 100k (* = selected on test)                          EST
+*   "Расстройка" (Gen II only): R79 100k across +-12.5 V, wiper via R77 1.0M
+* "Регистры" comes in on X2 pin 1 through A1 (follower) and R1 100k.
+* The output is measured at A2; the octave scale is the keyboard's
+* (12 keys x 125 mV into 100k = 15 uA per octave).
+.include ud8.lib
+.param vk=0 vm=0 am=0.5 vt=0 af=0.5 ad=0.5 vreg=0
+Vp vp 0 12.5
+Vn vn 0 -12.5
+Vkb kb 0 {vk}
+Vmb mb 0 {vm}
+Vtr tr 0 {vt}
+Vrg rg 0 {vreg}
+XA1 rg a1o vp vn a1o UD8S r1=3.2g kc=0.1
+R1 a1o sum 100k
+R65 kb sum 100k
+* mod pot: wiper at fraction am from ground
+Rm1 mb wm {max(100k*(1-am),1)}
+Rm2 wm 0 {max(100k*am,1)}
+R62 wm sum 47k
+* FM: R64 into the top of R66, wiper at af from ground, R63* to the node
+R64 tr ft 100k
+Rf1 ft wf {max(100k*(1-af),1)}
+Rf2 wf 0 {max(100k*af,1)}
+R63 wf sum 100k
+* detune pot across the rails, wiper at ad (0 = -12.5 V end)
+Rd1 vp wd {max(100k*(1-ad),1)}
+Rd2 wd vn {max(100k*ad,1)}
+R77 wd sum 1meg
+XA2 a2p sum vp vn a2o UD8S r1=3.2g kc=0.1
+R3 a2p 0 1k
+R2 a2o sum 22.1k
+.control
+* each case prints A2's output; summer.js turns them into octaves
+op
+print v(a2o)
+alterparam vk = -1.5
+reset
+op
+print v(a2o)
+alterparam vk = 0
+alterparam vreg = 1.49
+reset
+op
+print v(a2o)
+alterparam vreg = 0
+alterparam vm = 1.43
+foreach a 0.1 0.25 0.5 0.75 1.0
+  alterparam am = $a
+  reset
+  op
+  print v(a2o)
+end
+alterparam am = 0.5
+alterparam vm = 0
+alterparam vt = 1.0
+foreach a 0.25 0.5 1.0
+  alterparam af = $a
+  reset
+  op
+  print v(a2o)
+end
+alterparam vt = 0
+alterparam af = 0.5
+foreach d 0 0.25 0.75 1
+  alterparam ad = $d
+  reset
+  op
+  print v(a2o)
+end
+.endc
+.end
