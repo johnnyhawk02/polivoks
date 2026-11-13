@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ЭМС «Поливокс» — circuit model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --w: #fff; --b: #000; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #000; color: #fff; font-family: 'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif; }
+  body { min-height: 100vh; overflow-x: hidden; }
+  #stage { transform-origin: 0 0; width: 1580px; padding: 18px; }
+  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr) 46px; gap: 8px; border: 2px solid #fff; padding: 8px; }
+  .box { border: 1.5px solid #fff; padding: 6px 6px 8px; position: relative; }
+  .box h2 { margin: 0 0 2px; font-size: 13px; font-weight: 600; letter-spacing: .14em; text-align: center; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; justify-content: space-around; align-items: flex-start; }
+  .ctl { display: flex; flex-direction: column; align-items: center; user-select: none; -webkit-user-select: none; touch-action: none; }
+  .ctl svg { display: block; cursor: ns-resize; overflow: visible; }
+  .ctl .lab { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-align: center; margin-top: -3px; white-space: nowrap; }
+  .ctl svg text { fill: #fff; font-family: inherit; font-size: 9.5px; }
+  .sw { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; user-select: none; -webkit-user-select: none; }
+  .sw .slot { width: 18px; height: 38px; border: 1.5px solid #fff; position: relative; }
+  .sw .lev { position: absolute; left: 2px; right: 2px; height: 15px; background: #fff; transition: top .08s; }
+  .sw .t { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-align: center; line-height: 1.15; }
+  .head { display: flex; align-items: center; gap: 14px; border: 1.5px solid #fff; padding: 8px 12px; }
+  .head .ttl { white-space: nowrap; font-size: 30px; font-weight: 700; letter-spacing: .04em; line-height: 1; }
+  .head .sub { font-size: 11px; letter-spacing: .08em; opacity: .85; margin-top: 4px; }
+  .head canvas { margin-left: auto; border: 1.5px solid #fff; background: #000; }
+  .lang { display: flex; border: 1.5px solid #fff; align-self: center; }
+  .lang button { background: #000; color: #fff; border: 0; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 4px 9px; cursor: pointer; }
+  .lang button.on { background: #fff; color: #000; }
+  .power { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 14px; gap: 10px; }
+  .lamp { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #fff; }
+  .lamp.on { background: #fff; box-shadow: 0 0 10px #fff; }
+  .pbtn { width: 30px; height: 40px; border: 2px solid #fff; background: #000; cursor: pointer; padding: 0; }
+  .pbtn.on { background: #fff; }
+  .plab { font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+  .kb { position: relative; height: 150px; margin-top: 10px; border: 2px solid #fff; border-top-width: 6px; background: #000; touch-action: none; }
+  .key { position: absolute; top: 0; }
+  .key.w { background: #fff; border-right: 1px solid #000; height: 100%; }
+  .key.k { background: #000; border: 1.5px solid #fff; border-top: none; height: 60%; z-index: 2; }
+  .key.w.dn { background: #000; outline: 2px solid #fff; outline-offset: -4px; }
+  .key.k.dn { background: #fff; }
+  .info { display: flex; gap: 22px; align-items: center; margin-top: 10px; font-size: 12px; letter-spacing: .04em; }
+  .info b { font-weight: 700; }
+  .btn { background: #000; color: #fff; border: 1.5px solid #fff; font: inherit; font-size: 11px; font-weight: 600; padding: 3px 8px; cursor: pointer; letter-spacing: .06em; }
+  .btn:hover { background: #fff; color: #000; }
+  .resp { margin-top: 4px; }
+  .hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 5; pointer-events: none; font-size: 13px; font-weight: 700; letter-spacing: .1em; background: #000; color: #fff; border: 1.5px solid #fff; padding: 6px 14px; }
+  .hint:empty { display: none; }
+  details { margin-top: 12px; font-size: 12.5px; line-height: 1.5; max-width: 1100px; }
+  details summary { cursor: pointer; font-weight: 600; letter-spacing: .06em; }
+  details td { padding: 2px 14px 2px 0; vertical-align: top; border-bottom: 1px solid #333; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="panel" id="panel">
+    <div class="col">
+      <div class="box"><h2>МОДУЛЯТОР</h2><div class="row" id="g-mod"></div></div>
+      <div class="box" style="flex:1">
+        <div class="row" id="g-l1"></div>
+        <div class="row" id="g-l2" style="margin-top:8px"></div>
+        <div class="row" id="g-l3" style="margin-top:6px"></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="head">
+        <div><div class="ttl" data-ru="ЭМС «ПОЛИВОКС»">ЭМС «ПОЛИВОКС»</div><div class="sub">CIRCUIT MODEL · К140УД12 OTA-C VCF · КР198НТ1А EXPO · SHOCKLEY-DIODE EG</div></div>
+        <div class="lang" id="lang"><button data-l="ru">РУС</button><button data-l="en">ENG</button></div>
+        <canvas id="scope" width="236" height="56"></canvas>
+      </div>
+      <div class="row" style="gap:8px;align-items:stretch">
+        <div class="box" style="flex:1"><h2>ГЕНЕРАТОР I</h2><div class="row" id="g-o1a"></div><div class="row" id="g-o1b"></div></div>
+        <div class="box" style="flex:1"><h2>ГЕНЕРАТОР II</h2><div class="row" id="g-o2a"></div><div class="row" id="g-o2b"></div></div>
+      </div>
+      <div class="box"><h2>МИКШЕР</h2><div class="row" id="g-mix"></div></div>
+    </div>
+    <div class="row" style="gap:8px;align-items:stretch">
+      <div class="box" style="flex:1.4"><h2>ФИЛЬТР</h2>
+        <div class="row" id="g-f1"></div><div class="row" id="g-f2"></div><div class="row" id="g-f3"></div><div class="row" id="g-f4"></div>
+      </div>
+      <div class="box" style="flex:1"><h2>УСИЛИТЕЛЬ</h2>
+        <div class="row" id="g-a1"></div><div class="row" id="g-a2" style="margin-top:4px"></div><div class="row" id="g-a3" style="margin-top:8px"></div><div class="row" id="g-a4" style="margin-top:4px"></div>
+      </div>
+    </div>
+    <div class="power"><div class="lamp" id="lamp"></div><button class="pbtn" id="pbtn" aria-label="power"></button><div class="plab" data-ru="СЕТЬ">СЕТЬ</div></div>
+  </div>
+  <div class="kb" id="kb"><div class="hint" id="hint"></div></div>
+  <div class="info">
+    <span><b data-ru="СЕТЬ">СЕТЬ</b> — power on to start audio</span>
+    <span>Keys: <b>A W S E D F T G Y H U J K O L P</b> · octave <b>Z / X</b> (<span id="octv">4</span>)</span>
+    <span>MIDI: <b id="midi">—</b></span>
+    <span>Engine: <b id="emode">off</b></span>
+    <span><span data-ru="ВНЕШ.">ВНЕШ.</span> input: <button class="btn" id="extbtn">LOAD AUDIO FILE</button><input type="file" id="extfile" accept="audio/*" hidden> <span id="extname"></span></span>
+    <button class="btn" id="resetbtn">RESET PANEL</button>
+  </div>
+  <details>
+    <summary>WHAT IS MODELLED (component level)</summary>
+    <table>
+      <tr><td>VCO ×2</td><td>КР198НТ1А matched pair solved with Ebers–Moll + bulk emitter resistance (high-end flattening) and thermal drift of V<sub>T</sub>; 5600 pF timing cap charged by the collector current and integrated exactly per step; comparator + transistor reset with finite discharge time; precision-rectifier triangle; К140УД8 comparator pulse with 3 V/µs slew.</td></tr>
+      <tr><td>VCF</td><td>Two К140УД12 programmable op-amps as OTA-C integrators: dV/dt = (I<sub>set</sub>/C1)·tanh(V<sub>d</sub>/4V<sub>T</sub>), 47k/1k input dividers, 2 mV input offsets, rail clamping, I<sub>set</sub> from an exponential converter plus leakage floor. Solved implicitly (trapezoidal + Newton) at 4× oversampling.</td></tr>
+      <tr><td>Envelopes ×2</td><td>5 µF capacitor charged and discharged through the pots and КД521 diodes (Shockley equation solved per sample); comparator ends attack at +6 V; repeat mode retriggers at the sustain level.</td></tr>
+      <tr><td>VCA</td><td>Differential transistor pair: I<sub>tail</sub>·tanh(V<sub>in</sub>/2V<sub>T</sub>) with control-voltage bleed from pair mismatch; output coupling capacitor.</td></tr>
+      <tr><td>Modulator</td><td>Integrator + Schmitt trigger (triangle/square), sample-and-hold of the noise source, filtered noise.</td></tr>
+      <tr><td>Mixer / glide</td><td>Op-amp summer saturating at the ±12.5 V rails; glide is an RC lag on each key CV.</td></tr>
+      <tr><td>Estimated values</td><td>C1 (≈18 pF, from the datasheet slew rate), reset timing, bulk resistance, diode parameters and some pot ranges are estimates where the schematic scan is unreadable or the value is unpublished.</td></tr>
+    </table>
+  </details>
+</div>
+
+<script type="text/plain" id="dsp-src">// ============================================================================
+//  Polivoks circuit model — DSP core
+//  Every block is solved from the equations of its circuit, not from
+//  "musical" approximations. Values come from the factory schematics
+//  (sheets 5, 7, 8, 10) and the uA776 / К140УД12 datasheet.
+//  Where a value is unreadable or unpublished it is marked EST (estimated).
+// ============================================================================
+
+const K_Q = 8.617333262e-5;            // Boltzmann / electron charge  [V/K]
+const VT_OF = (T) => K_Q * T;          // thermal voltage kT/q
+const LN2 = Math.LN2;
+
+function clamp(x, lo, hi) { return x < lo ? lo : x > hi ? hi : x; }
+
+// Op-amp output stage: linear until close to the rail, then saturates.
+function rail(x, vs) {
+  const r = x / vs, a = r < 0 ? -r : r;
+  if (a < 0.7) return x;
+  const a2 = a * a, a4 = a2 * a2, a8 = a4 * a4;
+  return x / Math.pow(1 + a8, 0.125);
+}
+
+// Pot tapers ----------------------------------------------------------------
+// 'A' (log) taper resistance, p in 0..1
+function potA(p, rmin, rmax) { const k = 5; return rmin + (rmax - rmin) * (Math.exp(k * p) - 1) / (Math.exp(k) - 1); }
+
+// Small fast RNG (xorshift32) ------------------------------------------------
+class Rng {
+  constructor(seed) { this.s = (seed >>> 0) || 0x9e3779b9; }
+  u() { let s = this.s; s ^= s << 13; s ^= s >>> 17; s ^= s << 5; this.s = s >>> 0; return this.s / 4294967296; }
+  g() { return (this.u() + this.u() + this.u() + this.u() - 2) * 1.7320508; } // ~N(0,1)
+}
+
+// ============================================================================
+//  Exponential converter: matched NPN pair (КР198НТ1А) with bulk emitter
+//  resistance rb.  ΔVbe = VT·ln(I/Iref) + rb·(I − Iref)   solved by Newton.
+//  The divider is calibrated at Tcal; when the chip is at T≠Tcal the scaling
+//  drifts exactly as a real uncompensated converter does.
+// ============================================================================
+class ExpoPair {
+  constructor(Iref, rb, Tcal) { this.Iref = Iref; this.rb = rb; this.VTcal = VT_OF(Tcal); this.x = 0; }
+  // octaves -> collector current at chip temperature T
+  current(oct, T) {
+    const dv = oct * this.VTcal * LN2;          // calibrated 1 V/oct divider output
+    const VT = VT_OF(T), k = this.rb * this.Iref;
+    let x = this.x;
+    for (let i = 0; i < 3; i++) {
+      const e = Math.exp(x);
+      x -= (VT * x + k * (e - 1) - dv) / (VT + k * e);
+    }
+    this.x = x;
+    return this.Iref * Math.exp(x);
+  }
+}
+
+// ============================================================================
+//  VCO (sheet 5, У2/У3): current I from the expo pair charges a timing
+//  capacitor; comparator A7 fires at Vth and a transistor (V5) discharges the
+//  cap for a fixed reset time.  The capacitor voltage is integrated exactly
+//  over each (oversampled) step, so the output is the true box-filtered
+//  waveform including the finite reset slope.
+//  Shapers: precision rectifier (A9 + КД521 diodes) -> triangle;
+//           comparator A10 (К140УД8, slew-limited)  -> square / pulse.
+// ============================================================================
+class VCO {
+  constructor(h, seed) {
+    this.h = h;
+    this.C = 5.6e-9;          // timing capacitor 5600 pF (C5)
+    this.Vth = 10;            // comparator threshold (+10 V point on sheet)
+    this.tauR = 0.6e-6;       // discharge: Ron(V5)≈100 Ω × C   EST
+    this.Tres = 2.5e-6;       // reset pulse width               EST
+    this.SR = 3.0e6;          // К140УД8 slew rate ≈ 3 V/µs
+    this.Vsat = 11;           // op-amp swing on ±12.5 V
+    this.v = 0; this.resetting = false; this.rem = 0;
+    this.pulse = -this.Vsat;
+    this.vpw = 5;             // comparator reference (5 V = square)
+    const rng = new Rng(seed);
+    this.mismatch = (rng.u() - 0.5) * 0.004;    // pair ΔVbe mismatch in octaves
+    // Factory trim: reference current set so A4 = 440 Hz, accounting for the
+    // residual voltage left after reset and the reset time itself.
+    const vres = this.Vth * Math.exp(-this.Tres / this.tauR);
+    this.expo = new ExpoPair((this.Vth - vres) * this.C / (1 / 440 - this.Tres), 2, 303); // rb = 2 Ω  EST
+    this.saw = 0; this.tri = 0; this.sq = 0;
+  }
+  step(I) {
+    const C = this.C, h = this.h, Vpw = this.vpw, Vth = this.Vth, tau = this.tauR;
+    let t = h, acc = 0, above = 0, aabs = 0, v = this.v, guard = 0;
+    const M = Vth * 0.5;      // rectifier reference (mid-point of the ramp)
+    while (t > 1e-14 && guard++ < 16) {
+      if (this.resetting) {
+        const dt = Math.min(t, this.rem), vinf = I * tau / C, e = Math.exp(-dt / tau);
+        const v1 = vinf + (v - vinf) * e;
+        const seg = vinf * dt + (v - vinf) * tau * (1 - e);
+        acc += seg;
+        if (v > Vpw) above += v1 >= Vpw ? dt : -tau * Math.log((Vpw - vinf) / (v - vinf));
+        // ∫|v−M| over the exponential discharge (split at the crossing)
+        if (v > M && v1 < M) {
+          const tm = -tau * Math.log((M - vinf) / (v - vinf));
+          const i1 = vinf * tm + (v - vinf) * tau * (1 - Math.exp(-tm / tau));
+          aabs += (i1 - M * tm) - ((seg - i1) - M * (dt - tm));
+        } else aabs += Math.abs(seg - M * dt);
+        v = v1; this.rem -= dt; t -= dt;
+        if (this.rem <= 1e-14) this.resetting = false;
+      } else {
+        const s = I / C, tc = (Vth - v) / s;
+        const dt = tc >= t ? t : Math.max(tc, 0);
+        if (v >= Vpw) above += dt; else { const tx = (Vpw - v) / s; if (tx < dt) above += dt - tx; }
+        // ∫|v−M| over the linear ramp
+        const a0 = v - M, a1 = a0 + s * dt;
+        if (a0 >= 0 || a1 <= 0) aabs += Math.abs(0.5 * (a0 + a1) * dt);
+        else { const tz = -a0 / s; aabs += 0.5 * (-a0) * tz + 0.5 * a1 * (dt - tz); }
+        acc += v * dt + 0.5 * s * dt * dt; v += s * dt; t -= dt;
+        if (tc <= dt) { v = Vth; this.resetting = true; this.rem = this.Tres; }
+      }
+    }
+    this.v = v;
+    const avg = acc / h;
+    this.saw = avg - 5;                                   // −5..+5 V
+    this.tri = 2 * (aabs / h) - 5;                        // precision rectifier: 2|v−5| − 5
+    const target = -this.Vsat + 2 * this.Vsat * (above / h);
+    const dmax = this.SR * h;
+    this.pulse += clamp(target - this.pulse, -dmax, dmax);
+    this.sq = this.pulse * (5 / this.Vsat);
+  }
+  out(wave) { return wave === 0 ? this.tri : wave === 1 ? this.saw : this.sq; }
+}
+
+// ============================================================================
+//  VCF (sheet 7, У4): two К140УД12 programmable op-amps used open-loop.
+//  Each is an OTA charging its own internal compensation capacitor C1:
+//     dV/dt = (Itail/C1) · tanh( Vdiff / 4VT )
+//  (741-style CC–CB input stage → 4 junctions → 4VT).  Inputs come through
+//  the 47k/1k dividers (a = 1/48).  Itail is set by the Iset current from the
+//  A1/V1 exponential converter.  Integrator outputs saturate at the rails.
+//  Solved implicitly (trapezoidal + Newton), so slew-limiting and resonance
+//  blow-ups are handled without instability.
+// ============================================================================
+class K140VCF {
+  constructor(h) {
+    this.h = h; this.a = 1 / 48;
+    this.C1 = 18e-12;          // internal comp. cap, from SR = Iset/C1 (datasheet) EST
+    this.vos1 = 0.0021; this.vos2 = -0.0014;   // input offset voltages (datasheet typ 2 mV)
+    this.Vs = 11;
+    this.y1 = 0; this.y2 = 0;
+  }
+  step(vin, I, k, VT) {
+    const h = this.h, h2 = h * 0.5, a = this.a, c = 1 / (4 * VT), g = I / this.C1;
+    const y1 = this.y1, y2 = this.y2, o1 = this.vos1, o2 = this.vos2;
+    const F1n = g * Math.tanh((a * (vin - y2) - k * a * y1 + o1) * c);
+    const F2n = g * Math.tanh((a * y1 + o2) * c);
+    let z1 = y1 + h * F1n, z2 = y2 + h * F2n;
+    for (let it = 0; it < 3; it++) {
+      const t1 = Math.tanh((a * (vin - z2) - k * a * z1 + o1) * c);
+      const t2 = Math.tanh((a * z1 + o2) * c);
+      const r1 = z1 - y1 - h2 * (F1n + g * t1);
+      const r2 = z2 - y2 - h2 * (F2n + g * t2);
+      const s1 = g * (1 - t1 * t1) * c * a, s2 = g * (1 - t2 * t2) * c * a;
+      const j11 = 1 + h2 * s1 * k, j12 = h2 * s1, j21 = -h2 * s2;
+      const det = j11 - j12 * j21;
+      z1 -= (r1 - j12 * r2) / det;
+      z2 -= (j11 * r2 - j21 * r1) / det;
+    }
+    const Vs = this.Vs;
+    this.y1 = z1 > Vs ? Vs : z1 < -Vs ? -Vs : z1;
+    this.y2 = z2 > Vs ? Vs : z2 < -Vs ? -Vs : z2;
+    if (!(this.y1 === this.y1) || !(this.y2 === this.y2)) { this.y1 = 0; this.y2 = 0; }
+  }
+}
+
+// ============================================================================
+//  Envelope generator (on the VCF board, sheet 7 — same design used for the
+//  VCA): a 5 µF capacitor charged/discharged through the pots and КД521
+//  diodes; comparator A5 ends the attack at +6 V.  The diode is solved with
+//  the Shockley equation, which gives the real curve shapes and tails.
+// ============================================================================
+class EG {
+  constructor(h) {
+    this.h = h; this.C = 5e-6; this.Vpk = 6; this.Vsup = 12.5;
+    this.v = 0; this.stage = 0; this.Iw = [1e-6, 1e-6, 1e-6];
+    this.nVT = 1.9 * VT_OF(300); this.Is = 2e-9; this.Rbleed = 10e6;
+  }
+  diodeI(vd, R, w) {
+    if (vd <= 0) return 0;
+    let I = this.Iw[w]; if (!(I > 0)) I = vd / R;
+    for (let i = 0; i < 4; i++) {
+      const f = I * R + this.nVT * Math.log(1 + I / this.Is) - vd;
+      I -= f / (R + this.nVT / (this.Is + I));
+      if (I < 1e-15) I = 1e-15;
+    }
+    this.Iw[w] = I; return I;
+  }
+  trigger() { this.stage = 1; }
+  step(gate, Ra, Rd, sus, Rr, cycle) {
+    const C = this.C, h = this.h, Vs = sus * this.Vpk;
+    let v = this.v;
+    if (gate && this.stage === 0) this.stage = 1;
+    if (!gate) this.stage = 0;
+    if (this.stage === 1) {
+      v += this.diodeI(this.Vsup - v, Ra, 0) * h / C;
+      if (v >= this.Vpk) { v = this.Vpk; this.stage = 2; }
+    } else if (this.stage === 2) {
+      if (v > Vs) v -= this.diodeI(v - Vs, Rd, 1) * h / C;
+      if (cycle && v - Vs < 0.03 * this.Vpk) this.stage = 1;
+    } else {
+      v -= this.diodeI(v, Rr, 2) * h / C;
+    }
+    v -= v * h / (this.Rbleed * C);
+    this.v = v < 0 ? 0 : v;
+    return this.v / this.Vpk;
+  }
+}
+
+// ============================================================================
+//  Modulator (sheet 10): op-amp integrator + Schmitt comparator.
+//  Triangle ±5 V, square ±11 V, f = 1/(4RC·Vth/Vsat).
+//  Extra modes: sample&hold of the noise source clocked by the square, and
+//  filtered noise.
+// ============================================================================
+class LFO {
+  constructor(h, rng) { this.h = h; this.C = 1e-6; this.vt = 0; this.vs = 11; this.Vth = 5; this.sh = 0; this.nz = 0; this.rng = rng; }
+  step(R, mode) {
+    this.vt -= this.vs * this.h / (R * this.C);
+    if (this.vt > this.Vth && this.vs < 0) { this.vs = 11; this.vt = this.Vth; }
+    else if (this.vt < -this.Vth && this.vs > 0) { this.vs = -11; this.vt = -this.Vth; this.sh = clamp(this.rng.g() * 0.5, -1, 1); }
+    const fc = 11 / (20 * R * this.C) * 6;
+    this.nz += (this.rng.g() * 1.6 - this.nz) * Math.min(1, 6.283 * fc * this.h);
+    switch (mode) {
+      case 0: return -this.vt / 5;
+      case 1: return this.vs / 11;
+      case 2: return this.sh;
+      default: return clamp(this.nz, -1, 1);
+    }
+  }
+}
+
+// ============================================================================
+//  Engine
+// ============================================================================
+const PARAM_DEFAULTS = {
+  power: 0,
+  lfoRate: 0.45, lfoMode: 0,
+  phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
+  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0,
+  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0,
+  mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0,
+  fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.45, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
+  aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
+};
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+
+class PolivoksEngine {
+  constructor(sr) {
+    this.sr = sr; this.OS = 4; this.fs = sr * this.OS;
+    const hb = 1 / sr, ho = 1 / this.fs; this.hb = hb; this.ho = ho;
+    this.rng = new Rng(12345);
+    this.vco1 = new VCO(ho, 77); this.vco2 = new VCO(ho, 991);
+    this.vco1.v = 2.1; this.vco2.v = 7.3;
+    this.vcf = new K140VCF(ho);
+    this.egF = new EG(hb); this.egA = new EG(hb);
+    this.lfo = new LFO(hb, new Rng(4242));
+    this.fexpo = new ExpoPair(0, 4, 303);
+    this.p = Object.assign({}, PARAM_DEFAULTS); this.ps = Object.assign({}, PARAM_DEFAULTS);
+    // filter Iset for 1 kHz:  f = Iset·a / (2π·C1·4VT)
+    this.Tchip = 303;
+    this.fexpo.Iref = 1000 * 2 * Math.PI * this.vcf.C1 * 4 * VT_OF(303) / this.vcf.a;
+    this.held = []; this.gate = false; this.n1 = 57; this.n2 = 57;
+    this.cv1 = 57; this.cv2 = 57;
+    this.T1 = 303; this.T2 = 303; this.drift1 = 0; this.drift2 = 0;
+    this.noiseLP = 0;
+    this.hpX = 0; this.hpY = 0; this.vcaHpX = 0; this.vcaHpY = 0;
+    this.ext = null; this.extPos = 0;
+    this.lastVal = 0;
+    this.powerLevel = 0;
+    // decimation FIR (Blackman windowed sinc)
+    const N = 48, fc = 0.5 / this.OS * 0.92; this.firN = N;
+    this.fir = new Float64Array(N); let sum = 0;
+    for (let i = 0; i < N; i++) {
+      const m = i - (N - 1) / 2;
+      const sinc = m === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * m) / (Math.PI * m);
+      const w = 0.42 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1)) + 0.08 * Math.cos(4 * Math.PI * i / (N - 1));
+      this.fir[i] = sinc * w; sum += this.fir[i];
+    }
+    for (let i = 0; i < N; i++) this.fir[i] /= sum;
+    this.buf = new Float64Array(N * 2); this.bi = 0;
+    this.scope = new Float32Array(512); this.scopeI = 0;
+  }
+
+  setParam(id, v) { if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
+  setExt(data) { this.ext = data; this.extPos = 0; }
+
+  // Keyboard assignment: 1-ГОЛ → both VCOs follow the last key;
+  // 2-ГОЛ → Generator I takes the lowest held key, Generator II the highest.
+  assign() {
+    const H = this.held;
+    if (!H.length) { this.gate = false; return; }
+    this.gate = true;
+    if (this.p.voice >= 0.5) {
+      let lo = 1e9, hi = -1e9; for (const n of H) { if (n < lo) lo = n; if (n > hi) hi = n; }
+      this.n1 = lo; this.n2 = hi;
+    } else { this.n1 = this.n2 = H[H.length - 1]; }
+  }
+  noteOn(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); this.held.push(n); this.assign(); this.egF.trigger(); this.egA.trigger(); }
+  noteOff(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); this.assign(); }
+  allOff() { this.held.length = 0; this.assign(); }
+
+  render(out, n) {
+    const p = this.p, ps = this.ps, OS = this.OS, ho = this.ho, hb = this.hb;
+    const vco1 = this.vco1, vco2 = this.vco2, vcf = this.vcf, rng = this.rng, fir = this.fir, N = this.firN;
+    const sm = 1 - Math.exp(-hb / 0.012);
+    const rangeOct = [-2, -1, 0, 1, 2];
+    for (let s = 0; s < n; s++) {
+      for (let j = 0; j < SMOOTHED.length; j++) { const k = SMOOTHED[j]; ps[k] += (p[k] - ps[k]) * sm; }
+      // power supply ramps like rail capacitors charging
+      this.powerLevel += ((p.power ? 1 : 0) - this.powerLevel) * (p.power ? 0.0004 : 0.002);
+
+      // modulator
+      const lfoR = potA(1 - ps.lfoRate, 10e3, 2.2e6);
+      const lfo = this.lfo.step(lfoR, p.lfoMode | 0);
+
+      // glide: RC lag on the key CV (R = pot, C = 0.47 µF)
+      const tg = potA(ps.glide, 100, 2.2e6) * 0.47e-6;
+      const gk = 1 - Math.exp(-hb / tg);
+      this.cv1 += (this.n1 - this.cv1) * gk; this.cv2 += (this.n2 - this.cv2) * gk;
+
+      // envelopes
+      const ef = this.egF.step(this.gate, potA(p.fA, 200, 1e6), potA(p.fD, 1e3, 2e6), ps.fS, potA(p.fR, 1e3, 2e6), p.fEgMode >= 0.5);
+      const ea = this.egA.step(this.gate, potA(p.aA, 200, 1e6), potA(p.aD, 1e3, 2e6), ps.aS, potA(p.aR, 1e3, 2e6), p.aEgMode >= 0.5);
+
+      // slow thermal drift of each expo pair (±0.3 K random walk)
+      this.drift1 += (rng.g() * 0.02 - this.drift1 * 1e-4); this.drift2 += (rng.g() * 0.02 - this.drift2 * 1e-4);
+      const T1 = this.Tchip + clamp(this.drift1 * 0.01, -0.3, 0.3), T2 = this.Tchip + clamp(this.drift2 * 0.01, -0.3, 0.3);
+
+      // pitch CVs (octaves relative to A4 at 8')
+      const tune = ps.tune * 2 / 12;
+      const oct1 = (this.cv1 - 69) / 12 + rangeOct[p.o1range | 0] + tune + lfo * ps.o1mod * ps.o1mod + vco1.mismatch;
+      const oct2 = (this.cv2 - 69) / 12 + rangeOct[p.o2range | 0] + tune + lfo * ps.o2mod * ps.o2mod + ps.o2detune * 7 / 12 + vco2.mismatch;
+      const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
+      vco1.vpw = p.o1wave === 3 ? 8.7 : 5; vco2.vpw = p.o2wave === 3 ? 8.7 : 5;
+      const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
+      const fmk = ps.o1fm * ps.o1fm * 2 * LN2 / 5;
+
+      // filter Iset (A1/V1 expo converter) + leakage floor
+      const foct = (ps.cutoff * 9.8 - 5.5) + ef * ps.fEnv * 7 + lfo * ps.fMod * ps.fMod * 3;
+      const Iset = Math.min(this.fexpo.current(foct, this.Tchip), 60e-6) + 15e-9;
+      const kres = 2.2 * Math.pow(1 - ps.res, 1.6) - 0.06;
+      const VTf = VT_OF(this.Tchip);
+      const lp = p.fMode < 0.5;
+
+      // VCA: differential pair, tail current from EG (or held open)
+      let env = p.vcaHold >= 0.5 ? 1 : ea;
+      env *= Math.max(0, 1 + lfo * ps.aMod * 0.9);
+      const g1 = ps.mix1 * ps.mix1 * 1.6, g2 = ps.mix2 * ps.mix2 * 1.6, gn = ps.mixN * ps.mixN * 1.4, ge = ps.mixE * ps.mixE * 3;
+      let ext = 0;
+      if (this.ext && ge > 0) { ext = this.ext[this.extPos] * 5; if (++this.extPos >= this.ext.length) this.extPos = 0; }
+
+      const nk = 1 - Math.exp(-ho * 2 * Math.PI * 12000);
+      const vcaAtt = 0.005 / (2 * VT_OF(300));
+      for (let o = 0; o < OS; o++) {
+        vco2.step(I2);
+        const o2 = vco2.out(w2);
+        vco1.step(I1b * Math.exp(fmk * vco2.tri));
+        const o1 = vco1.out(w1);
+        this.noiseLP += (rng.g() * 3.2 - this.noiseLP) * nk;
+        const vmix = rail(g1 * o1 + g2 * o2 + gn * this.noiseLP + ge * ext, 11);
+        vcf.step(vmix, Iset, kres, VTf);
+        const vf = lp ? vcf.y2 : vcf.y1 * 0.8;
+        const vca = env * Math.tanh(vf * vcaAtt) * 1.05 + env * 0.004; // + CV bleed (pair mismatch)
+        const b = this.buf, i0 = this.bi;
+        b[i0] = vca; b[i0 + N] = vca; this.bi = (i0 + 1) % N;
+      }
+      // decimate
+      let acc = 0; const b = this.buf, start = this.bi;
+      for (let i = 0; i < N; i++) acc += fir[i] * b[start + i];
+      // output coupling capacitor (≈1.6 Hz HPF)
+      const hpk = 1 - 2 * Math.PI * 1.6 * hb;
+      this.hpY = hpk * (this.hpY + acc - this.hpX); this.hpX = acc;
+      const lvl = p.outSel >= 0.5 ? ps.phones : ps.volume;
+      let y = this.hpY * lvl * lvl * 1.3 * this.powerLevel;
+      y = y / Math.sqrt(1 + y * y);
+      out[s] = y;
+      this.scope[this.scopeI] = this.hpY; this.scopeI = (this.scopeI + 1) & 511;
+    }
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, VCO, K140VCF, EG, ExpoPair, VT_OF };
+</script>
+<script>
+(() => {
+'use strict';
+// ---------------------------------------------------------------- icons
+const IC = {
+  tri: 'M2,10 L8,2 L14,10',
+  saw: 'M2,10 L12,2 L12,10',
+  sq: 'M2,10 L2,3 L8,3 L8,10 L14,10',
+  pul: 'M2,10 L2,3 L5,3 L5,10 L14,10',
+  sh: 'M1,8 L4,8 L4,3 L7,3 L7,10 L10,10 L10,5 L14,5',
+  nz: 'M1,6 L2.5,3 L4,9 L5.5,2 L7,8 L8.5,4 L10,10 L11.5,3 L13,7',
+};
+// ---------------------------------------------------------------- panel spec
+const S = []; // all controls
+const knob = (id, label, scale, def, extra) => Object.assign({ id, label, kind: 'knob', scale, def }, extra || {});
+const sel = (id, label, opts, def) => ({ id, label, kind: 'sel', opts, def });
+const sw = (id, top, bot, def, label) => ({ id, kind: 'sw', top, bot, def, label });
+const L = {
+  'g-mod': [knob('lfoRate', 'ЧАСТОТА', 'mm', .45), sel('lfoMode', 'РЕЖИМ', [{i:'tri'},{i:'sq'},{i:'sh'},{i:'nz'}], 0)],
+  'g-l1': [knob('phones', 'ТЛФ.', '06', .6), knob('tune', 'НАСТРОЙКА', 'bip', 0)],
+  'g-l2': [knob('glide', 'ГЛИССАНДО', 'mm', 0), sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1)],
+  'g-l3': [knob('volume', 'ГРОМКОСТЬ', '06', .7), sw('outSel', 'ЛИН.', 'ТЛФ.', 0, 'ВЫХОД')],
+  'g-o1a': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 1)],
+  'g-o1b': [knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ГЕНЕРАТОР II', '06', 0)],
+  'g-o2a': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 2)],
+  'g-o2b': [knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0)],
+  'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0), knob('mixE', 'ВНЕШ.', '06', 0)],
+  'g-f1': [knob('fA', 'АТАКА', 'mm', .05), { kind: 'spacer' }, sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
+  'g-f2': [knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
+  'g-f3': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .45), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0)],
+  'g-f4': [knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), { kind: 'resp' }],
+  'g-a1': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5)],
+  'g-a2': [knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
+  'g-a3': [sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
+  'g-a4': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0)],
+};
+// fMode switch: top = ПФ (band-pass, value 1), bottom = ФНЧ (low-pass, 0) → invert mapping
+const INVERT = { fMode: true, voice: false };
+const EN = {
+  'МОДУЛЯТОР':'MODULATOR','ЧАСТОТА':'RATE','РЕЖИМ':'MODE','ТЛФ.':'PHONES','НАСТРОЙКА':'TUNE','ГЛИССАНДО':'GLIDE',
+  '1-ГОЛ.':'MONO','2-ГОЛ.':'DUO','ГРОМКОСТЬ':'VOLUME','ВЫХОД':'OUTPUT','ЛИН.':'LINE',
+  'ГЕНЕРАТОР I':'VCO I','ГЕНЕРАТОР II':'VCO II','ДИАПАЗОН':'RANGE','ФОРМА':'WAVE','МОДУЛЯЦИЯ':'MOD',
+  'РАССТРОЙКА':'DETUNE','МИКШЕР':'MIXER','ШУМ':'NOISE','ВНЕШ.':'EXT.','ФИЛЬТР':'FILTER','УСИЛИТЕЛЬ':'AMPLIFIER',
+  'АТАКА':'ATTACK','ЗАТУХАНИЕ':'DECAY','ПЬЕДЕСТАЛ':'SUSTAIN','ПОСЛЕЗВУЧ.':'RELEASE','ЧАСТОТА СРЕЗА':'CUTOFF',
+  'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
+  'ОГИБ.':'ENV','ВКЛ.':'HOLD','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
+  'PRESS СЕТЬ TO POWER ON':'PRESS POWER TO START',
+};
+let lang = 'ru'; try { lang = localStorage.getItem('polivoks-lang') || 'ru'; } catch (e) {}
+const tr = (ru) => lang === 'en' && EN[ru] ? EN[ru] : ru;
+const mark = (e, ru) => { e.setAttribute('data-ru', ru); if (e instanceof SVGElement) e.textContent = tr(ru); else e.innerHTML = tr(ru); return e; };
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('h2').forEach((h) => { if (!h.hasAttribute('data-ru')) h.setAttribute('data-ru', h.innerHTML); });
+  document.querySelectorAll('[data-ru]').forEach((e) => { const ru = e.getAttribute('data-ru'); if (e instanceof SVGElement) e.textContent = tr(ru); else e.innerHTML = tr(ru); });
+  document.querySelectorAll('#lang button').forEach((b) => b.classList.toggle('on', b.dataset.l === lang));
+  drawResp();
+}
+
+// ---------------------------------------------------------------- state
+const STORE = 'polivoks-model-v1';
+const state = {};
+let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) {}
+const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
+
+let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
+const send = (m) => { if (node) node.port.postMessage(m); };
+function setParam(id, v) {
+  state[id] = v; save();
+  let pv = v;
+  if (id === 'fMode') pv = v;          // 1 = ПФ (band-pass)
+  send({ t: 'p', id, v: pv });
+  if (id === 'fMode') drawResp();
+}
+
+// ---------------------------------------------------------------- SVG knob
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const ang = (u) => (-135 + 270 * u) * Math.PI / 180;
+function makeKnob(c) {
+  const wrap = document.createElement('div'); wrap.className = 'ctl';
+  const W = 92, H = 82, cx = W / 2, cy = 40, R = 17;
+  const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, wrap);
+  const bip = c.scale === 'bip';
+  // scale
+  const labels = c.scale === '06' ? ['0','1','2','3','4','5','6'] : c.scale === 'mm' ? ['','1','2','3','4','5',''] : ['2','1','0','1','2'];
+  labels.forEach((t, i) => {
+    const u = i / (labels.length - 1), a = ang(u);
+    const x1 = cx + Math.sin(a) * (R + 3), y1 = cy - Math.cos(a) * (R + 3), x2 = cx + Math.sin(a) * (R + 7), y2 = cy - Math.cos(a) * (R + 7);
+    el('line', { x1, y1, x2, y2, stroke: '#fff', 'stroke-width': 1.2 }, svg);
+    if (t) { const tx = el('text', { x: cx + Math.sin(a) * (R + 14), y: cy - Math.cos(a) * (R + 14) + 3.5, 'text-anchor': 'middle' }, svg); tx.textContent = t; }
+  });
+  if (c.scale === 'mm') {
+    mark(el('text', { x: cx - 21, y: cy + 33, 'text-anchor': 'end', 'font-size': 8.5 }, svg), 'МИН.');
+    mark(el('text', { x: cx + 21, y: cy + 33, 'text-anchor': 'start', 'font-size': 8.5 }, svg), 'МАКС.');
+  }
+  if (bip) {
+    el('text', { x: cx - 31, y: cy + 23, 'text-anchor': 'middle', 'font-size': 11 }, svg).textContent = '−';
+    el('text', { x: cx + 31, y: cy + 23, 'text-anchor': 'middle', 'font-size': 11 }, svg).textContent = '+';
+  }
+  const g = el('g', {}, svg);
+  el('circle', { cx, cy, r: R, fill: '#000', stroke: '#fff', 'stroke-width': 2 }, g);
+  for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; el('line', { x1: cx + Math.sin(a) * (R - 3), y1: cy - Math.cos(a) * (R - 3), x2: cx + Math.sin(a) * (R - 0.5), y2: cy - Math.cos(a) * (R - 0.5), stroke: '#fff', 'stroke-width': 0.6, opacity: 0.6 }, g); }
+  el('line', { x1: cx, y1: cy - 3, x2: cx, y2: cy - R + 1, stroke: '#fff', 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+  const lab = document.createElement('div'); lab.className = 'lab'; mark(lab, c.label); wrap.appendChild(lab);
+  const toU = (v) => bip ? (v + 1) / 2 : v, fromU = (u) => bip ? u * 2 - 1 : u;
+  const show = (v) => g.setAttribute('transform', `rotate(${-135 + 270 * toU(v)} ${cx} ${cy})`);
+  c.set = (v, quiet) => { v = Math.max(bip ? -1 : 0, Math.min(1, v)); c.v = v; show(v); if (!quiet) setParam(c.id, v); };
+  let y0 = 0, u0 = 0, drag = false;
+  svg.addEventListener('pointerdown', (e) => { drag = true; y0 = e.clientY; u0 = toU(c.v); svg.setPointerCapture(e.pointerId); e.preventDefault(); });
+  svg.addEventListener('pointermove', (e) => { if (!drag) return; const k = e.shiftKey ? 1200 : 220; c.set(fromU(Math.max(0, Math.min(1, u0 + (y0 - e.clientY) / k)))); });
+  svg.addEventListener('pointerup', () => { drag = false; });
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); c.set(fromU(Math.max(0, Math.min(1, toU(c.v) - Math.sign(e.deltaY) * (e.shiftKey ? 0.004 : 0.025))))); }, { passive: false });
+  svg.addEventListener('dblclick', () => c.set(c.def));
+  return wrap;
+}
+function makeSel(c) {
+  const wrap = document.createElement('div'); wrap.className = 'ctl';
+  const W = 104, H = 80, cx = W / 2, cy = 42, R = 19, n = c.opts.length;
+  const span = n === 5 ? 160 : 150;
+  const posA = (i) => (-span / 2 + span * i / (n - 1)) * Math.PI / 180;
+  const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, wrap);
+  c.opts.forEach((o, i) => {
+    const a = posA(i), x = cx + Math.sin(a) * (R + 17), y = cy - Math.cos(a) * (R + 13);
+    if (o.t) { const t = el('text', { x, y: y + 3.5, 'text-anchor': 'middle', 'font-size': 10.5, 'font-weight': 600 }, svg); t.textContent = o.t; }
+    else el('path', { d: IC[o.i], transform: `translate(${x - 8} ${y - 6})`, fill: 'none', stroke: '#fff', 'stroke-width': 1.4, 'stroke-linejoin': 'miter' }, svg);
+  });
+  const g = el('g', {}, svg);
+  el('circle', { cx, cy, r: R, fill: '#000', stroke: '#fff', 'stroke-width': 2 }, g);
+  for (let i = 0; i < 24; i++) { const a = i * Math.PI / 12; el('line', { x1: cx + Math.sin(a) * (R - 4), y1: cy - Math.cos(a) * (R - 4), x2: cx + Math.sin(a) * (R), y2: cy - Math.cos(a) * R, stroke: '#fff', 'stroke-width': 0.7, opacity: .6 }, g); }
+  el('rect', { x: cx - 3, y: cy - R - 2, width: 6, height: R + 2, fill: '#fff' }, g);
+  el('rect', { x: cx - 1, y: cy - R + 2, width: 2, height: R - 6, fill: '#000' }, g);
+  const lab = document.createElement('div'); lab.className = 'lab'; mark(lab, c.label); wrap.appendChild(lab);
+  c.set = (v, quiet) => { v = Math.max(0, Math.min(n - 1, Math.round(v))); c.v = v; g.setAttribute('transform', `rotate(${posA(v) * 180 / Math.PI} ${cx} ${cy})`); if (!quiet) setParam(c.id, v); };
+  let y0 = 0, v0 = 0, drag = false, moved = false;
+  svg.addEventListener('pointerdown', (e) => { drag = true; moved = false; y0 = e.clientY; v0 = c.v; svg.setPointerCapture(e.pointerId); e.preventDefault(); });
+  svg.addEventListener('pointermove', (e) => { if (!drag) return; const d = Math.round((y0 - e.clientY) / 22); if (d) moved = true; c.set(v0 + d); });
+  svg.addEventListener('pointerup', () => { if (drag && !moved) c.set((c.v + 1) % n); drag = false; });
+  svg.addEventListener('wheel', (e) => { e.preventDefault(); c.set(c.v - Math.sign(e.deltaY)); }, { passive: false });
+  return wrap;
+}
+function makeSwitch(c) {
+  const wrap = document.createElement('div'); wrap.className = 'sw';
+  if (c.label) { const l = document.createElement('div'); l.className = 't'; mark(l, c.label); l.style.marginBottom = '2px'; wrap.appendChild(l); }
+  const top = document.createElement('div'); top.className = 't'; mark(top, c.top);
+  const slot = document.createElement('div'); slot.className = 'slot';
+  const lev = document.createElement('div'); lev.className = 'lev'; slot.appendChild(lev);
+  const bot = document.createElement('div'); bot.className = 't'; mark(bot, c.bot);
+  wrap.append(top, slot, bot);
+  // value: 0 = top, 1 = bottom  (fMode is inverted: top ПФ = 1)
+  const inv = !!INVERT[c.id];
+  c.set = (v, quiet) => { c.v = v ? 1 : 0; const down = inv ? !c.v : !!c.v; lev.style.top = down ? '19px' : '2px'; if (!quiet) setParam(c.id, c.v); };
+  wrap.addEventListener('click', () => c.set(c.v ? 0 : 1));
+  return wrap;
+}
+let respSvg = null;
+function makeResp() {
+  const d = document.createElement('div'); d.className = 'resp';
+  respSvg = el('svg', { width: 96, height: 70, viewBox: '0 0 96 70' }, d); drawResp(); return d;
+}
+function drawResp() {
+  if (!respSvg) return; respSvg.innerHTML = '';
+  const bp = state.fMode === 1;
+  el('path', { d: 'M6,6 L6,62 L92,62', fill: 'none', stroke: '#fff', 'stroke-width': 1.2 }, respSvg);
+  el('path', { d: 'M88,59 L92,62 L88,65', fill: 'none', stroke: '#fff', 'stroke-width': 1.2 }, respSvg);
+  el('path', { d: 'M6,24 L44,24 L52,62', fill: 'none', stroke: '#fff', 'stroke-width': bp ? 1 : 2.4, 'stroke-dasharray': bp ? '2 2' : '' }, respSvg);
+  el('path', { d: 'M40,62 L52,8 L62,62', fill: 'none', stroke: '#fff', 'stroke-width': bp ? 2.4 : 1, 'stroke-dasharray': bp ? '' : '2 2' }, respSvg);
+  el('text', { x: 10, y: 20, 'font-size': 8.5, fill: '#fff' }, respSvg).textContent = tr('ФНЧ');
+  el('text', { x: 64, y: 54, 'font-size': 8.5, fill: '#fff' }, respSvg).textContent = tr('ПФ');
+}
+for (const gid in L) {
+  const host = document.getElementById(gid);
+  for (const c of L[gid]) {
+    if (c.kind === 'spacer') { const s = document.createElement('div'); s.style.width = '92px'; host.appendChild(s); continue; }
+    if (c.kind === 'resp') { host.appendChild(makeResp()); continue; }
+    host.appendChild(c.kind === 'knob' ? makeKnob(c) : c.kind === 'sel' ? makeSel(c) : makeSwitch(c));
+    S.push(c);
+    c.set(c.id in saved ? saved[c.id] : c.def, true); state[c.id] = c.v;
+  }
+}
+applyLang();
+document.querySelectorAll('#lang button').forEach((b) => b.onclick = () => { lang = b.dataset.l; try { localStorage.setItem('polivoks-lang', lang); } catch (e) {} applyLang(); if (!powered) hint.textContent = tr('PRESS СЕТЬ TO POWER ON'); });
+document.getElementById('resetbtn').onclick = () => { for (const c of S) c.set(c.def); };
+
+// ---------------------------------------------------------------- audio
+const lamp = document.getElementById('lamp'), pbtn = document.getElementById('pbtn'), hint = document.getElementById('hint');
+hint.textContent = tr('PRESS СЕТЬ TO POWER ON');
+async function powerOn() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    const src = document.getElementById('dsp-src').textContent + `
+class PolivoksProc extends AudioWorkletProcessor {
+  constructor() { super(); this.e = new PolivoksEngine(sampleRate);
+    this.port.onmessage = (m) => { const d = m.data;
+      if (d.t === 'p') this.e.setParam(d.id, d.v); else if (d.t === 'on') this.e.noteOn(d.n);
+      else if (d.t === 'off') this.e.noteOff(d.n); else if (d.t === 'all') this.e.allOff();
+      else if (d.t === 'ext') this.e.setExt(d.data); }; }
+  process(i, o) { const out = o[0]; this.e.render(out[0], out[0].length); for (let c = 1; c < out.length; c++) out[c].set(out[0]); return true; }
+}
+registerProcessor('polivoks', PolivoksProc);`;
+    analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
+    let ok = false;
+    for (const url of [URL.createObjectURL(new Blob([src], { type: 'application/javascript' })), 'data:application/javascript;charset=utf-8,' + encodeURIComponent(src)]) {
+      try { await ctx.audioWorklet.addModule(url); ok = true; break; } catch (e) { /* try next */ }
+    }
+    if (ok) {
+      node = new AudioWorkletNode(ctx, 'polivoks', { numberOfInputs: 0, outputChannelCount: [2] });
+      node.connect(analyser);
+      engineMode = 'AudioWorklet';
+    } else {
+      // Fallback for sandboxed frames that refuse worklet modules: run the same
+      // engine on the main thread through a ScriptProcessorNode.
+      const eng = new (new Function(document.getElementById('dsp-src').textContent + '; return PolivoksEngine;')())(ctx.sampleRate);
+      const sp = ctx.createScriptProcessor(1024, 0, 2);
+      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0); eng.render(L0, L0.length); ev.outputBuffer.getChannelData(1).set(L0); };
+      node = { port: { postMessage: (d) => {
+        if (d.t === 'p') eng.setParam(d.id, d.v); else if (d.t === 'on') eng.noteOn(d.n);
+        else if (d.t === 'off') eng.noteOff(d.n); else if (d.t === 'all') eng.allOff(); else if (d.t === 'ext') eng.setExt(d.data); } } };
+      sp.connect(analyser);
+      engineMode = 'main thread';
+    }
+    analyser.connect(ctx.destination);
+    for (const c of S) send({ t: 'p', id: c.id, v: c.v });
+    if (extData) send({ t: 'ext', data: extData });
+  }
+  await ctx.resume();
+  send({ t: 'p', id: 'power', v: 1 });
+  powered = true; document.getElementById('emode').textContent = engineMode; lamp.classList.add('on'); pbtn.classList.add('on'); hint.textContent = '';
+}
+function powerOff() { send({ t: 'all' }); send({ t: 'p', id: 'power', v: 0 }); powered = false; lamp.classList.remove('on'); pbtn.classList.remove('on'); hint.textContent = tr('PRESS СЕТЬ TO POWER ON'); }
+pbtn.onclick = () => { (powered ? Promise.resolve(powerOff()) : powerOn()).catch((e) => { hint.textContent = 'AUDIO ERROR: ' + e.message; }); };
+
+// ---------------------------------------------------------------- keyboard
+const kb = document.getElementById('kb'), LOW = 41, HIGH = 88; // F2 … E6, 4 octaves
+const keys = {}; const isBlack = (n) => [1, 3, 6, 8, 10].includes(n % 12);
+function layoutKB() {
+  kb.querySelectorAll('.key').forEach((k) => k.remove());
+  let whites = 0; for (let n = LOW; n <= HIGH; n++) if (!isBlack(n)) whites++;
+  const W = kb.clientWidth / whites; let x = 0;
+  for (let n = LOW; n <= HIGH; n++) {
+    const d = document.createElement('div'); d.dataset.n = n;
+    if (isBlack(n)) { d.className = 'key k'; d.style.left = (x - W * 0.3) + 'px'; d.style.width = (W * 0.6) + 'px'; }
+    else { d.className = 'key w'; d.style.left = x + 'px'; d.style.width = W + 'px'; x += W; }
+    kb.appendChild(d); keys[n] = d;
+  }
+}
+layoutKB();
+const down = new Set();
+function on(n) { if (down.has(n)) return; down.add(n); keys[n] && keys[n].classList.add('dn'); send({ t: 'on', n }); }
+function off(n) { if (!down.has(n)) return; down.delete(n); keys[n] && keys[n].classList.remove('dn'); send({ t: 'off', n }); }
+const ptr = new Map();
+kb.addEventListener('pointerdown', (e) => { const k = e.target.closest('.key'); if (!k) return; kb.setPointerCapture(e.pointerId); const n = +k.dataset.n; ptr.set(e.pointerId, n); on(n); e.preventDefault(); });
+kb.addEventListener('pointermove', (e) => { if (!ptr.has(e.pointerId)) return; const t = document.elementFromPoint(e.clientX, e.clientY); const k = t && t.closest && t.closest('.key'); if (!k) return; const n = +k.dataset.n, o = ptr.get(e.pointerId); if (n !== o) { off(o); on(n); ptr.set(e.pointerId, n); } });
+const up = (e) => { if (ptr.has(e.pointerId)) { off(ptr.get(e.pointerId)); ptr.delete(e.pointerId); } };
+kb.addEventListener('pointerup', up); kb.addEventListener('pointercancel', up);
+// computer keys
+const MAP = 'awsedftgyhujkolp;'; let oct = 4; const octv = document.getElementById('octv');
+const held = new Map();
+addEventListener('keydown', (e) => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.target.tagName === 'INPUT') return;
+  const k = e.key.toLowerCase();
+  if (k === 'z') { oct = Math.max(2, oct - 1); octv.textContent = oct; return; }
+  if (k === 'x') { oct = Math.min(6, oct + 1); octv.textContent = oct; return; }
+  const i = MAP.indexOf(k); if (i < 0) return;
+  const n = 12 * (oct + 1) + i; held.set(k, n); on(n);
+});
+addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (held.has(k)) { off(held.get(k)); held.delete(k); } });
+addEventListener('blur', () => { for (const n of [...down]) off(n); held.clear(); });
+// MIDI
+const midiEl = document.getElementById('midi');
+if (navigator.requestMIDIAccess) {
+  navigator.requestMIDIAccess().then((acc) => {
+    const bind = () => { let c = 0; acc.inputs.forEach((inp) => { c++; inp.onmidimessage = (m) => { const [st, d1, d2] = m.data; const ty = st & 0xf0; if (ty === 0x90 && d2 > 0) on(d1); else if (ty === 0x80 || (ty === 0x90 && d2 === 0)) off(d1); }; }); midiEl.textContent = c ? c + ' input' + (c > 1 ? 's' : '') : 'no devices'; };
+    bind(); acc.onstatechange = bind;
+  }).catch(() => { midiEl.textContent = 'not available here'; });
+} else midiEl.textContent = 'not supported';
+// external input
+const extfile = document.getElementById('extfile');
+document.getElementById('extbtn').onclick = () => extfile.click();
+extfile.onchange = async () => {
+  const f = extfile.files[0]; if (!f) return;
+  try {
+    const ab = await (ctx || new AudioContext()).decodeAudioData(await f.arrayBuffer());
+    const len = Math.min(ab.length, ab.sampleRate * 60), mono = new Float32Array(len);
+    for (let c = 0; c < ab.numberOfChannels; c++) { const d = ab.getChannelData(c); for (let i = 0; i < len; i++) mono[i] += d[i] / ab.numberOfChannels; }
+    extData = mono; send({ t: 'ext', data: mono });
+    document.getElementById('extname').textContent = f.name + ' — turn up ' + tr('ВНЕШ.');
+  } catch (e) { document.getElementById('extname').textContent = 'could not decode file'; }
+};
+
+// ---------------------------------------------------------------- scope
+const sc = document.getElementById('scope'), sx = sc.getContext('2d'); const tb = new Float32Array(2048);
+function draw() {
+  sx.fillStyle = '#000'; sx.fillRect(0, 0, sc.width, sc.height);
+  sx.strokeStyle = '#fff'; sx.globalAlpha = 0.25; sx.beginPath(); sx.moveTo(0, sc.height / 2); sx.lineTo(sc.width, sc.height / 2); sx.stroke(); sx.globalAlpha = 1;
+  if (analyser && powered) {
+    analyser.getFloatTimeDomainData(tb);
+    let st = 0; for (let i = 1; i < 1024; i++) if (tb[i - 1] < 0 && tb[i] >= 0) { st = i; break; }
+    let pk = 0.05; for (let i = 0; i < 2048; i++) pk = Math.max(pk, Math.abs(tb[i]));
+    sx.lineWidth = 1.5; sx.beginPath();
+    for (let x = 0; x < sc.width; x++) { const v = tb[st + x * 2] / pk; const y = sc.height / 2 - v * (sc.height / 2 - 4); x ? sx.lineTo(x, y) : sx.moveTo(x, y); }
+    sx.stroke();
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+
+// ---------------------------------------------------------------- fit to width
+const stage = document.getElementById('stage');
+function fit() { const s = Math.min(1, innerWidth / 1580); stage.style.transform = `scale(${s})`; document.body.style.height = (stage.offsetHeight * s) + 'px'; }
+addEventListener('resize', fit); fit();
+})();
+</script>
+</body>
+</html>
