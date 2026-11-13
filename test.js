@@ -49,7 +49,7 @@ console.log('--- stability sweep ---');
 // demo wav
 {
   const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
-  const set = { cutoff: 0.32, res: 0.85, fEnv: 0.55, fD: 0.35, fS: 0.1, aS: 0.8, mix1: 0.7, mix2: 0.55, o2detune: 0.012, o1range: 1, o2range: 2 };
+  const set = { cutoff: 0.54, res: 0.85, fEnv: 0.55, fD: 0.35, fS: 0.1, aS: 0.8, mix1: 0.7, mix2: 0.55, o2detune: 0.012, o1range: 1, o2range: 2 };
   for (const k in set) { e.setParam(k, set[k]); e.ps[k] = set[k]; }
   const seq = [36, 36, 48, 36, 39, 36, 43, 46], step = SR * 0.2; const out = new Float32Array(SR * 6);
   for (let i = 0, si = 0; i < out.length; i += 128) {

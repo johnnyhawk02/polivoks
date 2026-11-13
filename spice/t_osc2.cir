@@ -1,0 +1,20 @@
+.include models.lib
+.param pr=1 icol=10u
+.include core.inc
+VIN in 0 PULSE(0 0.2 1u 1u 1u 20u 1)
+ICOL col 0 {icol}
+.options method=gear reltol=1e-4
+.control
+tran 2u 1.0 0 2u
+let t1=0.1
+let t2=0.3
+let t3=0.6
+let t4=0.9
+foreach a 0.1 0.3 0.6 0.95
+ let tb=$a+0.05
+ meas tran pk max v(bp) from=$a to=$&tb
+ meas tran mn min v(bp) from=$a to=$&tb
+ echo "E $a $&pk $&mn"
+end
+.endc
+.end

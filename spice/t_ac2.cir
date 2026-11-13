@@ -1,0 +1,13 @@
+.include models.lib
+.param pr=0.5 icol=2u
+.include core.inc
+VIN in 0 DC 0 AC 1
+ICOL col 0 {icol}
+.control
+ac lin 3 300 2400 
+print mag(v(lp)) mag(v(bp))
+ac dec 400 100 10k
+let b=mag(v(bp))
+meas ac f0 max_at b
+.endc
+.end

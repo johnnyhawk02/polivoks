@@ -1,0 +1,21 @@
+.include models.lib
+.param pr=0.5 icol=2u
+.include core.inc
+VIN in 0 SIN(0 10 2400)
+ICOL col 0 {icol}
+.options reltol=1e-4
+.control
+tran 1u 60m 0 1u
+meas tran bmx max v(bp) from=40m to=60m
+meas tran bmn min v(bp) from=40m to=60m
+meas tran bav avg v(bp) from=40m to=60m
+meas tran lav avg v(lp) from=40m to=60m
+meas tran nmx max v(n2) from=40m to=60m
+meas tran nmn min v(n2) from=40m to=60m
+let d=deriv(v(bp))
+meas tran srp max d from=40m to=60m
+meas tran srn min d from=40m to=60m
+meas tran n3x max v(n3) from=40m to=60m
+meas tran n3n min v(n3) from=40m to=60m
+.endc
+.end

@@ -1,0 +1,35 @@
+* uA776 reconstruction sanity check: GBW, SR, open-loop gain at Iset
+.include models.lib
+.param iset=15u
+VP vp 0 12.5
+VN vn 0 -12.5
+I1 iset 0 {iset}
+* unity follower for SR
+VIN in 0 PULSE(-5 5 10u 1n 1n 50u 100u) AC 0
+X1 in out vp vn out iset UA776
+* open-loop gain via DC-servo: big RC feedback
+VIN2 in2 0 DC 0 AC 1
+X2 in2 fb vp vn out2 iset2 UA776
+I2 iset2 0 {iset}
+Rf out2 fb 1Meg
+Cf fb 0 1
+.control
+foreach is 1.5u 15u 100u
+  alterparam iset=$is
+  reset
+  op
+  print @VP[i] v(out2)
+  tran 20n 100u
+  meas tran sr_up deriv v(out) at=35u
+  let d=deriv(v(out))
+  meas tran srmax max d from=10.5u to=40u
+  meas tran srmin min d from=60.5u to=90u
+  ac dec 20 1 100Meg
+  let g=db(v(out2))
+  meas ac a0 find g at=1
+  meas ac ugf when g=0
+  let ph=180/pi*cph(v(out2))
+  meas ac phug find ph when g=0
+end
+.endc
+.end

@@ -1,0 +1,28 @@
+* VCF small-signal: f0 and Q vs Iset and resonance knob
+.include models.lib
+.param pr=0 icol=1u
+.include core.inc
+VIN in 0 DC 0 AC 1
+ICOL col 0 {icol}
+.control
+echo "icol pr f0 bpk lpdc q"
+foreach ic 0.1u 0.3u 1u 3u 10u 30u 100u
+ foreach r 0 0.5 0.8 0.95
+  alterparam icol=$ic
+  alterparam pr=$r
+  reset
+  ac dec 200 1 10Meg
+  let b=mag(v(bp))
+  let l=mag(v(lp))
+  meas ac bpk max b
+  meas ac f0 max_at b
+  let h=bpk/sqrt(2)
+  meas ac flo when b=h rise=1
+  meas ac fhi when b=h fall=1
+  meas ac lpdc find l at=1
+  let q=f0/(fhi-flo)
+  echo "R $ic $r $&f0 $&bpk $&lpdc $&q"
+ end
+end
+.endc
+.end
