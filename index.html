@@ -81,6 +81,31 @@
   #resetbtn { transform: rotate(1.5deg); }
   #resetbtn:hover { transform: rotate(-1deg) scale(1.03); }
   .resp { margin-top: 4px; }
+  /* knob step sequences (performance feature): label on a black slab while one runs */
+  .ctl .lab.seq { background: var(--ink); color: var(--pink); padding: 1px 5px; }
+  #seqed { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 8px; background: rgba(0,0,0,.62); }
+  #seqed[hidden] { display: none; }
+  .sq { position: relative; isolation: isolate; width: min(860px, 100%); max-height: 100%; overflow: auto; color: var(--ink); padding: 14px 18px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .sq::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--pink); clip-path: polygon(0 1.5%, 40% 0, 100% 1%, 99.6% 98.8%, 58% 100%, .4% 98.2%); }
+  .sq-head { display: flex; align-items: center; gap: 12px; }
+  .sq-ttl { position: relative; isolation: isolate; font: 400 20px/1 var(--display); color: var(--paper); text-transform: uppercase; padding: 5px 10px 3px; transform: rotate(-1.4deg); white-space: nowrap; }
+  .sq-ttl::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ink); clip-path: polygon(0 8%, 100% 0, 98.5% 100%, 1% 92%); }
+  .sq-sub { font: 600 10px var(--mono); letter-spacing: .12em; }
+  .sb { position: relative; isolation: isolate; cursor: pointer; border: 0; background: transparent; color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 7px 12px 5px; touch-action: manipulation; }
+  .sb::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ink); clip-path: polygon(0 8%, 100% 0, 97% 100%, 3% 92%); }
+  .sb.sm { padding: 4px 9px 2px; font-size: 14px; }
+  .sb.lit { color: var(--pink); }
+  .sq-grid { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; height: clamp(96px, 34vh, 220px); touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+  .bar { position: relative; border: 2px solid var(--ink); }
+  .bar::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--ink); }
+  .bar i { position: absolute; left: 0; right: 0; background: var(--ink); }
+  .bar.off { opacity: .25; }
+  .bar.now { background: var(--paper); }
+  .sq-row { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
+  .sq-f { display: flex; align-items: center; gap: 7px; font: 500 11px var(--mono); letter-spacing: .08em; }
+  .sq-f b, .sq-src { font: 600 12px var(--mono); min-width: 3.4em; text-align: center; }
+  .sq-src { font-size: 10.5px; letter-spacing: .1em; }
+  .sq-f input[type=range] { width: 110px; accent-color: var(--ink); }
   details { margin-top: 22px; font: 400 14px/1.5 var(--sans); max-width: 1100px; }
   details summary { cursor: pointer; font: 400 17px var(--display); text-transform: uppercase; letter-spacing: .01em; }
   details td { padding: 4px 14px 4px 0; vertical-align: top; border-bottom: 1.5px solid var(--ink); }
@@ -849,6 +874,82 @@ class PolivoksEngine {
 
 if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
 </script>
+<script type="text/plain" id="seq-src">// ============================================================================
+// Knob step sequencer: a PERFORMANCE FEATURE added on top of the model.
+// It is not part of the Polivoks circuit.  Each knob can have its own step
+// sequence; the sequence is a ± offset around where the knob is set, so
+// turning the knob moves the centre and the sequence rides on top.  It runs
+// at control rate (every CHUNK samples) and only ever calls the engine's
+// setParam, exactly as turning the knob would, so the circuit model is
+// untouched.  With every sequence off the engine sees the plain knob values.
+// ============================================================================
+class KnobSeq {
+  constructor(sr, engine, report) {
+    this.sr = sr; this.e = engine; this.report = report || null;
+    this.base = {};      // knob settings as turned on the panel
+    this.range = {};     // id -> [lo, hi]
+    this.seq = {};       // id -> { on, len, div, depth, slew, steps[16] }
+    this.cur = {};       // slewed step value, −1..+1
+    this.val = {};       // value last sent to the engine
+    this.bpm = 120;
+    this.pos = 0;        // clock position in 16th notes
+    this.time = 0;
+    this.pulses = 0; this.extT = -1;   // MIDI clock, 24 pulses per quarter
+    this.repT = 0;
+  }
+  extActive() { return this.extT >= 0 && this.time - this.extT < 0.5; }
+  param(id, v) { this.base[id] = v; const s = this.seq[id]; if (!(s && s.on)) this.e.setParam(id, v); }
+  setSeq(id, s, range) {
+    const was = this.seq[id] && this.seq[id].on;
+    this.seq[id] = s; if (range) this.range[id] = range;
+    if (s.on && !was) this.cur[id] = 0;
+    if (!s.on && was && id in this.base) { this.e.setParam(id, this.base[id]); delete this.val[id]; }
+  }
+  setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
+  // MIDI clock: each pulse is 1/6 of a 16th; Start goes back to step 1
+  clock() { if (!this.extActive()) this.pulses = Math.round(this.pos * 6); this.pulses++; this.pos = this.pulses / 6; this.extT = this.time; }
+  start() { this.pulses = 0; this.pos = 0; this.extT = this.time; }
+  stop() { this.extT = -1; }
+  tick(dt) {
+    this.time += dt;
+    if (!this.extActive()) this.pos += dt * this.bpm / 15;   // 4 sixteenths per beat
+    let any = false;
+    for (const id in this.seq) {
+      const s = this.seq[id]; if (!s.on) continue; any = true;
+      const step = Math.floor(this.pos / s.div) % s.len;
+      const k = s.slew > 0 ? 1 - Math.exp(-dt / s.slew) : 1;
+      const c = this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k;
+      const r = this.range[id] || [0, 1], b = id in this.base ? this.base[id] : r[0];
+      const v = Math.max(r[0], Math.min(r[1], b + s.depth * c * (r[1] - r[0])));
+      if (v !== this.val[id]) { this.val[id] = v; this.e.setParam(id, v); }
+    }
+    this.repT += dt;
+    if (this.report && this.repT >= 1 / 30) { this.repT = 0; this.report({ t: 'seqpos', pos: Math.floor(this.pos), ext: this.extActive(), v: any ? Object.assign({}, this.val) : null }); }
+  }
+  render(out, n) {
+    const C = 64;
+    for (let i = 0; i < n; i += C) {
+      const m = Math.min(C, n - i);
+      this.tick(m / this.sr);
+      this.e.render(i === 0 && m === n ? out : out.subarray(i, i + m), m);
+    }
+  }
+  msg(d) {
+    if (d.t === 'p') this.param(d.id, d.v);
+    else if (d.t === 'seq') this.setSeq(d.id, d.s, d.range);
+    else if (d.t === 'bpm') this.setBpm(d.v);
+    else if (d.t === 'clk') this.clock();
+    else if (d.t === 'cstart') this.start();
+    else if (d.t === 'cstop') this.stop();
+    else if (d.t === 'on') this.e.noteOn(d.n);
+    else if (d.t === 'off') this.e.noteOff(d.n);
+    else if (d.t === 'all') this.e.allOff();
+    else if (d.t === 'ext') this.e.setExt(d.data);
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = { KnobSeq };
+</script>
 <script>
 (() => {
 'use strict';
@@ -914,7 +1015,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -956,14 +1057,31 @@ function makeKnob(c) {
   el('circle', { cx, cy, r: R, fill: '#0b0b0b', stroke: '#0b0b0b', 'stroke-width': 2 }, g);
   for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; el('line', { x1: cx + Math.sin(a) * (R - 3), y1: cy - Math.cos(a) * (R - 3), x2: cx + Math.sin(a) * (R - 0.5), y2: cy - Math.cos(a) * (R - 0.5), stroke: '#fff', 'stroke-width': 0.6, opacity: 0.6 }, g); }
   el('line', { x1: cx, y1: cy - 3, x2: cx, y2: cy - R + 1, stroke: '#fff', 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+  // white dot on the scale: where the knob's step sequence has it right now
+  const md = el('circle', { r: 3.4, fill: '#fff', stroke: '#0b0b0b', 'stroke-width': 1.6, display: 'none', 'pointer-events': 'none' }, svg);
   const lab = document.createElement('div'); lab.className = 'lab'; mark(lab, c.label); wrap.appendChild(lab);
   const toU = (v) => bip ? (v + 1) / 2 : v, fromU = (u) => bip ? u * 2 - 1 : u;
   const show = (v) => g.setAttribute('transform', `rotate(${-135 + 270 * toU(v)} ${cx} ${cy})`);
   c.set = (v, quiet) => { v = Math.max(bip ? -1 : 0, Math.min(1, v)); c.v = v; show(v); if (!quiet) setParam(c.id, v); };
-  let y0 = 0, u0 = 0, drag = false;
-  svg.addEventListener('pointerdown', (e) => { drag = true; y0 = e.clientY; u0 = toU(c.v); svg.setPointerCapture(e.pointerId); e.preventDefault(); });
-  svg.addEventListener('pointermove', (e) => { if (!drag || !e.buttons) { drag = false; return; } const k = e.shiftKey ? 1200 : 220; c.set(fromU(Math.max(0, Math.min(1, u0 + (y0 - e.clientY) / k)))); });
-  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) svg.addEventListener(ev, () => { drag = false; });
+  c.showMod = (v) => {
+    if (v == null) { md.setAttribute('display', 'none'); return; }
+    const a = ang(Math.max(0, Math.min(1, toU(v))));
+    md.setAttribute('cx', cx + Math.sin(a) * (R + 5)); md.setAttribute('cy', cy - Math.cos(a) * (R + 5)); md.removeAttribute('display');
+  };
+  c.seqMark = (on) => lab.classList.toggle('seq', on);
+  // press and hold without moving (or right click) opens the knob's sequence
+  let x0 = 0, y0 = 0, u0 = 0, drag = false, hold = null;
+  const unhold = () => { clearTimeout(hold); hold = null; };
+  svg.addEventListener('pointerdown', (e) => {
+    drag = true; x0 = e.clientX; y0 = e.clientY; u0 = toU(c.v); svg.setPointerCapture(e.pointerId); e.preventDefault();
+    unhold(); if (e.button === 0) hold = setTimeout(() => { hold = null; drag = false; if (toU(c.v) !== u0) c.set(fromU(u0)); openSeq(c); }, 450);
+  });
+  svg.addEventListener('pointermove', (e) => {
+    if (hold && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) > 4) unhold();
+    if (!drag || !e.buttons) { drag = false; return; } const k = e.shiftKey ? 1200 : 220; c.set(fromU(Math.max(0, Math.min(1, u0 + (y0 - e.clientY) / k))));
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) svg.addEventListener(ev, () => { drag = false; unhold(); });
+  svg.addEventListener('contextmenu', (e) => { e.preventDefault(); unhold(); drag = false; openSeq(c); });
   svg.addEventListener('dblclick', () => c.set(c.def));
   return wrap;
 }
@@ -1032,7 +1150,115 @@ for (const gid in L) {
   }
 }
 applyLang();
-document.getElementById('resetbtn').onclick = () => { for (const c of S) c.set(c.def); };
+document.getElementById('resetbtn').onclick = () => {
+  for (const c of S) c.set(c.def);
+  for (const id in seqs) if (seqs[id].on) { seqs[id].on = false; pushSeq(S.find((c) => c.id === id)); }
+  if (edC) drawSeq();
+};
+
+// ---------------------------------------------------------------- knob sequences
+// A performance feature on top of the model (see seq.js): every knob can
+// carry a step sequence that moves it ± around where it is set.
+const SEQ_STORE = 'polivoks-seq-v1';
+let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
+const seqs = {};
+let bpm = seqSaved.bpm || 120, extBpm = 0, lastPos = null;
+const DIVS = [1, 2, 4, 8, 16], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR'];
+const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, steps: new Array(16).fill(0) }, (seqSaved.k || {})[id]));
+const saveSeq = () => { try { localStorage.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
+const KNOBS = S.filter((c) => c.kind === 'knob');
+const seqMsg = (c) => { const s = seqOf(c.id); return { t: 'seq', id: c.id, s: Object.assign({}, s, { steps: s.steps.slice() }), range: c.scale === 'bip' ? [-1, 1] : [0, 1] }; };
+function pushSeq(c) { const s = seqOf(c.id); send(seqMsg(c)); c.seqMark(s.on); if (!s.on) c.showMod(null); saveSeq(); }
+for (const c of KNOBS) if ((seqSaved.k || {})[c.id]) c.seqMark(seqOf(c.id).on);
+function onSeqPos(d) {
+  lastPos = d;
+  for (const c of KNOBS) { const s = seqs[c.id]; if (s && s.on && d.v && c.id in d.v) c.showMod(d.v[c.id]); }
+  if (edC) { markStep(); edSrc.textContent = d.ext ? 'MIDI CLOCK' + (extBpm ? ' · ' + extBpm.toFixed(0) : '') : 'INTERNAL'; }
+}
+// MIDI clock: 24 pulses a quarter note, forwarded to the engine; tempo shown in the editor
+let clkT = [];
+function midiClock(st) {
+  if (st === 0xf8) {
+    send({ t: 'clk' }); const t = performance.now(); clkT.push(t); if (clkT.length > 25) clkT.shift();
+    if (clkT.length > 4) extBpm = 60000 / ((clkT[clkT.length - 1] - clkT[0]) / (clkT.length - 1) * 24);
+  } else if (st === 0xfa) send({ t: 'cstart' });
+  else if (st === 0xfc) { send({ t: 'cstop' }); clkT = []; }
+}
+// editor
+const ed = document.createElement('div'); ed.id = 'seqed'; ed.hidden = true;
+ed.innerHTML = `<div class="sq" role="dialog" aria-label="Knob sequence">
+  <div class="sq-head"><div class="sq-ttl"></div><div class="sq-sub">STEP SEQUENCE</div><span style="flex:1"></span>
+    <button class="sb sq-on"></button><button class="sb sq-x" aria-label="Close">✕</button></div>
+  <div class="sq-grid"></div>
+  <div class="sq-row">
+    <div class="sq-f"><span>STEPS</span><button class="sb sm" data-a="len-">−</button><b class="sq-len"></b><button class="sb sm" data-a="len+">+</button></div>
+    <div class="sq-f"><span>RATE</span><button class="sb sm" data-a="div-">−</button><b class="sq-div"></b><button class="sb sm" data-a="div+">+</button></div>
+    <label class="sq-f"><span>DEPTH</span><input type="range" class="sq-depth" min="0" max="100"><b class="sq-depthv"></b></label>
+    <label class="sq-f"><span>SLEW</span><input type="range" class="sq-slew" min="0" max="100"><b class="sq-slewv"></b></label>
+  </div>
+  <div class="sq-row">
+    <label class="sq-f"><span>CLOCK</span><input type="range" class="sq-bpm" min="40" max="240"><b class="sq-bpmv"></b></label>
+    <b class="sq-src"></b><span style="flex:1"></span>
+    <button class="sb" data-a="rand">RANDOM</button><button class="sb" data-a="clear">CLEAR</button>
+  </div>
+</div>`;
+document.body.appendChild(ed);
+const q = (s) => ed.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
+const bars = [];
+for (let i = 0; i < 16; i++) { const b = document.createElement('div'); b.className = 'bar'; const f = document.createElement('i'); b.appendChild(f); grid.appendChild(b); bars.push(b); }
+let edC = null, nowStep = -1;
+function openSeq(c) { edC = c; q('.sq-ttl').textContent = tr(c.label); ed.hidden = false; drawSeq(); if (lastPos) onSeqPos(lastPos); }
+function closeSeq() { ed.hidden = true; edC = null; }
+function drawSeq() {
+  const s = seqOf(edC.id);
+  bars.forEach((b, i) => {
+    const v = s.steps[i], f = b.firstChild;
+    f.style.top = v >= 0 ? (50 - v * 50) + '%' : '50%'; f.style.height = Math.abs(v) * 50 + '%';
+    b.classList.toggle('off', i >= s.len);
+  });
+  const on = q('.sq-on'); on.textContent = s.on ? 'ON' : 'OFF'; on.classList.toggle('lit', s.on);
+  q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
+  q('.sq-depth').value = Math.round(s.depth * 100); q('.sq-depthv').textContent = Math.round(s.depth * 100) + '%';
+  q('.sq-slew').value = Math.round(Math.sqrt(s.slew / 2) * 100); q('.sq-slewv').textContent = s.slew < 1 ? Math.round(s.slew * 1000) + ' ms' : s.slew.toFixed(2) + ' s';
+  q('.sq-bpm').value = bpm; q('.sq-bpmv').textContent = bpm + ' BPM';
+  markStep();
+}
+function markStep() {
+  const s = seqOf(edC.id), n = s.on && lastPos ? Math.floor(lastPos.pos / s.div) % s.len : -1;
+  if (n !== nowStep) { if (bars[nowStep]) bars[nowStep].classList.remove('now'); if (bars[n]) bars[n].classList.add('now'); nowStep = n; }
+}
+const change = (fn) => { const s = seqOf(edC.id); fn(s); pushSeq(edC); drawSeq(); };
+q('.sq-on').onclick = () => change((s) => { s.on = !s.on; });
+q('.sq-x').onclick = closeSeq;
+ed.addEventListener('pointerdown', (e) => { if (e.target === ed) closeSeq(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && edC) closeSeq(); });
+ed.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => change((s) => {
+  const a = b.dataset.a, di = DIVS.indexOf(s.div);
+  if (a === 'len-') s.len = Math.max(1, s.len - 1); else if (a === 'len+') s.len = Math.min(16, s.len + 1);
+  else if (a === 'div-') s.div = DIVS[Math.max(0, di - 1)]; else if (a === 'div+') s.div = DIVS[Math.min(DIVS.length - 1, di + 1)];
+  else if (a === 'rand') { for (let i = 0; i < 16; i++) s.steps[i] = Math.round((Math.random() * 2 - 1) * 20) / 20; s.on = true; }
+  else if (a === 'clear') s.steps.fill(0);
+}));
+q('.sq-depth').oninput = (e) => change((s) => { s.depth = e.target.value / 100; });
+q('.sq-slew').oninput = (e) => change((s) => { const u = e.target.value / 100; s.slew = 2 * u * u; });
+q('.sq-bpm').oninput = (e) => { bpm = +e.target.value; send({ t: 'bpm', v: bpm }); saveSeq(); drawSeq(); };
+// draw steps by dragging across the bars; drawing switches the sequence on
+let paint = null;
+const stepAt = (e) => {
+  const r = grid.getBoundingClientRect();
+  const i = Math.max(0, Math.min(15, Math.floor((e.clientX - r.left) / r.width * 16)));
+  let v = Math.max(-1, Math.min(1, 1 - 2 * (e.clientY - r.top) / r.height)); if (Math.abs(v) < 0.06) v = 0;
+  return [i, Math.round(v * 100) / 100];
+};
+const paintTo = (e) => change((s) => {
+  const [i, v] = stepAt(e), [i0, v0] = paint;
+  const n = Math.abs(i - i0);
+  for (let k = 0; k <= n; k++) { const j = i0 + Math.sign(i - i0) * k; s.steps[j] = n ? v0 + (v - v0) * k / n : v; }
+  paint = [i, v]; s.on = true;
+});
+grid.addEventListener('pointerdown', (e) => { paint = stepAt(e); grid.setPointerCapture(e.pointerId); paintTo(e); e.preventDefault(); });
+grid.addEventListener('pointermove', (e) => { if (paint && e.buttons) paintTo(e); });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addEventListener(ev, () => { paint = null; });
 
 // ---------------------------------------------------------------- audio
 // Always on.  Browsers only let audio start after the first click, tap or key
@@ -1044,14 +1270,13 @@ async function powerOn() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     ctx.onstatechange = () => { powered = ctx.state === 'running'; document.getElementById('emode').textContent = powered ? engineMode : 'waiting for a click or key'; };
-    const src = document.getElementById('dsp-src').textContent + `
+    const lib = document.getElementById('dsp-src').textContent + '\n' + document.getElementById('seq-src').textContent;
+    const src = lib + `
 class PolivoksProc extends AudioWorkletProcessor {
   constructor() { super(); this.e = new PolivoksEngine(sampleRate);
-    this.port.onmessage = (m) => { const d = m.data;
-      if (d.t === 'p') this.e.setParam(d.id, d.v); else if (d.t === 'on') this.e.noteOn(d.n);
-      else if (d.t === 'off') this.e.noteOff(d.n); else if (d.t === 'all') this.e.allOff();
-      else if (d.t === 'ext') this.e.setExt(d.data); }; }
-  process(i, o) { const out = o[0]; this.e.render(out[0], out[0].length); for (let c = 1; c < out.length; c++) out[c].set(out[0]); return true; }
+    this.q = new KnobSeq(sampleRate, this.e, (m) => this.port.postMessage(m));
+    this.port.onmessage = (m) => this.q.msg(m.data); }
+  process(i, o) { const out = o[0]; this.q.render(out[0], out[0].length); for (let c = 1; c < out.length; c++) out[c].set(out[0]); return true; }
 }
 registerProcessor('polivoks', PolivoksProc);`;
     analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
@@ -1062,22 +1287,24 @@ registerProcessor('polivoks', PolivoksProc);`;
     }
     if (ok) {
       node = new AudioWorkletNode(ctx, 'polivoks', { numberOfInputs: 0, outputChannelCount: [2] });
+      node.port.onmessage = (m) => onSeqPos(m.data);
       node.connect(analyser);
       engineMode = 'AudioWorklet';
     } else {
       // Fallback for sandboxed frames that refuse worklet modules: run the same
       // engine on the main thread through a ScriptProcessorNode.
-      const eng = new (new Function(document.getElementById('dsp-src').textContent + '; return PolivoksEngine;')())(ctx.sampleRate);
+      const [Eng, KS] = new Function(lib + '; return [PolivoksEngine, KnobSeq];')();
+      const qs = new KS(ctx.sampleRate, new Eng(ctx.sampleRate), onSeqPos);
       const sp = ctx.createScriptProcessor(1024, 0, 2);
-      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0); eng.render(L0, L0.length); ev.outputBuffer.getChannelData(1).set(L0); };
-      node = { port: { postMessage: (d) => {
-        if (d.t === 'p') eng.setParam(d.id, d.v); else if (d.t === 'on') eng.noteOn(d.n);
-        else if (d.t === 'off') eng.noteOff(d.n); else if (d.t === 'all') eng.allOff(); else if (d.t === 'ext') eng.setExt(d.data); } } };
+      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0); qs.render(L0, L0.length); ev.outputBuffer.getChannelData(1).set(L0); };
+      node = { port: { postMessage: (d) => qs.msg(d) } };
       sp.connect(analyser);
       engineMode = 'main thread';
     }
     analyser.connect(ctx.destination);
     for (const c of S) send({ t: 'p', id: c.id, v: c.v });
+    send({ t: 'bpm', v: bpm });
+    for (const c of KNOBS) if (seqs[c.id]) send(seqMsg(c));
     if (extData) send({ t: 'ext', data: extData });
     send({ t: 'p', id: 'power', v: 1 });
     for (const m of early.splice(0)) send(m);
@@ -1151,6 +1378,7 @@ function bsiiCC(cc, val) {
 const isBSII = (name) => /bass\s*station\s*(ii|2)/i.test(name || '');
 function midiMsg(m, bsii) {
   const [st, d1, d2] = m.data, ty = st & 0xf0;
+  if (st >= 0xf8) { midiClock(st); return; }
   if (bsii && ty === 0xb0 && bsiiCC(d1, d2)) return;
   if (ty === 0x90 && d2 > 0) { sustained.delete(d1); on(d1, 'midi'); }
   else if (ty === 0x80 || ty === 0x90) { if (pedal) sustained.add(d1); else off(d1, 'midi'); }
