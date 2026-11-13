@@ -119,3 +119,49 @@ console.log('--- stability sweep ---');
   console.log('seq cutoff values', [...seen].sort().join(' '), '| moved', moved.toFixed(3), '| off ->', e.p.cutoff);
   if (![...seen].includes('1.000') || ![...seen].includes('0.000') || ![...seen].includes('0.750') || e.p.cutoff !== 0.4) { console.log('SEQ TEST FAILED'); process.exitCode = 1; }
 }
+// stereo echo (an added effect after the synth, fx.js)
+{
+  const { TapeEcho, FxRack } = require('./fx.js');
+  const { KnobSeq } = require('./seq.js');
+  console.log('--- stereo echo (added effect, not circuit) ---');
+  const runFx = (set, len, feed) => {
+    const fx = new TapeEcho(SR); for (const k in set) { fx.set(k, set[k]); fx.ps[k] = set[k]; } fx.d = fx.target();
+    const L = new Float32Array(SR * len), R = new Float32Array(SR * len);
+    for (let i = 0; i < L.length; i++) L[i] = feed(i);
+    for (let i = 0; i < L.length; i += 128) fx.process(L.subarray(i, i + 128), R.subarray(i, i + 128), 128);
+    return { L, R, fx };
+  };
+  const peakAt = (x, a, b) => { let m = 0, at = a; for (let i = a; i < b; i++) if (Math.abs(x[i]) > m) { m = Math.abs(x[i]); at = i; } return [at, m]; };
+  // 1/8 at 120 BPM = 250 ms, full spread: echoes alternate L, R, L
+  const { L, R } = runFx({ eSync: 1, eTime: 2 / 6, eFb: 0.6, eMix: 1, eSpread: 1, eTone: 1 }, 1, (i) => i < 48 ? 0.8 : 0);
+  const e1 = peakAt(L, 2000, 18000), e1r = peakAt(R, 2000, 18000), e2 = peakAt(R, 18000, 30000), e3 = peakAt(L, 30000, 42000);
+  console.log(`ping-pong 1/8 @120: L ${(e1[0] / SR * 1e3).toFixed(1)} ms (${e1[1].toFixed(3)}), R ${(e2[0] / SR * 1e3).toFixed(1)} ms (${e2[1].toFixed(3)}), L ${(e3[0] / SR * 1e3).toFixed(1)} ms (${e3[1].toFixed(3)}); R at first echo ${e1r[1].toFixed(4)}`);
+  if (Math.abs(e1[0] / SR - 0.25) > 0.004 || Math.abs(e2[0] / SR - 0.5) > 0.006 || e1r[1] > 0.01 || !(e3[1] < e2[1] && e2[1] < e1[1])) { console.log('ECHO TIMING FAILED'); process.exitCode = 1; }
+  // feedback flat out on loud noise, then silence: bounded and dying away
+  const hot = runFx({ eSync: 0, eTime: 0.3, eFb: 1, eMix: 1, eSpread: 1, eTone: 1 }, 12, (i) => i < SR ? (Math.random() * 2 - 1) : 0);
+  const rms = (x, a, b) => { let s = 0; for (let i = a; i < b; i++) s += x[i] * x[i]; return Math.sqrt(s / (b - a)); };
+  let pk = 0; for (const x of [hot.L, hot.R]) for (const v of x) pk = Math.max(pk, Math.abs(v));
+  const r1 = rms(hot.L, SR, 2 * SR), r5 = rms(hot.L, 5 * SR, 6 * SR), r11 = rms(hot.L, 11 * SR, 12 * SR);
+  console.log(`feedback at max: peak ${pk.toFixed(3)}, rms 1-2 s ${r1.toFixed(3)}, 5-6 s ${r5.toFixed(3)}, 11-12 s ${r11.toFixed(4)}`);
+  if (pk > 1 || !(r5 < r1 && r11 < r5 * 0.5)) { console.log('ECHO RUNAWAY'); process.exitCode = 1; }
+  // whole chain with random echo settings: finite, ≤ full scale, CPU
+  const e = new PolivoksEngine(SR), fx = new TapeEcho(SR), q = new KnobSeq(SR, new FxRack(e, fx));
+  q.msg({ t: 'p', id: 'power', v: 1 }); e.powerLevel = 1;
+  for (const [k, v] of Object.entries({ volume: 1, cutoff: 0.8, res: 0.7, mix1: 1, mix2: 1 })) q.msg({ t: 'p', id: k, v });
+  const oL = new Float32Array(128), oR = new Float32Array(128); let bad = 0, pk2 = 0; const t0 = Date.now(), nb = 3000;
+  for (let b = 0; b < nb; b++) {
+    if (b % 60 === 0) { for (const k of ['eTime', 'eFb', 'eTone', 'eMix', 'eSpread']) q.msg({ t: 'p', id: k, v: Math.random() }); q.msg({ t: 'p', id: 'eSync', v: Math.random() < .5 ? 0 : 1 }); q.msg({ t: 'on', n: 36 + Math.floor(Math.random() * 36) }); }
+    if (b % 60 === 30) q.msg({ t: 'all' });
+    q.render(oL, 128); fx.bpm = q.tempo(); fx.process(oL, oR, 128);
+    for (let i = 0; i < 128; i++) { if (!isFinite(oL[i]) || !isFinite(oR[i])) bad++; pk2 = Math.max(pk2, Math.abs(oL[i]), Math.abs(oR[i])); }
+  }
+  console.log(`synth + echo, random settings: NaN/inf ${bad}, peak ${pk2.toFixed(3)}, CPU ${((Date.now() - t0) / 1000 / (nb * 128 / SR) * 100).toFixed(1)}% of realtime`);
+  if (bad || pk2 > 1) { console.log('ECHO CHAIN FAILED'); process.exitCode = 1; }
+  // MIDI clock at 100 BPM sets the echo: 1/4 = 600 ms
+  const q2 = new KnobSeq(SR, new FxRack(new PolivoksEngine(SR), fx)); const o = new Float32Array(128);
+  let next = 0; const per = 60 / 100 / 24;
+  for (let b = 0; b < SR * 2 / 128; b++) { const t = b * 128 / SR; while (next <= t) { q2.msg({ t: 'clk' }); next += per; } q2.render(o, 128); }
+  fx.set('eSync', 1); fx.set('eTime', 4 / 6); fx.bpm = q2.tempo();
+  console.log(`MIDI clock 100 BPM: tempo ${q2.tempo()}, echo 1/4 = ${(fx.target() / SR * 1e3).toFixed(1)} ms`);
+  if (q2.tempo() !== 100 || Math.abs(fx.target() / SR - 0.6) > 1e-6) { console.log('ECHO CLOCK FAILED'); process.exitCode = 1; }
+}

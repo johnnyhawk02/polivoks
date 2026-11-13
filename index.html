@@ -45,9 +45,14 @@
   .ctl svg text { fill: var(--ink); font-family: var(--mono); font-size: 9.5px; }
   .sw { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; user-select: none; -webkit-user-select: none; }
   .sw .slot { width: 18px; height: 38px; border: 2px solid var(--ink); position: relative; }
-  .sw .lev { position: absolute; left: 2px; right: 2px; height: 15px; background: var(--ink); transition: top .08s; }
+  .sw .lev { --lh: 15px; position: absolute; left: 2px; right: 2px; height: var(--lh); background: var(--ink); transition: top .08s; }
   .sw .t { font: 500 10px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
-  .head { display: flex; align-items: center; gap: 14px; padding: 4px 4px 4px 2px; }
+  .head { display: flex; align-items: center; gap: 14px; padding: 4px 0 0 2px; }
+  /* the echo is an effect after the synth: one compact row beside the title */
+  .head .echo { flex: 1; padding: 12px 6px 2px; }
+  .head .echo .row { align-items: center; }
+  .head .echo .sw .slot { height: 30px; }
+  .head .echo .sw .lev { --lh: 11px; }
   .head .ttl {
     width: fit-content; white-space: nowrap; background: var(--ink); color: var(--paper);
     font: 400 32px/1 var(--display); letter-spacing: -.01em; text-transform: uppercase; padding: 8px 12px 6px;
@@ -108,6 +113,7 @@
     <div class="col">
       <div class="head">
         <div class="ttl">THEE FILF</div>
+        <div class="box echo"><h2>ECHO</h2><div class="row" id="g-echo"></div></div>
       </div>
       <div class="row" style="gap:8px;align-items:stretch">
         <div class="box" style="flex:1"><h2>VCO I</h2><div class="row" id="g-o1a"></div><div class="row" id="g-o1b"></div></div>
@@ -862,6 +868,7 @@ class KnobSeq {
     this.pos = 0;        // clock position in 16th notes
     this.time = 0;
     this.pulses = 0; this.extT = -1;   // MIDI clock, 24 pulses per quarter
+    this.clkT = []; this.extBpm = 0;    // tempo measured from the MIDI clock
     this.repT = 0;
   }
   extActive() { return this.extT >= 0 && this.time - this.extT < 0.5; }
@@ -874,9 +881,20 @@ class KnobSeq {
   }
   setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
   // MIDI clock: each pulse is 1/6 of a 16th; Start goes back to step 1
-  clock() { if (!this.extActive()) this.pulses = Math.round(this.pos * 6); this.pulses++; this.pos = this.pulses / 6; this.extT = this.time; }
+  clock() {
+    if (!this.extActive()) { this.pulses = Math.round(this.pos * 6); this.clkT.length = 0; }
+    this.pulses++; this.pos = this.pulses / 6; this.extT = this.time;
+    const c = this.clkT; c.push(this.time); if (c.length > 49) c.shift();
+    if (c.length >= 13) {
+      let b = 60 / ((c[c.length - 1] - c[0]) / (c.length - 1) * 24);
+      if (Math.abs(b - Math.round(b)) < 0.3) b = Math.round(b);   // DAW tempos are mostly whole
+      this.extBpm = Math.max(20, Math.min(300, b));
+    }
+  }
   start() { this.pulses = 0; this.pos = 0; this.extT = this.time; }
-  stop() { this.extT = -1; }
+  stop() { this.extT = -1; this.clkT.length = 0; }
+  // the clock's tempo: MIDI clock while it runs, else the internal BPM
+  tempo() { return this.extActive() && this.extBpm ? this.extBpm : this.bpm; }
   tick(dt) {
     this.time += dt;
     if (!this.extActive()) this.pos += dt * this.bpm / 15;   // 4 sixteenths per beat
@@ -917,6 +935,122 @@ class KnobSeq {
 
 if (typeof module !== 'undefined') module.exports = { KnobSeq };
 </script>
+<script type="text/plain" id="fx-src">// ============================================================================
+// Stereo echo: an EFFECT ADDED AFTER THE SYNTH.  It is not part of the
+// Polivoks circuit and models no particular unit; it is a tape / BBD style
+// ping-pong delay voiced to sit with a gritty mono synth:
+//   - two delay lines that feed each other (ping-pong), SPREAD sets how much
+//     of the repeat crosses sides: 0 = centred mono echo, 1 = full ping-pong
+//   - every pass goes through a band limit (TONE: dark … bright low-pass, plus
+//     a fixed low cut) and a soft saturator, so repeats get darker and dirtier
+//   - FEEDBACK is capped below unity and the saturator bounds the loop, so it
+//     can never run away
+//   - gentle wow and flutter (slightly different on each side), and delay-time
+//     changes glide like a tape motor, so moving TIME bends the repeats
+//   - TIME is free (40 ms … 1.2 s) or, with SYNC, steps through note values of
+//     the shared clock (which follows MIDI clock)
+// The synth engine is untouched: this runs on its mono output.
+// ============================================================================
+const ECHO_DEFAULTS = { eTime: 0.5, eFb: 0.35, eTone: 0.45, eMix: 0.25, eSpread: 0.8, eSync: 1 };
+// sync note values in 16ths: 1/16, 1/8T, 1/8, 1/8., 1/4, 1/4., 1/2
+const ECHO_DIVS = [1, 4 / 3, 2, 3, 4, 6, 8];
+const ECHO_FB_MAX = 0.94;
+
+class TapeEcho {
+  constructor(sr) {
+    this.sr = sr;
+    this.size = 1 << Math.ceil(Math.log2(sr * 4 + 8)); this.mask = this.size - 1;
+    this.bL = new Float32Array(this.size); this.bR = new Float32Array(this.size); this.w = 0;
+    this.p = Object.assign({}, ECHO_DEFAULTS); this.ps = Object.assign({}, ECHO_DEFAULTS);
+    this.bpm = 120;
+    this.d = this.target();                 // current delay, samples (glides)
+    this.lpL = 0; this.lpR = 0; this.lp2L = 0; this.lp2R = 0; this.hpL = 0; this.hpR = 0;
+    this.yL = 0; this.yR = 0;
+    this.ph = [0, 0.37, 0.11, 0.6];          // wow L, wow R, flutter L, flutter R
+    this.rs = 0x2545f491; this.drift = 0; this.driftT = 0;
+  }
+  set(id, v) { if (id in this.p) { this.p[id] = v; if (id === 'eSync') this.ps[id] = v; } }
+  // delay time asked for by the knobs, in samples
+  target() {
+    const u = Math.max(0, Math.min(1, this.p.eTime));
+    let s;
+    if (this.p.eSync >= 0.5) s = ECHO_DIVS[Math.min(ECHO_DIVS.length - 1, Math.round(u * (ECHO_DIVS.length - 1)))] * 15 / this.bpm;
+    else s = 0.04 * Math.pow(30, u);
+    return Math.max(0.01, Math.min(3.6, s)) * this.sr;
+  }
+  rnd() { let s = this.rs; s ^= s << 13; s ^= s >>> 17; s ^= s << 5; this.rs = s >>> 0; return this.rs / 4294967296 - 0.5; }
+  // 4-point Hermite read, d samples behind the write head
+  read(b, d) {
+    const pos = this.w - d, i = Math.floor(pos), f = pos - i, m = this.mask;
+    const y0 = b[(i - 1) & m], y1 = b[i & m], y2 = b[(i + 1) & m], y3 = b[(i + 2) & m];
+    const c1 = 0.5 * (y2 - y0), c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3, c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
+    return ((c3 * f + c2) * f + c1) * f + y1;
+  }
+  // in: mono synth output (left buffer); writes the stereo result to L and R
+  process(L, R, n) {
+    const sr = this.sr, p = this.p, ps = this.ps;
+    const sm = 1 - Math.exp(-1 / (0.02 * sr));
+    const glide = 1 - Math.exp(-1 / (0.12 * sr));        // tape motor settling
+    const tgt = this.target();
+    const hpk = 1 - Math.exp(-2 * Math.PI * 90 / sr);
+    const TW = 2 * Math.PI / sr;
+    for (let s = 0; s < n; s++) {
+      ps.eFb += (p.eFb - ps.eFb) * sm; ps.eTone += (p.eTone - ps.eTone) * sm;
+      ps.eMix += (p.eMix - ps.eMix) * sm; ps.eSpread += (p.eSpread - ps.eSpread) * sm;
+      this.d += (tgt - this.d) * glide;
+      // wow ~0.5 Hz, flutter ~6.5 Hz, plus a slow random drift
+      const ph = this.ph;
+      ph[0] += 0.53 * TW; ph[1] += 0.61 * TW; ph[2] += 6.3 * TW; ph[3] += 6.9 * TW;
+      if (ph[0] > 6.2832) { ph[0] -= 6.2832; } if (ph[1] > 6.2832) ph[1] -= 6.2832;
+      if (ph[2] > 6.2832) ph[2] -= 6.2832; if (ph[3] > 6.2832) ph[3] -= 6.2832;
+      if (--this.driftT <= 0) { this.driftT = 64; this.drift += (this.rnd() * 0.6 - this.drift * 0.002); }
+      const dr = this.drift * 0.00002 * sr;
+      const wL = (0.0009 * Math.sin(ph[0]) + 0.00007 * Math.sin(ph[2])) * sr + dr;
+      const wR = (0.0009 * Math.sin(ph[1]) + 0.00007 * Math.sin(ph[3])) * sr - dr;
+      const dL = Math.max(4, this.d + wL), dR = Math.max(4, this.d + wR);
+      const yL = this.read(this.bL, dL), yR = this.read(this.bR, dR);
+
+      const x = L[s], sp = ps.eSpread, fb = ECHO_FB_MAX * Math.min(1, Math.max(0, ps.eFb));
+      // ping-pong routing: the dry signal enters on the left (and on the right
+      // too as SPREAD comes down); SPREAD of each repeat crosses sides
+      let iL = x + fb * ((1 - sp) * yL + sp * yR);
+      let iR = x * (1 - sp) + fb * ((1 - sp) * yR + sp * yL);
+      // band limit on every pass: tone low-pass (two poles) and a 90 Hz low cut
+      const fc = 650 * Math.pow(2, 4.2 * Math.min(1, Math.max(0, ps.eTone)));
+      const lk = 1 - Math.exp(-TW * fc);
+      this.lpL += (iL - this.lpL) * lk; this.lp2L += (this.lpL - this.lp2L) * lk;
+      this.lpR += (iR - this.lpR) * lk; this.lp2R += (this.lpR - this.lp2R) * lk;
+      this.hpL += (this.lp2L - this.hpL) * hpk; this.hpR += (this.lp2R - this.hpR) * hpk;
+      iL = this.lp2L - this.hpL; iR = this.lp2R - this.hpR;
+      // soft saturation, a little asymmetric like an overdriven tape / BBD stage
+      this.bL[this.w] = Math.tanh(iL * 1.25 + 0.04) / 1.25 - 0.032;
+      this.bR[this.w] = Math.tanh(iR * 1.25 + 0.04) / 1.25 - 0.032;
+      this.w = (this.w + 1) & this.mask;
+
+      // dry stays full up to half MIX, then fades; wet comes up to full by half
+      const m = Math.min(1, Math.max(0, ps.eMix)), dg = Math.min(1, 2 - 2 * m), wg = Math.min(1, 2 * m);
+      L[s] = TapeEcho.lim(x * dg + yL * wg);
+      R[s] = TapeEcho.lim(x * dg + yR * wg);
+    }
+  }
+  // transparent below 0.7, then a soft knee up to 1
+  static lim(x) { const a = x < 0 ? -x : x; if (a <= 0.7) return x; const y = 0.7 + 0.3 * Math.tanh((a - 0.7) / 0.3); return x < 0 ? -y : y; }
+}
+
+// Passes knob values to the synth engine or to the echo, so the knob
+// sequencer can drive both through the one setParam it knows.
+class FxRack {
+  constructor(engine, fx) { this.e = engine; this.fx = fx; }
+  setParam(id, v) { if (id in this.fx.p) this.fx.set(id, v); else this.e.setParam(id, v); }
+  noteOn(n) { this.e.noteOn(n); }
+  noteOff(n) { this.e.noteOff(n); }
+  allOff() { this.e.allOff(); }
+  setExt(d) { this.e.setExt(d); }
+  render(out, n) { this.e.render(out, n); }
+}
+
+if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
+</script>
 <script>
 (() => {
 'use strict';
@@ -952,6 +1086,9 @@ const L = {
   'g-a2': [knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   'g-a3': [sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
   'g-a4': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0)],
+  // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
+  'g-echo': [knob('eTime', 'TIME', '06', .5, { sm: 1 }), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35, { sm: 1 }),
+    knob('eTone', 'TONE', '06', .45, { sm: 1 }), knob('eSpread', 'SPREAD', '06', .8, { sm: 1 }), knob('eMix', 'MIX', '06', .25, { sm: 1 })],
 };
 // fMode switch: top = ПФ (band-pass, value 1), bottom = ФНЧ (low-pass, 0) → invert mapping
 const INVERT = { fMode: true, voice: false };
@@ -982,7 +1119,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.14.0';
+const VERSION = '1.15.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1001,7 +1138,7 @@ const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag)
 const ang = (u) => (-135 + 270 * u) * Math.PI / 180;
 function makeKnob(c) {
   const wrap = document.createElement('div'); wrap.className = 'ctl';
-  const W = 92, H = 58, cx = W / 2, cy = 30, R = 17;
+  const W = c.sm ? 70 : 92, H = c.sm ? 46 : 58, cx = W / 2, cy = c.sm ? 24 : 30, R = c.sm ? 14 : 17;
   const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, wrap);
   const bip = c.scale === 'bip';
   // scale: plain tick marks only
@@ -1076,7 +1213,7 @@ function makeSwitch(c) {
   wrap.append(top, slot, bot);
   // value: 0 = top, 1 = bottom  (fMode is inverted: top ПФ = 1)
   const inv = !!INVERT[c.id];
-  c.set = (v, quiet) => { c.v = v ? 1 : 0; const down = inv ? !c.v : !!c.v; lev.style.top = down ? '19px' : '2px'; if (!quiet) setParam(c.id, c.v); };
+  c.set = (v, quiet) => { c.v = v ? 1 : 0; const down = inv ? !c.v : !!c.v; lev.style.top = down ? 'calc(100% - var(--lh))' : '2px'; if (!quiet) setParam(c.id, c.v); };
   wrap.addEventListener('click', () => c.set(c.v ? 0 : 1));
   return wrap;
 }
@@ -1165,6 +1302,8 @@ const RND = {
 };
 const knobById = (id) => KNOBS.find((c) => c.id === id);
 const SAFE = (c) => c.id !== 'volume' && c.id !== 'phones';   // never throw the level around
+// echo level knobs: PATCH keeps them in a tame range and MESS leaves them alone
+const ECHO_RANGE = { eFb: [.1, .55], eMix: [0, .4], eTone: [.2, .85] };
 function seqsOff() { for (const id in seqs) if (seqs[id].on) { seqs[id].on = false; pushSeq(knobById(id)); } }
 const dice = {
   // small moves of every knob around where it is
@@ -1182,7 +1321,8 @@ const dice = {
   // a new sound: every knob and selector at random (level knobs kept)
   patch() {
     for (const c of S) {
-      if (c.kind === 'knob' && SAFE(c)) c.set(c.scale === 'bip' ? (c.id === 'tune' ? rnd(-.15, .15) : c.id.endsWith('pitch') ? pick([0, 0, 0, 7 / 12, -5 / 12, 1, -1]) : rnd(-.3, .3)) : Math.random() ** (c.id.startsWith('mix') || c.id === 'cutoff' ? .6 : 1));
+      if (ECHO_RANGE[c.id]) c.set(rnd(...ECHO_RANGE[c.id]));
+      else if (c.kind === 'knob' && SAFE(c)) c.set(c.scale === 'bip' ? (c.id === 'tune' ? rnd(-.15, .15) : c.id.endsWith('pitch') ? pick([0, 0, 0, 7 / 12, -5 / 12, 1, -1]) : rnd(-.3, .3)) : Math.random() ** (c.id.startsWith('mix') || c.id === 'cutoff' ? .6 : 1));
       else if (c.kind === 'sel') c.set(Math.floor(rnd(0, c.opts.length)));
       else if (c.kind === 'sw' && c.id !== 'outSel') c.set(Math.random() < .5 ? 0 : 1);
     }
@@ -1191,7 +1331,7 @@ const dice = {
   // four to eight knobs on chaotic, out-of-step sequences
   mess() {
     seqsOff();
-    const pool = KNOBS.filter(SAFE).sort(() => Math.random() - .5);
+    const pool = KNOBS.filter((c) => SAFE(c) && c.id !== 'eFb' && c.id !== 'eMix').sort(() => Math.random() - .5);
     for (const c of pool.slice(0, 4 + Math.floor(rnd(0, 5)))) { const s = seqOf(c.id); RND.chaos(s); s.on = true; pushSeq(c); }
   },
 };
@@ -1221,7 +1361,8 @@ const q = (s) => ed.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src')
 // one button per knob: black = its sequence is running, white outline = the one being edited
 const pickB = {};
 const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE', mixE: 'MIX EXT.',
-  fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD' };
+  fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD',
+  eTime: 'ECHO TIME', eFb: 'ECHO FEEDBACK', eTone: 'ECHO TONE', eSpread: 'ECHO SPREAD', eMix: 'ECHO MIX' };
 for (const c of KNOBS) {
   const b = document.createElement('button'); b.textContent = PICK[c.id] || tr(c.label);
   b.onclick = () => selSeq(c); q('.sq-pick').appendChild(b); pickB[c.id] = b;
@@ -1293,13 +1434,15 @@ async function powerOn() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     ctx.onstatechange = () => { powered = ctx.state === 'running'; document.getElementById('emode').textContent = powered ? engineMode : 'waiting for a click or key'; };
-    const lib = document.getElementById('dsp-src').textContent + '\n' + document.getElementById('seq-src').textContent;
+    const lib = ['dsp-src', 'seq-src', 'fx-src'].map((id) => document.getElementById(id).textContent).join('\n');
+    // synth -> knob sequencer -> stereo echo (the echo is an added effect, not circuit)
     const src = lib + `
 class PolivoksProc extends AudioWorkletProcessor {
-  constructor() { super(); this.e = new PolivoksEngine(sampleRate);
-    this.q = new KnobSeq(sampleRate, this.e, (m) => this.port.postMessage(m));
+  constructor() { super(); this.e = new PolivoksEngine(sampleRate); this.fx = new TapeEcho(sampleRate);
+    this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx), (m) => this.port.postMessage(m));
     this.port.onmessage = (m) => this.q.msg(m.data); }
-  process(i, o) { const out = o[0]; this.q.render(out[0], out[0].length); for (let c = 1; c < out.length; c++) out[c].set(out[0]); return true; }
+  process(i, o) { const out = o[0], L = out[0], R = out[1] || new Float32Array(L.length);
+    this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length); return true; }
 }
 registerProcessor('polivoks', PolivoksProc);`;
     analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
@@ -1316,10 +1459,10 @@ registerProcessor('polivoks', PolivoksProc);`;
     } else {
       // Fallback for sandboxed frames that refuse worklet modules: run the same
       // engine on the main thread through a ScriptProcessorNode.
-      const [Eng, KS] = new Function(lib + '; return [PolivoksEngine, KnobSeq];')();
-      const qs = new KS(ctx.sampleRate, new Eng(ctx.sampleRate), onSeqPos);
+      const [Eng, KS, Echo, Rack] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack];')();
+      const fx = new Echo(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(new Eng(ctx.sampleRate), fx), onSeqPos);
       const sp = ctx.createScriptProcessor(1024, 0, 2);
-      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0); qs.render(L0, L0.length); ev.outputBuffer.getChannelData(1).set(L0); };
+      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); };
       node = { port: { postMessage: (d) => qs.msg(d) } };
       sp.connect(analyser);
       engineMode = 'main thread';

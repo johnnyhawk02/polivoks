@@ -19,6 +19,7 @@ class KnobSeq {
     this.pos = 0;        // clock position in 16th notes
     this.time = 0;
     this.pulses = 0; this.extT = -1;   // MIDI clock, 24 pulses per quarter
+    this.clkT = []; this.extBpm = 0;    // tempo measured from the MIDI clock
     this.repT = 0;
   }
   extActive() { return this.extT >= 0 && this.time - this.extT < 0.5; }
@@ -31,9 +32,20 @@ class KnobSeq {
   }
   setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
   // MIDI clock: each pulse is 1/6 of a 16th; Start goes back to step 1
-  clock() { if (!this.extActive()) this.pulses = Math.round(this.pos * 6); this.pulses++; this.pos = this.pulses / 6; this.extT = this.time; }
+  clock() {
+    if (!this.extActive()) { this.pulses = Math.round(this.pos * 6); this.clkT.length = 0; }
+    this.pulses++; this.pos = this.pulses / 6; this.extT = this.time;
+    const c = this.clkT; c.push(this.time); if (c.length > 49) c.shift();
+    if (c.length >= 13) {
+      let b = 60 / ((c[c.length - 1] - c[0]) / (c.length - 1) * 24);
+      if (Math.abs(b - Math.round(b)) < 0.3) b = Math.round(b);   // DAW tempos are mostly whole
+      this.extBpm = Math.max(20, Math.min(300, b));
+    }
+  }
   start() { this.pulses = 0; this.pos = 0; this.extT = this.time; }
-  stop() { this.extT = -1; }
+  stop() { this.extT = -1; this.clkT.length = 0; }
+  // the clock's tempo: MIDI clock while it runs, else the internal BPM
+  tempo() { return this.extActive() && this.extBpm ? this.extBpm : this.bpm; }
   tick(dt) {
     this.time += dt;
     if (!this.extActive()) this.pos += dt * this.bpm / 15;   // 4 sixteenths per beat
