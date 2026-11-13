@@ -54,73 +54,111 @@ class ExpoPair {
 }
 
 // ============================================================================
-//  VCO (sheet 5, У2/У3): current I from the expo pair charges a timing
-//  capacitor; comparator A7 fires at Vth and a transistor (V5) discharges the
-//  cap for a fixed reset time.  The capacitor voltage is integrated exactly
-//  over each (oversampled) step, so the output is the true box-filtered
-//  waveform including the finite reset slope.
-//  Shapers: precision rectifier (A9 + КД521 diodes) -> triangle;
-//           comparator A10 (К140УД8, slew-limited)  -> square / pulse.
+//  VCO (sheet 5, У2/У3).  Transcribed and checked in ngspice (spice/vco/).
+//  C5 5600 pF hangs from Vref (A6: 12.5 V·10k/12.21k = 10.24 V) to node X;
+//  the expo collector sinks I from X, so X ramps DOWN and the cap voltage
+//  vc = Vref − X ramps up.  A7 buffers X (saw test point, 0 … +10 V).
+//  Reset: V1 (КТ361Г) + V5 (КТ315Г) form a PNP/NPN latch across C5, gated
+//  through V6 by Z (R18/R19 6.19k off Vref).  V7, fed from A7 through R21
+//  3.3k, holds Z near 0 V while the ramp is high; near 0.6 V it lets go, Z
+//  rises and the latch fires.  The latch dumps C5 to ≈1.6 V in ≈0.35 µs,
+//  then A7 slews back up (2 V/µs) and V7 shuts the gate again.
+//
+//  From the SPICE sweep (spice/vco/sweep.json), the cap swing per cycle,
+//  including the dump time and A7's lag at the trigger, is
+//      ΔV(I) = 7.948 + 35.51·I^0.73  V      (fit within 0.15 cents, 1 µA–1.3 mA)
+//  so the period is C·ΔV(I)/I.  This is the high-note flattening of the core:
+//  −2.5 cents at 440 Hz … −13 at 3.5 kHz … −35 at 14 kHz (vs 22 Hz).
+//
+//  Shapers (sheet 5):
+//    saw   A7 out → C8 30 µF / R29 6.8k (AC coupling, 0.2 s)          = S
+//    tri   A8 precision rectifier, V3/V4 КД521Б, R28 = R31 = 100k,
+//          R27 100k:  out = −(|S| − Vf), flat near S = 0;  C9 50 µF out
+//    pulse A10 comparator, S into (−) via R33 20k, (+) to R34 20k / panel
 // ============================================================================
 class VCO {
   constructor(h, seed) {
     this.h = h;
-    this.C = 5.6e-9;          // timing capacitor 5600 pF (C5)
-    this.Vth = 10;            // comparator threshold (+10 V point on sheet)
-    this.tauR = 0.6e-6;       // discharge: Ron(V5)≈100 Ω × C   EST
-    this.Tres = 2.5e-6;       // reset pulse width               EST
-    this.SR = 3.0e6;          // К140УД8 slew rate ≈ 3 V/µs
-    this.Vsat = 11;           // op-amp swing on ±12.5 V
-    this.v = 0; this.resetting = false; this.rem = 0;
+    this.C = 5.6e-9;                 // C5 5600 pF
+    this.Vref = 12.5 * 10 / 12.21;   // A6 output, R15 2.21k / R16 10k
+    this.vcLow = 1.57;               // C5 voltage left after the dump (SPICE)
+    this.tDump = 0.35e-6;            // latch dump time (SPICE)
+    this.tauD = 0.08e-6;             // dump time constant (SPICE)
+    this.SR7 = 2e6;                  // A7 КР140УД8Б slew 2 V/µs   EST
+    this.SR10 = 3e6;                 // A10 slew                   EST
+    this.Vsat = 11;                  // op-amp swing on ±12.5 V
+    this.Vf = 0.6; this.wf = 0.04;   // КД521Б drop and knee in A8  EST
+    this.tC8 = 30e-6 * 6.8e3;        // C8·R29
+    this.tC9 = 5;                    // C9 50 µF into the mixer (load EST 100k)
+    // Output levels into the mixer depend on sheet 9 (not transcribed yet);
+    // each wave is scaled back to the previous nominal ±5 V so the mixer and
+    // filter drive are unchanged.  Circuit levels: saw ≈ 8 V p-p at A7,
+    // triangle ≈ 3.4 V p-p at A8, pulse ±11 V at A10.
+    this.kSaw = 1.25; this.kTri = 10 / 3.4; this.kSq = 5 / 11;
+    this.narrow = false;             // pulse switch: square or narrow pulse
+    this.narrowRef = 0.37;           // narrow pulse level, fraction of ΔV below the mean (13 % duty)  EST
+    this.vc = 0; this.dumping = false; this.rem = 0; this.dA = 0;
+    this.o = this.Vref - 5; this.dc = this.Vref - 5; this.tdc = -1.4;
     this.pulse = -this.Vsat;
-    this.vpw = 5;             // comparator reference (5 V = square)
     const rng = new Rng(seed);
     this.mismatch = (rng.u() - 0.5) * 0.004;    // pair ΔVbe mismatch in octaves
-    // Factory trim: reference current set so A4 = 440 Hz, accounting for the
-    // residual voltage left after reset and the reset time itself.
-    const vres = this.Vth * Math.exp(-this.Tres / this.tauR);
-    this.expo = new ExpoPair((this.Vth - vres) * this.C / (1 / 440 - this.Tres), 2, 303); // rb = 2 Ω  EST
+    // Factory trim: reference current that gives A4 = 440 Hz on this core.
+    let I = 2e-5; for (let i = 0; i < 20; i++) I = this.C * this.dV(I) * 440;
+    // Expo transistor series resistance seen from the emitter: its bulk RE
+    // plus the base-side resistance over β.  The base (A4 pin 11) is fed from
+    // R4 1k / R5 100 Ω, i.e. 90.9 Ω.  RE 1 Ω, rbb' 100 Ω, β 150 for the
+    // КР198НТ1А are EST (no datasheet values to hand).
+    const rb = 1 + (100 + 1e3 * 100 / 1100) / 150;
+    this.expo = new ExpoPair(I, rb, 303);
     this.saw = 0; this.tri = 0; this.sq = 0;
   }
+  dV(I) { return 7.948 + 35.51 * Math.pow(I, 0.73); }
   step(I) {
-    const C = this.C, h = this.h, Vpw = this.vpw, Vth = this.Vth, tau = this.tauR;
-    let t = h, acc = 0, above = 0, aabs = 0, v = this.v, guard = 0;
-    const M = Vth * 0.5;      // rectifier reference (mid-point of the ramp)
+    const C = this.C, h = this.h, Vref = this.Vref, lo = this.vcLow, tau = this.tauD;
+    const dv = this.dV(I), hi = lo + dv - I * this.tDump / C;
+    // comparator level on X: mean of the ramp, or near its bottom (narrow)
+    const xr = this.dc - (this.narrow ? this.narrowRef * dv : 0);
+    const vr = Vref - xr;                       // same level as cap voltage
+    let t = h, acc = 0, low = 0, vc = this.vc, guard = 0;
     while (t > 1e-14 && guard++ < 16) {
-      if (this.resetting) {
-        const dt = Math.min(t, this.rem), vinf = I * tau / C, e = Math.exp(-dt / tau);
-        const v1 = vinf + (v - vinf) * e;
-        const seg = vinf * dt + (v - vinf) * tau * (1 - e);
-        acc += seg;
-        if (v > Vpw) above += v1 >= Vpw ? dt : -tau * Math.log((Vpw - vinf) / (v - vinf));
-        // ∫|v−M| over the exponential discharge (split at the crossing)
-        if (v > M && v1 < M) {
-          const tm = -tau * Math.log((M - vinf) / (v - vinf));
-          const i1 = vinf * tm + (v - vinf) * tau * (1 - Math.exp(-tm / tau));
-          aabs += (i1 - M * tm) - ((seg - i1) - M * (dt - tm));
-        } else aabs += Math.abs(seg - M * dt);
-        v = v1; this.rem -= dt; t -= dt;
-        if (this.rem <= 1e-14) this.resetting = false;
+      if (this.dumping) {
+        // vc = lo + A·(e^(−τd/τ) − E): exponential that lands on lo exactly
+        // at the end of the dump
+        const E = Math.exp(-this.tDump / tau), A = this.dA;
+        const t1 = this.tDump - this.rem, dt = Math.min(t, this.rem), t2 = t1 + dt;
+        const e1 = Math.exp(-t1 / tau), e2 = Math.exp(-t2 / tau);
+        acc += lo * dt + A * (tau * (e1 - e2) - E * dt);
+        const v0 = vc; vc = lo + A * (e2 - E);
+        // pulse is high while X < xr, i.e. vc > vr
+        if (v0 > vr) low += vc >= vr ? dt : -tau * Math.log((vr - lo) / A + E) - t1;
+        this.rem -= dt; t -= dt;
+        if (this.rem <= 1e-14) { this.dumping = false; vc = lo; }
       } else {
-        const s = I / C, tc = (Vth - v) / s;
+        const s = I / C, tc = (hi - vc) / s;
         const dt = tc >= t ? t : Math.max(tc, 0);
-        if (v >= Vpw) above += dt; else { const tx = (Vpw - v) / s; if (tx < dt) above += dt - tx; }
-        // ∫|v−M| over the linear ramp
-        const a0 = v - M, a1 = a0 + s * dt;
-        if (a0 >= 0 || a1 <= 0) aabs += Math.abs(0.5 * (a0 + a1) * dt);
-        else { const tz = -a0 / s; aabs += 0.5 * (-a0) * tz + 0.5 * a1 * (dt - tz); }
-        acc += v * dt + 0.5 * s * dt * dt; v += s * dt; t -= dt;
-        if (tc <= dt) { v = Vth; this.resetting = true; this.rem = this.Tres; }
+        if (vc >= vr) low += dt; else { const tx = (vr - vc) / s; if (tx < dt) low += dt - tx; }
+        acc += vc * dt + 0.5 * s * dt * dt; vc += s * dt; t -= dt;
+        if (tc <= dt) { this.dumping = true; this.rem = this.tDump; this.dA = (vc - lo) / (1 - Math.exp(-this.tDump / tau)); }
       }
     }
-    this.v = v;
-    const avg = acc / h;
-    this.saw = avg - 5;                                   // −5..+5 V
-    this.tri = 2 * (aabs / h) - 5;                        // precision rectifier: 2|v−5| − 5
-    const target = -this.Vsat + 2 * this.Vsat * (above / h);
-    const dmax = this.SR * h;
-    this.pulse += clamp(target - this.pulse, -dmax, dmax);
-    this.sq = this.pulse * (5 / this.Vsat);
+    this.vc = vc;
+    const x = Vref - acc / h;                   // box-filtered X over the step
+    // A7: follower, slew-limited
+    const dm = this.SR7 * h;
+    this.o += clamp(x - this.o, -dm, dm);
+    // C8 / R29 coupling
+    this.dc += (this.o - this.dc) * (h / this.tC8);
+    const S = this.o - this.dc;
+    this.saw = S * this.kSaw;
+    // A8 precision rectifier: −(|S| − Vf) with a soft knee, then C9
+    const a = S < 0 ? -S : S, u = (a - this.Vf) / this.wf;
+    const y = -this.wf * (u > 30 ? u : Math.log1p(Math.exp(u)));
+    this.tdc += (y - this.tdc) * (h / this.tC9);
+    this.tri = (y - this.tdc) * this.kTri;
+    // A10 comparator, slew-limited
+    const target = -this.Vsat + 2 * this.Vsat * (low / h), dp = this.SR10 * h;
+    this.pulse += clamp(target - this.pulse, -dp, dp);
+    this.sq = this.pulse * this.kSq;
   }
   out(wave) { return wave === 0 ? this.tri : wave === 1 ? this.saw : this.sq; }
 }
@@ -319,7 +357,7 @@ class PolivoksEngine {
     const hb = 1 / sr, ho = 1 / this.fs; this.hb = hb; this.ho = ho;
     this.rng = new Rng(12345);
     this.vco1 = new VCO(ho, 77); this.vco2 = new VCO(ho, 991);
-    this.vco1.v = 2.1; this.vco2.v = 7.3;
+    this.vco1.vc = 3.1; this.vco2.vc = 7.3;
     this.vcf = new K140VCF(ho);
     this.egF = new EG(hb); this.egA = new EG(hb);
     this.lfo = new LFO(hb, new Rng(4242));
@@ -398,7 +436,7 @@ class PolivoksEngine {
       const oct1 = (this.cv1 - 69) / 12 + rangeOct[p.o1range | 0] + tune + lfo * ps.o1mod * ps.o1mod + vco1.mismatch;
       const oct2 = (this.cv2 - 69) / 12 + rangeOct[p.o2range | 0] + tune + lfo * ps.o2mod * ps.o2mod + ps.o2detune * 7 / 12 + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
-      vco1.vpw = p.o1wave === 3 ? 8.7 : 5; vco2.vpw = p.o2wave === 3 ? 8.7 : 5;
+      vco1.narrow = p.o1wave === 3; vco2.narrow = p.o2wave === 3;
       const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
       const fmk = ps.o1fm * ps.o1fm * 2 * LN2 / 5;
 
