@@ -12,7 +12,7 @@
   html, body { margin: 0; background: #000; color: #fff; font-family: 'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif; }
   body { min-height: 100vh; overflow-x: hidden; }
   #stage { transform-origin: 0 0; width: 1580px; padding: 18px; }
-  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr) 46px; gap: 8px; border: 2px solid #fff; padding: 8px; }
+  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr); gap: 8px; border: 2px solid #fff; padding: 8px; }
   .box { border: 1.5px solid #fff; padding: 6px 6px 8px; position: relative; }
   .box h2 { margin: 0 0 2px; font-size: 13px; font-weight: 600; letter-spacing: .14em; text-align: center; }
   .col { display: flex; flex-direction: column; gap: 8px; }
@@ -32,25 +32,11 @@
   .lang { display: flex; border: 1.5px solid #fff; align-self: center; }
   .lang button { background: #000; color: #fff; border: 0; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 4px 9px; cursor: pointer; }
   .lang button.on { background: #fff; color: #000; }
-  .power { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 14px; gap: 10px; }
-  .lamp { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #fff; }
-  .lamp.on { background: #fff; box-shadow: 0 0 10px #fff; }
-  .pbtn { width: 30px; height: 40px; border: 2px solid #fff; background: #000; cursor: pointer; padding: 0; }
-  .pbtn.on { background: #fff; }
-  .plab { font-size: 11px; font-weight: 700; letter-spacing: .08em; }
-  .kb { position: relative; height: 150px; margin-top: 10px; border: 2px solid #fff; border-top-width: 6px; background: #000; touch-action: none; }
-  .key { position: absolute; top: 0; }
-  .key.w { background: #fff; border-right: 1px solid #000; height: 100%; }
-  .key.k { background: #000; border: 1.5px solid #fff; border-top: none; height: 60%; z-index: 2; }
-  .key.w.dn { background: #000; outline: 2px solid #fff; outline-offset: -4px; }
-  .key.k.dn { background: #fff; }
   .info { display: flex; gap: 22px; align-items: center; margin-top: 10px; font-size: 12px; letter-spacing: .04em; }
   .info b { font-weight: 700; }
   .btn { background: #000; color: #fff; border: 1.5px solid #fff; font: inherit; font-size: 11px; font-weight: 600; padding: 3px 8px; cursor: pointer; letter-spacing: .06em; }
   .btn:hover { background: #fff; color: #000; }
   .resp { margin-top: 4px; }
-  .hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 5; pointer-events: none; font-size: 13px; font-weight: 700; letter-spacing: .1em; background: #000; color: #fff; border: 1.5px solid #fff; padding: 6px 14px; }
-  .hint:empty { display: none; }
   details { margin-top: 12px; font-size: 12.5px; line-height: 1.5; max-width: 1100px; }
   details summary { cursor: pointer; font-weight: 600; letter-spacing: .06em; }
   details td { padding: 2px 14px 2px 0; vertical-align: top; border-bottom: 1px solid #333; }
@@ -87,11 +73,8 @@
         <div class="row" id="g-a1"></div><div class="row" id="g-a2" style="margin-top:4px"></div><div class="row" id="g-a3" style="margin-top:8px"></div><div class="row" id="g-a4" style="margin-top:4px"></div>
       </div>
     </div>
-    <div class="power"><div class="lamp" id="lamp"></div><button class="pbtn" id="pbtn" aria-label="power"></button><div class="plab" data-ru="СЕТЬ">СЕТЬ</div></div>
   </div>
-  <div class="kb" id="kb"><div class="hint" id="hint"></div></div>
   <div class="info">
-    <span><b data-ru="СЕТЬ">СЕТЬ</b> — power on to start audio</span>
     <span>Keys: <b>A W S E D F T G Y H U J K O L P</b> · octave <b>Z / X</b> (<span id="octv">4</span>)</span>
     <span>MIDI: <b id="midi">—</b></span>
     <span>v<b id="ver"></b></span>
@@ -651,7 +634,6 @@ const EN = {
   'АТАКА':'ATTACK','ЗАТУХАНИЕ':'DECAY','ПЬЕДЕСТАЛ':'SUSTAIN','ПОСЛЕЗВУЧ.':'RELEASE','ЧАСТОТА СРЕЗА':'CUTOFF',
   'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
   'ОГИБ.':'ENV','ВКЛ.':'HOLD','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
-  'PRESS СЕТЬ TO POWER ON':'PRESS POWER TO START',
 };
 let lang = 'ru'; try { lang = localStorage.getItem('polivoks-lang') || 'ru'; } catch (e) {}
 const tr = (ru) => lang === 'en' && EN[ru] ? EN[ru] : ru;
@@ -671,9 +653,11 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.2.1';
+const VERSION = '1.3.0';
 document.getElementById('ver').textContent = VERSION;
-const send = (m) => { if (node) node.port.postMessage(m); };
+// notes played before the audio engine is up wait here and go in once it is
+const early = [];
+const send = (m) => { if (node) node.port.postMessage(m); else if (m.t === 'on' || m.t === 'off' || m.t === 'all') early.push(m); };
 function setParam(id, v) {
   state[id] = v; save();
   let pv = v;
@@ -787,15 +771,19 @@ for (const gid in L) {
   }
 }
 applyLang();
-document.querySelectorAll('#lang button').forEach((b) => b.onclick = () => { lang = b.dataset.l; try { localStorage.setItem('polivoks-lang', lang); } catch (e) {} applyLang(); if (!powered) hint.textContent = tr('PRESS СЕТЬ TO POWER ON'); });
+document.querySelectorAll('#lang button').forEach((b) => b.onclick = () => { lang = b.dataset.l; try { localStorage.setItem('polivoks-lang', lang); } catch (e) {} applyLang(); });
 document.getElementById('resetbtn').onclick = () => { for (const c of S) c.set(c.def); };
 
 // ---------------------------------------------------------------- audio
-const lamp = document.getElementById('lamp'), pbtn = document.getElementById('pbtn'), hint = document.getElementById('hint');
-hint.textContent = tr('PRESS СЕТЬ TO POWER ON');
+// Always on.  Browsers only let audio start after the first click, tap or key
+// press on the page, so the engine starts at load where that is allowed and
+// otherwise on the first such gesture; a MIDI note before then is held and
+// sounds once audio starts.
+let starting = null;
 async function powerOn() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    ctx.onstatechange = () => { powered = ctx.state === 'running'; document.getElementById('emode').textContent = powered ? engineMode : 'waiting for a click or key'; };
     const src = document.getElementById('dsp-src').textContent + `
 class PolivoksProc extends AudioWorkletProcessor {
   constructor() { super(); this.e = new PolivoksEngine(sampleRate);
@@ -831,38 +819,25 @@ registerProcessor('polivoks', PolivoksProc);`;
     analyser.connect(ctx.destination);
     for (const c of S) send({ t: 'p', id: c.id, v: c.v });
     if (extData) send({ t: 'ext', data: extData });
+    send({ t: 'p', id: 'power', v: 1 });
+    for (const m of early.splice(0)) send(m);
   }
-  await ctx.resume();
-  send({ t: 'p', id: 'power', v: 1 });
-  powered = true; document.getElementById('emode').textContent = engineMode; lamp.classList.add('on'); pbtn.classList.add('on'); hint.textContent = '';
+  ctx.onstatechange();
+  ctx.resume();
 }
-function powerOff() { send({ t: 'all' }); send({ t: 'p', id: 'power', v: 0 }); powered = false; lamp.classList.remove('on'); pbtn.classList.remove('on'); hint.textContent = tr('PRESS СЕТЬ TO POWER ON'); }
-pbtn.onclick = () => { (powered ? Promise.resolve(powerOff()) : powerOn()).catch((e) => { hint.textContent = 'AUDIO ERROR: ' + e.message; }); };
+function start() {
+  if (powered) return;
+  if (ctx) { ctx.resume(); return; }
+  if (!starting) starting = powerOn().catch(() => {}).finally(() => { starting = null; });
+}
+start();
+for (const ev of ['pointerdown', 'keydown', 'touchend']) addEventListener(ev, start, true);
 
-// ---------------------------------------------------------------- keyboard
-const kb = document.getElementById('kb'), LOW = 41, HIGH = 88; // F2 … E6, 4 octaves
-const keys = {}; const isBlack = (n) => [1, 3, 6, 8, 10].includes(n % 12);
-function layoutKB() {
-  kb.querySelectorAll('.key').forEach((k) => k.remove());
-  let whites = 0; for (let n = LOW; n <= HIGH; n++) if (!isBlack(n)) whites++;
-  const W = kb.clientWidth / whites; let x = 0;
-  for (let n = LOW; n <= HIGH; n++) {
-    const d = document.createElement('div'); d.dataset.n = n;
-    if (isBlack(n)) { d.className = 'key k'; d.style.left = (x - W * 0.3) + 'px'; d.style.width = (W * 0.6) + 'px'; }
-    else { d.className = 'key w'; d.style.left = x + 'px'; d.style.width = W + 'px'; x += W; }
-    kb.appendChild(d); keys[n] = d;
-  }
-}
-layoutKB();
-// a note stays down while any source (screen keys, computer keys, MIDI) holds it
+// ---------------------------------------------------------------- notes
+// a note stays down while any source (computer keys, MIDI) holds it
 const down = new Map();
-function on(n, src = 'ui') { let s = down.get(n); if (s) { s.add(src); return; } down.set(n, new Set([src])); keys[n] && keys[n].classList.add('dn'); send({ t: 'on', n }); }
-function off(n, src = 'ui') { const s = down.get(n); if (!s) return; s.delete(src); if (s.size) return; down.delete(n); keys[n] && keys[n].classList.remove('dn'); send({ t: 'off', n }); }
-const ptr = new Map();
-kb.addEventListener('pointerdown', (e) => { const k = e.target.closest('.key'); if (!k) return; kb.setPointerCapture(e.pointerId); const n = +k.dataset.n; ptr.set(e.pointerId, n); on(n); e.preventDefault(); });
-kb.addEventListener('pointermove', (e) => { if (!ptr.has(e.pointerId)) return; const t = document.elementFromPoint(e.clientX, e.clientY); const k = t && t.closest && t.closest('.key'); if (!k) return; const n = +k.dataset.n, o = ptr.get(e.pointerId); if (n !== o) { off(o); on(n); ptr.set(e.pointerId, n); } });
-const up = (e) => { if (ptr.has(e.pointerId)) { off(ptr.get(e.pointerId)); ptr.delete(e.pointerId); } };
-kb.addEventListener('pointerup', up); kb.addEventListener('pointercancel', up);
+function on(n, src = 'ui') { let s = down.get(n); if (s) { s.add(src); return; } down.set(n, new Set([src])); send({ t: 'on', n }); }
+function off(n, src = 'ui') { const s = down.get(n); if (!s) return; s.delete(src); if (s.size) return; down.delete(n); send({ t: 'off', n }); }
 // computer keys
 const MAP = 'awsedftgyhujkolp;'; let oct = 4; const octv = document.getElementById('octv');
 const held = new Map();
