@@ -94,6 +94,7 @@
     <span><b data-ru="СЕТЬ">СЕТЬ</b> — power on to start audio</span>
     <span>Keys: <b>A W S E D F T G Y H U J K O L P</b> · octave <b>Z / X</b> (<span id="octv">4</span>)</span>
     <span>MIDI: <b id="midi">—</b></span>
+    <span>v<b id="ver"></b></span>
     <span>Engine: <b id="emode">off</b></span>
     <span><span data-ru="ВНЕШ.">ВНЕШ.</span> input: <button class="btn" id="extbtn">LOAD AUDIO FILE</button><input type="file" id="extfile" accept="audio/*" hidden> <span id="extname"></span></span>
     <button class="btn" id="resetbtn">RESET PANEL</button>
@@ -632,6 +633,8 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
+const VERSION = '1.1.0';
+document.getElementById('ver').textContent = VERSION;
 const send = (m) => { if (node) node.port.postMessage(m); };
 function setParam(id, v) {
   state[id] = v; save();
@@ -814,9 +817,10 @@ function layoutKB() {
   }
 }
 layoutKB();
-const down = new Set();
-function on(n) { if (down.has(n)) return; down.add(n); keys[n] && keys[n].classList.add('dn'); send({ t: 'on', n }); }
-function off(n) { if (!down.has(n)) return; down.delete(n); keys[n] && keys[n].classList.remove('dn'); send({ t: 'off', n }); }
+// a note stays down while any source (screen keys, computer keys, MIDI) holds it
+const down = new Map();
+function on(n, src = 'ui') { let s = down.get(n); if (s) { s.add(src); return; } down.set(n, new Set([src])); keys[n] && keys[n].classList.add('dn'); send({ t: 'on', n }); }
+function off(n, src = 'ui') { const s = down.get(n); if (!s) return; s.delete(src); if (s.size) return; down.delete(n); keys[n] && keys[n].classList.remove('dn'); send({ t: 'off', n }); }
 const ptr = new Map();
 kb.addEventListener('pointerdown', (e) => { const k = e.target.closest('.key'); if (!k) return; kb.setPointerCapture(e.pointerId); const n = +k.dataset.n; ptr.set(e.pointerId, n); on(n); e.preventDefault(); });
 kb.addEventListener('pointermove', (e) => { if (!ptr.has(e.pointerId)) return; const t = document.elementFromPoint(e.clientX, e.clientY); const k = t && t.closest && t.closest('.key'); if (!k) return; const n = +k.dataset.n, o = ptr.get(e.pointerId); if (n !== o) { off(o); on(n); ptr.set(e.pointerId, n); } });
@@ -831,18 +835,35 @@ addEventListener('keydown', (e) => {
   if (k === 'z') { oct = Math.max(2, oct - 1); octv.textContent = oct; return; }
   if (k === 'x') { oct = Math.min(6, oct + 1); octv.textContent = oct; return; }
   const i = MAP.indexOf(k); if (i < 0) return;
-  const n = 12 * (oct + 1) + i; held.set(k, n); on(n);
+  const n = 12 * (oct + 1) + i; held.set(k, n); on(n, 'kb');
 });
-addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (held.has(k)) { off(held.get(k)); held.delete(k); } });
-addEventListener('blur', () => { for (const n of [...down]) off(n); held.clear(); });
-// MIDI
+addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (held.has(k)) { off(held.get(k), 'kb'); held.delete(k); } });
+// losing focus drops computer-key notes only; MIDI notes keep playing
+addEventListener('blur', () => { for (const n of held.values()) off(n, 'kb'); held.clear(); });
+// MIDI: every input, all channels. Note on/off, sustain pedal (CC64),
+// all-notes-off (CC120/123). Tap the MIDI label to ask for access again.
 const midiEl = document.getElementById('midi');
-if (navigator.requestMIDIAccess) {
+const sustained = new Set(); let pedal = false;
+function midiMsg(m) {
+  const [st, d1, d2] = m.data, ty = st & 0xf0;
+  if (ty === 0x90 && d2 > 0) { sustained.delete(d1); on(d1, 'midi'); }
+  else if (ty === 0x80 || ty === 0x90) { if (pedal) sustained.add(d1); else off(d1, 'midi'); }
+  else if (ty === 0xb0 && d1 === 64) { pedal = d2 >= 64; if (!pedal) { for (const n of sustained) off(n, 'midi'); sustained.clear(); } }
+  else if (ty === 0xb0 && (d1 === 120 || d1 === 123)) { pedal = false; sustained.clear(); for (const n of [...down.keys()]) off(n, 'midi'); }
+}
+function midiInit() {
+  if (!navigator.requestMIDIAccess) { midiEl.textContent = window.isSecureContext ? 'not supported' : 'needs https'; return; }
+  midiEl.textContent = '…';
   navigator.requestMIDIAccess().then((acc) => {
-    const bind = () => { let c = 0; acc.inputs.forEach((inp) => { c++; inp.onmidimessage = (m) => { const [st, d1, d2] = m.data; const ty = st & 0xf0; if (ty === 0x90 && d2 > 0) on(d1); else if (ty === 0x80 || (ty === 0x90 && d2 === 0)) off(d1); }; }); midiEl.textContent = c ? c + ' input' + (c > 1 ? 's' : '') : 'no devices'; };
+    const bind = () => {
+      const names = []; acc.inputs.forEach((inp) => { names.push(inp.name); inp.onmidimessage = midiMsg; });
+      midiEl.textContent = names.length === 1 ? names[0] : names.length ? names.length + ' inputs' : 'no devices';
+    };
     bind(); acc.onstatechange = bind;
-  }).catch(() => { midiEl.textContent = 'not available here'; });
-} else midiEl.textContent = 'not supported';
+  }).catch(() => { midiEl.textContent = 'blocked (tap to retry)'; });
+}
+midiEl.style.cursor = 'pointer'; midiEl.onclick = midiInit;
+midiInit();
 // external input
 const extfile = document.getElementById('extfile');
 document.getElementById('extbtn').onclick = () => extfile.click();
