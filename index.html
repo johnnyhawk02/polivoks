@@ -4,47 +4,105 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ЭМС «Поливокс» — circuit model</title>
+<meta name="theme-color" content="#fc0fc0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700&family=Archivo+Black&family=Rubik:wght@900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --w: #fff; --b: #000; }
+  /* Poster look from johnnyhawk.org: speckled pink page, a black panel with
+     torn edges, heavy all-caps type on skewed slabs, letter-spaced mono labels.
+     Archivo Black has no Cyrillic, so Rubik Black fills in those letters. */
+  :root {
+    --pink: #fc0fc0; --ink: #0b0b0b; --paper: #fff;
+    --display: "Archivo Black", "Rubik", "Arial Black", sans-serif;
+    --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --mono: "Geist Mono", ui-monospace, Menlo, monospace;
+  }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: #000; color: #fff; font-family: 'IBM Plex Sans Condensed', 'Arial Narrow', sans-serif; }
-  body { min-height: 100vh; overflow-x: hidden; }
-  #stage { transform-origin: 0 0; width: 1580px; padding: 18px; }
-  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr); gap: 8px; border: 2px solid #fff; padding: 8px; }
-  .box { border: 1.5px solid #fff; padding: 6px 6px 8px; position: relative; }
-  .box h2 { margin: 0 0 2px; font-size: 13px; font-weight: 600; letter-spacing: .14em; text-align: center; }
-  .col { display: flex; flex-direction: column; gap: 8px; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh; overflow-x: hidden; color: var(--paper); font-family: var(--mono);
+    background-color: var(--ink);
+  }
+  /* the panel is the hot part: hot pink with the site's speckle, black ink on top */
+  .torn::before {
+    background-color: var(--pink);
+    background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='d'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='1' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 0 0 0 0 0 .26 9 0 0 0 -6.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23d)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='340'%3E%3Cfilter id='l'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='1' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .86 0 0 0 0 .97 9 0 0 0 -6.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3C/svg%3E");
+  }
+  ::selection { background: var(--ink); color: var(--paper); }
+  #stage { transform-origin: 0 0; width: 1580px; padding: 26px 26px 18px; }
+  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr); gap: 10px; padding: 18px 14px 14px; position: relative; isolation: isolate; color: var(--ink); }
+  /* the black sheet behind the panel: clipped on a slant, then roughed up so the edges look torn */
+  .torn { position: absolute; inset: -6px -8px -8px -6px; z-index: -1; filter: url(#torn); pointer-events: none; }
+  .torn::before { content: ""; position: absolute; inset: 0; clip-path: polygon(0 1.2%, 37% 0, 100% .6%, 99.7% 99.2%, 61% 100%, .3% 98.6%); }
+  .box { border: 2px solid var(--ink); padding: 16px 6px 8px; position: relative; }
+  /* section names: white letters on a skewed black slab hanging over the top edge */
+  .box h2 {
+    position: absolute; top: -11px; left: 10px; z-index: 1; margin: 0;
+    font: 400 15px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; color: var(--paper);
+    padding: 5px 10px 3px; transform: rotate(-1.6deg);
+  }
+  .box h2::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ink); clip-path: polygon(0 10%, 100% 0, 98% 100%, 2% 88%); }
+  .box:nth-of-type(even) h2 { transform: rotate(1.2deg); }
+  .box:nth-of-type(even) h2::before { clip-path: polygon(0 0, 100% 12%, 98.5% 92%, 0 100%); }
+  .col { display: flex; flex-direction: column; gap: 10px; }
   .row { display: flex; justify-content: space-around; align-items: flex-start; }
   .ctl { display: flex; flex-direction: column; align-items: center; user-select: none; -webkit-user-select: none; touch-action: none; }
   .ctl svg { display: block; cursor: ns-resize; overflow: visible; }
-  .ctl .lab { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-align: center; margin-top: -3px; white-space: nowrap; }
-  .ctl svg text { fill: #fff; font-family: inherit; font-size: 9.5px; }
+  .ctl .lab { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: .07em; text-align: center; margin-top: -3px; white-space: nowrap; }
+  .ctl svg text { fill: var(--ink); font-family: var(--mono); font-size: 9.5px; }
   .sw { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; user-select: none; -webkit-user-select: none; }
-  .sw .slot { width: 18px; height: 38px; border: 1.5px solid #fff; position: relative; }
-  .sw .lev { position: absolute; left: 2px; right: 2px; height: 15px; background: #fff; transition: top .08s; }
-  .sw .t { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-align: center; line-height: 1.15; }
-  .head { display: flex; align-items: center; gap: 14px; border: 1.5px solid #fff; padding: 8px 12px; }
-  .head .ttl { white-space: nowrap; font-size: 30px; font-weight: 700; letter-spacing: .04em; line-height: 1; }
-  .head .sub { font-size: 11px; letter-spacing: .08em; opacity: .85; margin-top: 4px; }
-  .head canvas { margin-left: auto; border: 1.5px solid #fff; background: #000; }
-  .lang { display: flex; border: 1.5px solid #fff; align-self: center; }
-  .lang button { background: #000; color: #fff; border: 0; font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 4px 9px; cursor: pointer; }
-  .lang button.on { background: #fff; color: #000; }
-  .info { display: flex; gap: 22px; align-items: center; margin-top: 10px; font-size: 12px; letter-spacing: .04em; }
-  .info b { font-weight: 700; }
-  .btn { background: #000; color: #fff; border: 1.5px solid #fff; font: inherit; font-size: 11px; font-weight: 600; padding: 3px 8px; cursor: pointer; letter-spacing: .06em; }
-  .btn:hover { background: #fff; color: #000; }
+  .sw .slot { width: 18px; height: 38px; border: 2px solid var(--ink); position: relative; }
+  .sw .lev { position: absolute; left: 2px; right: 2px; height: 15px; background: var(--ink); transition: top .08s; }
+  .sw .t { font: 500 10px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
+  .head { display: flex; align-items: center; gap: 14px; padding: 4px 4px 4px 2px; }
+  /* title: white letters on a black slab, slightly tilted and roughed up */
+  .head .ttl {
+    position: relative; isolation: isolate; width: fit-content; white-space: nowrap;
+    font: 400 31px/1 var(--display); letter-spacing: -.01em; color: var(--paper); text-transform: uppercase;
+    padding: 6px 10px 3px; transform: rotate(-1.5deg); transform-origin: left center; filter: url(#rough);
+  }
+  .head .ttl::before { content: ""; position: absolute; inset: 2px -4px 0 2px; z-index: -1; background: var(--ink); clip-path: polygon(0 7%, 100% 0, 98.8% 100%, .6% 93%); }
+  .head .sub { font: 600 9.5px var(--mono); letter-spacing: .12em; margin-top: 9px; }
+  .head canvas { margin-left: auto; border: 2px solid var(--ink); background: var(--ink); }
+  .lang { display: flex; gap: 4px; align-self: center; }
+  .lang button {
+    background: transparent; color: var(--ink); border: 0; cursor: pointer;
+    font: 400 13px var(--display); letter-spacing: .02em; padding: 6px 9px 4px;
+    clip-path: polygon(0 10%, 100% 0, 96% 100%, 4% 90%); box-shadow: inset 0 0 0 2px var(--ink);
+  }
+  .lang button.on { background: var(--ink); color: var(--pink); box-shadow: none; }
+  /* below the panel: a white band cut on a slant, as on the site */
+  .foot { margin: 22px -26px 0; padding: 40px 26px 34px; background: var(--paper); color: var(--ink); clip-path: polygon(0 26px, 100% 0, 100% calc(100% - 20px), 0 100%); }
+  .info { display: flex; gap: 26px; align-items: center; flex-wrap: wrap; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
+  .info b { font-weight: 600; }
+  .btn {
+    position: relative; isolation: isolate; cursor: pointer;
+    border: 0; background: transparent; color: var(--paper);
+    font: 400 15px var(--display); text-transform: uppercase; letter-spacing: .02em;
+    padding: 11px 18px 9px; transition: transform .12s ease;
+  }
+  .btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ink); clip-path: polygon(0 8%, 100% 0, 98% 100%, 2% 92%); }
+  .btn:hover { transform: rotate(-2deg) scale(1.03); }
+  #resetbtn { transform: rotate(1.5deg); }
+  #resetbtn:hover { transform: rotate(-1deg) scale(1.03); }
   .resp { margin-top: 4px; }
-  details { margin-top: 12px; font-size: 12.5px; line-height: 1.5; max-width: 1100px; }
-  details summary { cursor: pointer; font-weight: 600; letter-spacing: .06em; }
-  details td { padding: 2px 14px 2px 0; vertical-align: top; border-bottom: 1px solid #333; }
+  details { margin-top: 22px; font: 400 14px/1.5 var(--sans); max-width: 1100px; }
+  details summary { cursor: pointer; font: 400 17px var(--display); text-transform: uppercase; letter-spacing: .01em; }
+  details td { padding: 4px 14px 4px 0; vertical-align: top; border-bottom: 1.5px solid var(--ink); }
+  details td:first-child { font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; padding-top: 6px; }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="6"/></filter>
+  <filter id="torn" x="-2%" y="-5%" width="104%" height="110%"><feTurbulence type="fractalNoise" baseFrequency=".09" numOctaves="3" seed="3"/><feDisplacementMap in="SourceGraphic" scale="9"/></filter>
+</svg>
 <div id="stage">
   <div class="panel" id="panel">
+    <div class="torn"></div>
     <div class="col">
       <div class="box"><h2>МОДУЛЯТОР</h2><div class="row" id="g-mod"></div></div>
       <div class="box" style="flex:1">
@@ -74,6 +132,7 @@
       </div>
     </div>
   </div>
+  <div class="foot">
   <div class="info">
     <span>Keys: <b>A W S E D F T G Y H U J K O L P</b> · octave <b>Z / X</b> (<span id="octv">4</span>)</span>
     <span>MIDI: <b id="midi">—</b></span>
@@ -94,6 +153,7 @@
       <tr><td>Estimated values</td><td>C1 (≈25 pF, fitted to the datasheet slew rate and bandwidth), pot tapers, КТ315Г I<sub>s</sub>/β, op-amp excess phase at full resonance, КР140УД8 slew and output current, КР198НТ1А bulk resistance and β, one wire junction at the VCO’s A7/V7 (see spice/vco/README), diode parameters and some pot ranges are estimates where the schematic scan is unreadable or the value is unpublished.</td></tr>
     </table>
   </details>
+  </div>
 </div>
 
 <script type="text/plain" id="dsp-src">// ============================================================================
@@ -787,7 +847,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -814,7 +874,7 @@ function makeKnob(c) {
   labels.forEach((t, i) => {
     const u = i / (labels.length - 1), a = ang(u);
     const x1 = cx + Math.sin(a) * (R + 3), y1 = cy - Math.cos(a) * (R + 3), x2 = cx + Math.sin(a) * (R + 7), y2 = cy - Math.cos(a) * (R + 7);
-    el('line', { x1, y1, x2, y2, stroke: '#fff', 'stroke-width': 1.2 }, svg);
+    el('line', { x1, y1, x2, y2, stroke: '#0b0b0b', 'stroke-width': 1.2 }, svg);
     if (t) { const tx = el('text', { x: cx + Math.sin(a) * (R + 14), y: cy - Math.cos(a) * (R + 14) + 3.5, 'text-anchor': 'middle' }, svg); tx.textContent = t; }
   });
   if (c.scale === 'mm') {
@@ -826,7 +886,7 @@ function makeKnob(c) {
     el('text', { x: cx + 31, y: cy + 23, 'text-anchor': 'middle', 'font-size': 11 }, svg).textContent = '+';
   }
   const g = el('g', {}, svg);
-  el('circle', { cx, cy, r: R, fill: '#000', stroke: '#fff', 'stroke-width': 2 }, g);
+  el('circle', { cx, cy, r: R, fill: '#0b0b0b', stroke: '#0b0b0b', 'stroke-width': 2 }, g);
   for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; el('line', { x1: cx + Math.sin(a) * (R - 3), y1: cy - Math.cos(a) * (R - 3), x2: cx + Math.sin(a) * (R - 0.5), y2: cy - Math.cos(a) * (R - 0.5), stroke: '#fff', 'stroke-width': 0.6, opacity: 0.6 }, g); }
   el('line', { x1: cx, y1: cy - 3, x2: cx, y2: cy - R + 1, stroke: '#fff', 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
   const lab = document.createElement('div'); lab.className = 'lab'; mark(lab, c.label); wrap.appendChild(lab);
@@ -849,13 +909,13 @@ function makeSel(c) {
   c.opts.forEach((o, i) => {
     const a = posA(i), x = cx + Math.sin(a) * (R + 17), y = cy - Math.cos(a) * (R + 13);
     if (o.t) { const t = el('text', { x, y: y + 3.5, 'text-anchor': 'middle', 'font-size': 10.5, 'font-weight': 600 }, svg); t.textContent = o.t; }
-    else el('path', { d: IC[o.i], transform: `translate(${x - 8} ${y - 6})`, fill: 'none', stroke: '#fff', 'stroke-width': 1.4, 'stroke-linejoin': 'miter' }, svg);
+    else el('path', { d: IC[o.i], transform: `translate(${x - 8} ${y - 6})`, fill: 'none', stroke: '#0b0b0b', 'stroke-width': 1.4, 'stroke-linejoin': 'miter' }, svg);
   });
   const g = el('g', {}, svg);
-  el('circle', { cx, cy, r: R, fill: '#000', stroke: '#fff', 'stroke-width': 2 }, g);
+  el('circle', { cx, cy, r: R, fill: '#0b0b0b', stroke: '#0b0b0b', 'stroke-width': 2 }, g);
   for (let i = 0; i < 24; i++) { const a = i * Math.PI / 12; el('line', { x1: cx + Math.sin(a) * (R - 4), y1: cy - Math.cos(a) * (R - 4), x2: cx + Math.sin(a) * (R), y2: cy - Math.cos(a) * R, stroke: '#fff', 'stroke-width': 0.7, opacity: .6 }, g); }
   el('rect', { x: cx - 3, y: cy - R - 2, width: 6, height: R + 2, fill: '#fff' }, g);
-  el('rect', { x: cx - 1, y: cy - R + 2, width: 2, height: R - 6, fill: '#000' }, g);
+  el('rect', { x: cx - 1, y: cy - R + 2, width: 2, height: R - 6, fill: '#0b0b0b' }, g);
   const lab = document.createElement('div'); lab.className = 'lab'; mark(lab, c.label); wrap.appendChild(lab);
   c.set = (v, quiet) => { v = Math.max(0, Math.min(n - 1, Math.round(v))); c.v = v; g.setAttribute('transform', `rotate(${posA(v) * 180 / Math.PI} ${cx} ${cy})`); if (!quiet) setParam(c.id, v); };
   let y0 = 0, v0 = 0, drag = false, moved = false;
@@ -887,12 +947,12 @@ function makeResp() {
 function drawResp() {
   if (!respSvg) return; respSvg.innerHTML = '';
   const bp = state.fMode === 1;
-  el('path', { d: 'M6,6 L6,62 L92,62', fill: 'none', stroke: '#fff', 'stroke-width': 1.2 }, respSvg);
-  el('path', { d: 'M88,59 L92,62 L88,65', fill: 'none', stroke: '#fff', 'stroke-width': 1.2 }, respSvg);
-  el('path', { d: 'M6,24 L44,24 L52,62', fill: 'none', stroke: '#fff', 'stroke-width': bp ? 1 : 2.4, 'stroke-dasharray': bp ? '2 2' : '' }, respSvg);
-  el('path', { d: 'M40,62 L52,8 L62,62', fill: 'none', stroke: '#fff', 'stroke-width': bp ? 2.4 : 1, 'stroke-dasharray': bp ? '' : '2 2' }, respSvg);
-  el('text', { x: 10, y: 20, 'font-size': 8.5, fill: '#fff' }, respSvg).textContent = tr('ФНЧ');
-  el('text', { x: 64, y: 54, 'font-size': 8.5, fill: '#fff' }, respSvg).textContent = tr('ПФ');
+  el('path', { d: 'M6,6 L6,62 L92,62', fill: 'none', stroke: '#0b0b0b', 'stroke-width': 1.2 }, respSvg);
+  el('path', { d: 'M88,59 L92,62 L88,65', fill: 'none', stroke: '#0b0b0b', 'stroke-width': 1.2 }, respSvg);
+  el('path', { d: 'M6,24 L44,24 L52,62', fill: 'none', stroke: '#0b0b0b', 'stroke-width': bp ? 1 : 2.4, 'stroke-dasharray': bp ? '2 2' : '' }, respSvg);
+  el('path', { d: 'M40,62 L52,8 L62,62', fill: 'none', stroke: '#0b0b0b', 'stroke-width': bp ? 2.4 : 1, 'stroke-dasharray': bp ? '' : '2 2' }, respSvg);
+  el('text', { x: 10, y: 20, 'font-size': 8.5, fill: '#0b0b0b' }, respSvg).textContent = tr('ФНЧ');
+  el('text', { x: 64, y: 54, 'font-size': 8.5, fill: '#0b0b0b' }, respSvg).textContent = tr('ПФ');
 }
 for (const gid in L) {
   const host = document.getElementById(gid);
@@ -1061,13 +1121,13 @@ extfile.onchange = async () => {
 // ---------------------------------------------------------------- scope
 const sc = document.getElementById('scope'), sx = sc.getContext('2d'); const tb = new Float32Array(2048);
 function draw() {
-  sx.fillStyle = '#000'; sx.fillRect(0, 0, sc.width, sc.height);
+  sx.fillStyle = '#0b0b0b'; sx.fillRect(0, 0, sc.width, sc.height);
   sx.strokeStyle = '#fff'; sx.globalAlpha = 0.25; sx.beginPath(); sx.moveTo(0, sc.height / 2); sx.lineTo(sc.width, sc.height / 2); sx.stroke(); sx.globalAlpha = 1;
   if (analyser && powered) {
     analyser.getFloatTimeDomainData(tb);
     let st = 0; for (let i = 1; i < 1024; i++) if (tb[i - 1] < 0 && tb[i] >= 0) { st = i; break; }
     let pk = 0.05; for (let i = 0; i < 2048; i++) pk = Math.max(pk, Math.abs(tb[i]));
-    sx.lineWidth = 1.5; sx.beginPath();
+    sx.strokeStyle = '#fc0fc0'; sx.lineWidth = 1.5; sx.beginPath();
     for (let x = 0; x < sc.width; x++) { const v = tb[st + x * 2] / pk; const y = sc.height / 2 - v * (sc.height / 2 - 4); x ? sx.lineTo(x, y) : sx.moveTo(x, y); }
     sx.stroke();
   }
