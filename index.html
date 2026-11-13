@@ -671,7 +671,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 document.getElementById('ver').textContent = VERSION;
 const send = (m) => { if (node) node.port.postMessage(m); };
 function setParam(id, v) {
@@ -717,9 +717,8 @@ function makeKnob(c) {
   c.set = (v, quiet) => { v = Math.max(bip ? -1 : 0, Math.min(1, v)); c.v = v; show(v); if (!quiet) setParam(c.id, v); };
   let y0 = 0, u0 = 0, drag = false;
   svg.addEventListener('pointerdown', (e) => { drag = true; y0 = e.clientY; u0 = toU(c.v); svg.setPointerCapture(e.pointerId); e.preventDefault(); });
-  svg.addEventListener('pointermove', (e) => { if (!drag) return; const k = e.shiftKey ? 1200 : 220; c.set(fromU(Math.max(0, Math.min(1, u0 + (y0 - e.clientY) / k)))); });
-  svg.addEventListener('pointerup', () => { drag = false; });
-  svg.addEventListener('wheel', (e) => { e.preventDefault(); c.set(fromU(Math.max(0, Math.min(1, toU(c.v) - Math.sign(e.deltaY) * (e.shiftKey ? 0.004 : 0.025))))); }, { passive: false });
+  svg.addEventListener('pointermove', (e) => { if (!drag || !e.buttons) { drag = false; return; } const k = e.shiftKey ? 1200 : 220; c.set(fromU(Math.max(0, Math.min(1, u0 + (y0 - e.clientY) / k)))); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) svg.addEventListener(ev, () => { drag = false; });
   svg.addEventListener('dblclick', () => c.set(c.def));
   return wrap;
 }
@@ -743,9 +742,9 @@ function makeSel(c) {
   c.set = (v, quiet) => { v = Math.max(0, Math.min(n - 1, Math.round(v))); c.v = v; g.setAttribute('transform', `rotate(${posA(v) * 180 / Math.PI} ${cx} ${cy})`); if (!quiet) setParam(c.id, v); };
   let y0 = 0, v0 = 0, drag = false, moved = false;
   svg.addEventListener('pointerdown', (e) => { drag = true; moved = false; y0 = e.clientY; v0 = c.v; svg.setPointerCapture(e.pointerId); e.preventDefault(); });
-  svg.addEventListener('pointermove', (e) => { if (!drag) return; const d = Math.round((y0 - e.clientY) / 22); if (d) moved = true; c.set(v0 + d); });
+  svg.addEventListener('pointermove', (e) => { if (!drag || !e.buttons) { drag = false; return; } const d = Math.round((y0 - e.clientY) / 22); if (d) moved = true; c.set(v0 + d); });
   svg.addEventListener('pointerup', () => { if (drag && !moved) c.set((c.v + 1) % n); drag = false; });
-  svg.addEventListener('wheel', (e) => { e.preventDefault(); c.set(c.v - Math.sign(e.deltaY)); }, { passive: false });
+  for (const ev of ['pointercancel', 'lostpointercapture']) svg.addEventListener(ev, () => { drag = false; });
   return wrap;
 }
 function makeSwitch(c) {
