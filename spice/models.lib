@@ -1,0 +1,87 @@
+* ============================================================================
+*  Device models for the Polivoks VCF board (sheet 7, У4)
+*
+*  EVERYTHING in this file is a reconstruction. No uA776 / К140УД12 datasheet
+*  or die schematic was available, so the op-amp is built as the published
+*  741 topology with every bias current mirrored 1:1 from the Iset pin, which
+*  is how the uA776 family is described (all currents programmed by Iset,
+*  internal Miller compensation).  Values marked EST are estimates.
+* ============================================================================
+
+* --- discrete parts --------------------------------------------------------
+* КТ315Г: small-signal NPN, h21э 50..350.                       EST (generic)
+.model KT315G NPN(IS=2e-14 BF=150 VAF=100 IKF=0.1 CJE=7p CJC=7p TF=0.5n RB=40)
+* КТ361Б: complementary PNP.                                    EST (generic)
+.model KT361B PNP(IS=2e-14 BF=100 VAF=80 IKF=0.1 CJE=9p CJC=9p TF=0.7n RB=40)
+
+* --- on-chip devices of the uA776 reconstruction -----------------------------
+* vertical NPN                                                  EST
+.model QN NPN(IS=1e-16 BF=250 VAF=130 CJE=0.6p CJC=0.4p CJS=1.5p TF=0.4n RB=200)
+* lateral PNP: low beta, slow (fT a few MHz)                    EST
+.model QL PNP(IS=1e-16 BF=50 VAF=50 CJE=0.3p CJC=1.0p TF=25n RB=300)
+* substrate PNP (output pull-down)                              EST
+.model QS PNP(IS=1e-16 BF=80 VAF=60 CJE=0.5p CJC=1.5p TF=5n RB=200)
+.model DN D(IS=1e-16 CJO=0.5p)
+
+* ----------------------------------------------------------------------------
+*  uA776 / К140УД12 — transistor netlist of the SGS-Thomson UA776 datasheet
+*  (April 1995, "Schematic diagram", p.2).  Topology and the labelled resistor
+*  values (R1,R2 10k; R3 2k; R4,R8 50; R6,R7 100; C1) are from that drawing.
+*  EST: device models, C1 = 25 pF (fits datasheet SR 0.8 V/us and GBW 0.1 MHz),
+*  the unlabelled resistor between R4 and R6 (taken as 100), and the areas of
+*  Q13 (x2, so Q7 is biased) and Q12 (x5, so supply current ~ 11*Iset and output current ~3 mA at
+*  Iset = 1.5 uA, matching the datasheet table).
+*  pins: inp inm vp vn out iset      (Iset is drawn OUT of pin 8)
+* ----------------------------------------------------------------------------
+.subckt UA776 inp inm vp vn out iset
+* Iset mirror: Q17 diode, Q16/Q13/Q12 copies
+Q17  iset iset vp QL
+Q16  n18  iset vp QL
+Q13  nn   iset vp QL 2
+Q12  nt   iset vp QL 5
+* input stage (741-type CC-CB) with Q14/Q15/Q19 tail loop
+Q14  c12 c12 vp QL
+Q15  nb  c12 vp QL
+Q1   c12 inp e1 QN
+Q2   c12 inm e2 QN
+Q3   c3  nb  e1 QL
+Q4   c4  nb  e2 QL
+Q5   c3  c3  r1 QN
+Q6   c4  c3  r2 QN
+R1   r1  vn  10k
+R2   r2  vn  10k
+* Q16 -> Q18 diode; Q19 sinks Iset from nb, Q20 sinks Iset from nm
+Q18  n18 n18 vn QN
+Q19  nb  n18 vn QN
+Q20  nm  n18 vn QN
+* second stage: Q7 PNP follower, Q8 diode level shift, Q9 CE gain
+Q7   vn  c4  nn QS
+Q8   nn  nn  nm QN
+Q9   nl  nm  vn QN
+C1   c4  nt  25p
+* class-AB bias string and output
+R3   nt  nu  2k
+Q21  nu  nt  e21 QN
+Q22  nl  nl  e21 QL
+Q11  vp  nu  e11 QN
+R4   e11 o1  50
+Q23  nu  e11 o1 QN
+R5   o1  oi  100
+R6   oi  out 100
+R7   oi  o2  100
+R8   o2  e10 50
+Q24  nl  e10 o2 QL
+Q10  vn  nl  e10 QS
+.ends UA776
+
+* ----------------------------------------------------------------------------
+*  КР140УД8Б (A1): JFET-input op-amp, GBW ~1 MHz, SR ~2 V/us.  Behavioural.
+*  pins: inp inm vp vn out
+* ----------------------------------------------------------------------------
+.subckt K140UD8 inp inm vp vn out
+Gin 0 n1 inp inm 1e-3
+Rin n1 0 2e8
+Cin n1 0 160p
+B2  n2 0 V = max(min(v(n1), 11.5), -11.5)
+Rout n2 out 100
+.ends K140UD8

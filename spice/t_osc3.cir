@@ -1,0 +1,28 @@
+.include models.lib
+.param pr=1 icol=10u
+.include core.inc
+VIN in 0 PULSE(0 0.2 1u 1u 1u 20u 1)
+ICOL col 0 {icol}
+.options method=gear reltol=1e-4
+.control
+foreach ic 1u 10u 100u
+ foreach r 0.995 1
+  alterparam icol=$ic
+  alterparam pr=$r
+  reset
+  let tend=7000/($ic*1e6*580)
+  let tst=tend/150000
+  tran $&tst $&tend 0 $&tst
+  let ta0=tend*0.9
+  meas tran bpk max v(bp) from=$&ta0 to=$&tend
+  meas tran bmn min v(bp) from=$&ta0 to=$&tend
+  meas tran lpk max v(lp) from=$&ta0 to=$&tend
+  meas tran lmn min v(lp) from=$&ta0 to=$&tend
+  meas tran ta when v(lp)=0 rise=3000
+  meas tran tb when v(lp)=0 rise=3200
+  let fo=200/(tb-ta)
+  echo "O $ic $r bp $&bpk $&bmn lp $&lpk $&lmn f $&fo"
+ end
+end
+.endc
+.end

@@ -1,0 +1,11 @@
+.include models.lib
+VP vp 0 12.5
+VN vn 0 -12.5
+I1 iset 0 15u
+VD inp 0 0
+X1 inp 0 vp vn out iset UA776
+.control
+dc VD -20m 20m 2m
+print v(out) v(x1.c4) v(x1.nn) v(x1.nm) v(x1.nl) v(x1.nt)
+.endc
+.end

@@ -1,0 +1,29 @@
+* Self-oscillation: resonance knob up, tiny kick, no input
+.include models.lib
+.param pr=1 icol=1u
+.include core.inc
+VIN in 0 PULSE(0 0.2 1u 1u 1u 20u 1)
+ICOL col 0 {icol}
+.options method=gear reltol=1e-4
+.control
+foreach ic 0.3u 1u 3u 10u 30u 100u
+ foreach r 0.99 0.995 1
+  alterparam icol=$ic
+  alterparam pr=$r
+  reset
+  let tend=600/($ic*1e6*800)
+  let tst=tend/20000
+  tran $&tst $&tend 0 $&tst
+  let t0=tend*0.7
+  meas tran lpmax max v(lp) from=$&t0 to=$&tend
+  meas tran lpmin min v(lp) from=$&t0 to=$&tend
+  meas tran bpmax max v(bp) from=$&t0 to=$&tend
+  meas tran bpmin min v(bp) from=$&t0 to=$&tend
+  meas tran ta when v(lp)=0 rise=40
+  meas tran tb when v(lp)=0 rise=60
+  let fo=20/(tb-ta)
+  echo "O $ic $r $&lpmax $&lpmin $&bpmax $&bpmin $&fo"
+ end
+end
+.endc
+.end
