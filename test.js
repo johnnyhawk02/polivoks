@@ -1,4 +1,4 @@
-const { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct } = require('./dsp.js');
+const { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct } = require('./dsp.js');
 const fs = require('fs');
 const SR = 48000;
 
@@ -66,13 +66,17 @@ console.log('--- keyboard board (sheet 3) ---');
 console.log('--- VCO summer (sheet 5), octaves; SPICE in spice/vco/summer.txt ---');
 console.log('mod bus +1.43 V, pot 0.1/0.25/0.5/0.75/1:', [0.1, 0.25, 0.5, 0.75, 1].map(a => modOct(a, 1.43).toFixed(4)).join(' '));
 console.log('FM per volt, pot 0.25/0.5/1:', [0.25, 0.5, 1].map(a => fmOctPerVolt(a).toFixed(4)).join(' '), ' detune -1/0/+1:', [-1, 0, 1].map(d => detuneOct(d).toFixed(4)).join(' '));
+console.log('--- pitch knobs (±1 octave, an addition) ---');
+console.log('pitchOct -1/-0.5/0/0.5/1:', [-1, -0.5, 0, 0.5, 1].map(d => pitchOct(d).toFixed(4)).join(' '));
+for (const [id, mix] of [['o1pitch', { mix1: 0.6, mix2: 0 }], ['o2pitch', { mix1: 0, mix2: 0.6, o2wave: 1 }]])
+  for (const v of [-1, 1]) { const { out } = run(Object.assign({}, open, mix, { [id]: v }), 1, [57]); console.log(id, v, 'note', (69 + 12 * Math.log2(freqOf(out, SR) / 440)).toFixed(2)); }
 console.log('--- stability sweep ---');
 {
   const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
   const keys = Object.keys(e.p); let bad = 0, pk = 0; const out = new Float32Array(128);
   const t0 = Date.now(); let blocks = 0;
   for (let b = 0; b < 3000; b++) {
-    if (b % 40 === 0) { for (const k of keys) if (k !== 'power') { const v = Math.random(); const map = { lfoMode: 3, o1range: 4, o2range: 4, o1wave: 3, o2wave: 3 }; e.setParam(k, map[k] ? Math.floor(v * (map[k] + 1)) : (k === 'tune' || k === 'o2detune') ? v * 2 - 1 : v); } e.noteOn(30 + Math.floor(Math.random() * 60)); }
+    if (b % 40 === 0) { for (const k of keys) if (k !== 'power') { const v = Math.random(); const map = { lfoMode: 3, o1range: 4, o2range: 4, o1wave: 3, o2wave: 3 }; e.setParam(k, map[k] ? Math.floor(v * (map[k] + 1)) : (k === 'tune' || k === 'o2detune' || k.endsWith('pitch')) ? v * 2 - 1 : v); } e.noteOn(30 + Math.floor(Math.random() * 60)); }
     if (b % 40 === 25) e.allOff();
     e.render(out, 128); blocks++;
     for (const v of out) { if (!isFinite(v)) bad++; pk = Math.max(pk, Math.abs(v)); }

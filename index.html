@@ -695,6 +695,9 @@ const I_OCT = 1.5 / 100e3;
 // wiper at a (0…1 from the ground end) of a 100k pot with v on top, then rs
 function modOct(a, v) { return -(a * v) / (47e3 + 100e3 * a * (1 - a)) / I_OCT; }
 function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; return -(a / 2) / (100e3 + rth) / I_OCT; }
+// "Pitch" (an addition, not on the original panel): a 100k pot across
+// ±12.5 V into each VCO's summing node through 833k, i.e. ±15 µA = ±1 octave.
+function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
 
 // ============================================================================
@@ -705,13 +708,13 @@ const PARAM_DEFAULTS = {
   power: 0,
   lfoRate: 0.45, lfoMode: 0,
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
-  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0,
-  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0,
+  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0,
+  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0,
   mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -789,8 +792,8 @@ class PolivoksEngine {
       // pitch CVs (octaves relative to A4 at 8')
       const tune = ps.tune * 2 / 12;
       //   key CV −1.5 V/oct (key 53 − 69 = −16 semitones at 0 V), summer inputs
-      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + vco1.mismatch;
-      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + vco2.mismatch;
+      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch) + vco1.mismatch;
+      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.narrow = p.o1wave === 3; vco2.narrow = p.o2wave === 3;
       const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
@@ -854,7 +857,7 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
 </script>
 <script type="text/plain" id="seq-src">// ============================================================================
 // Knob step sequencer: a PERFORMANCE FEATURE added on top of the model.
@@ -955,9 +958,9 @@ const L = {
   'g-l2': [knob('glide', 'ГЛИССАНДО', 'mm', 0), sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1)],
   'g-l3': [knob('volume', 'ГРОМКОСТЬ', '06', .7), sw('outSel', 'ЛИН.', 'ТЛФ.', 0, 'ВЫХОД')],
   'g-o1a': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 1)],
-  'g-o1b': [knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ГЕНЕРАТОР II', '06', 0)],
+  'g-o1b': [knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ГЕНЕРАТОР II', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0)],
   'g-o2a': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 2)],
-  'g-o2b': [knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0)],
+  'g-o2b': [knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0)],
   'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0), knob('mixE', 'ВНЕШ.', '06', 0)],
   'g-f1': [knob('fA', 'АТАКА', 'mm', .05), { kind: 'spacer' }, sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
   'g-f2': [knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
@@ -974,7 +977,7 @@ const EN = {
   'МОДУЛЯТОР':'MODULATOR','ЧАСТОТА':'RATE','РЕЖИМ':'MODE','ТЛФ.':'PHONES','НАСТРОЙКА':'TUNE','ГЛИССАНДО':'GLIDE',
   '1-ГОЛ.':'MONO','2-ГОЛ.':'DUO','ГРОМКОСТЬ':'VOLUME','ВЫХОД':'OUTPUT','ЛИН.':'LINE',
   'ГЕНЕРАТОР I':'VCO I','ГЕНЕРАТОР II':'VCO II','ДИАПАЗОН':'RANGE','ФОРМА':'WAVE','МОДУЛЯЦИЯ':'MOD',
-  'РАССТРОЙКА':'DETUNE','МИКШЕР':'MIXER','ШУМ':'NOISE','ВНЕШ.':'EXT.','ФИЛЬТР':'FILTER','УСИЛИТЕЛЬ':'AMPLIFIER',
+  'РАССТРОЙКА':'DETUNE','ВЫСОТА':'PITCH','МИКШЕР':'MIXER','ШУМ':'NOISE','ВНЕШ.':'EXT.','ФИЛЬТР':'FILTER','УСИЛИТЕЛЬ':'AMPLIFIER',
   'АТАКА':'ATTACK','ЗАТУХАНИЕ':'DECAY','ПЬЕДЕСТАЛ':'SUSTAIN','ПОСЛЕЗВУЧ.':'RELEASE','ЧАСТОТА СРЕЗА':'CUTOFF',
   'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
   'ОГИБ.':'ENV','ВКЛ.':'HOLD','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
@@ -997,7 +1000,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.12.0';
+const VERSION = '1.13.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1197,7 +1200,7 @@ const dice = {
   // a new sound: every knob and selector at random (level knobs kept)
   patch() {
     for (const c of S) {
-      if (c.kind === 'knob' && SAFE(c)) c.set(c.scale === 'bip' ? (c.id === 'tune' ? rnd(-.15, .15) : rnd(-.3, .3)) : Math.random() ** (c.id.startsWith('mix') || c.id === 'cutoff' ? .6 : 1));
+      if (c.kind === 'knob' && SAFE(c)) c.set(c.scale === 'bip' ? (c.id === 'tune' ? rnd(-.15, .15) : c.id.endsWith('pitch') ? pick([0, 0, 0, 7 / 12, -5 / 12, 1, -1]) : rnd(-.3, .3)) : Math.random() ** (c.id.startsWith('mix') || c.id === 'cutoff' ? .6 : 1));
       else if (c.kind === 'sel') c.set(Math.floor(rnd(0, c.opts.length)));
       else if (c.kind === 'sw' && c.id !== 'outSel') c.set(Math.random() < .5 ? 0 : 1);
     }
@@ -1235,7 +1238,7 @@ document.getElementById('stage').insertBefore(ed, document.querySelector('.foot'
 const q = (s) => ed.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
 // one button per knob: black = its sequence is running, white outline = the one being edited
 const pickB = {};
-const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE', mixE: 'MIX EXT.',
+const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE', mixE: 'MIX EXT.',
   fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD' };
 for (const c of KNOBS) {
   const b = document.createElement('button'); b.textContent = PICK[c.id] || tr(c.label);
