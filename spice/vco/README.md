@@ -1,0 +1,106 @@
+# VCO check in ngspice (sheet 5, У2/У3)
+
+The Polivoks oscillator board, transcribed from `sch_polivoks5-vco1vco2.jpg`,
+and an ngspice bench of its core used to build the JS `VCO` in `dsp.js`.
+
+Run one case with `ngspice -b core.cir`, or the pitch sweep with
+`node spice/vco/sweep.js [currents in A…]` (writes `sweep.json` when
+`JSON=sweep.json` is set; `PARAMS="sr6=2 isc6=20m sr7=2"` and `IL=10n` vary
+the estimated op-amp and leakage values).
+
+## Transcription
+
+**Reference.** A6 КР140УД8Б, R15 2.21k from +12.5 V and R16 10k to ground on
+pin 3, follower with R17 3.3k: Vref = +10.24 V (the sheet's check-point table
+gives +10 V on A6 pins 2, 3, 6).
+
+**Timing.** C5 5600 pF (К31-11) from Vref to node X. The expo collector,
+A4 pin 10, sinks current from X, so X ramps down from about +8.6 V to +0.6 V.
+
+**Reset.** V1 КТ361Г (emitter on Vref, base to V5's collector, collector to
+V2 КД521Б), V5 КТ315Г (emitter on X, base on node Y), V2 cathode on Y. V1 and
+V5 make a PNP/NPN latch across C5. V6 КТ315Г is diode-connected from Y to Z.
+R18 6.19k (from Vref) and R19 6.19k (to ground) put Z at 5.1 V through 3.1k.
+V7 КТ315Б, emitter grounded, collector on Z.
+
+**Buffer.** R20 22k from X into A7 pin 3; A7 КР140УД8Б as a follower; R21
+3.3k from A7's output to V7's base. Saw test point on A7's output, drawn as a
+falling ramp 0 … +10 V.
+
+How it runs: while the ramp is high, A7 drives V7 through R21, V7 holds Z near
+0 V and V6 clamps Y, so the latch can't fire. Near 0.6 V V7 runs out of base
+current, Z rises, the latch fires and dumps C5 in about 0.35 µs. A7 slews back
+up at 2 V/µs, V7 pulls Z down and the latch lets go.
+
+**Shapers.**
+- Saw: C8 30 µF (К50-6) and R29 6.8k AC-couple A7's output (node S); S goes
+  out through R24 20k.
+- Triangle: A8 КР140УД8Б with V3/V4 КД521Б, R28 100k, R31 100k, R27 100k: a
+  precision rectifier giving −(|S| − Vf), drawn as 0 … −5 V, then C9 50 µF.
+- Pulse: A10, S into (−) through R33 20k, (+) to R34 20k and the pulse-width
+  switch line (X2 pin 10), output through R35.
+
+**Expo and CV (unchanged in the JS apart from the series resistance).** A4
+КР198НТ1А: the expo transistor's base (pin 11) sits on R4 1k / R5 100 Ω from
+the A2 summer, with C2 100 pF; the reference transistor (pins 13/14) runs from
+A3 with R7 6.19k and C3 2200 pF, its current set by R9 100k and trimmer R30
+100k from +12.5 V. A5 КМ551УД1Б with R10 1k trimmer, R22 470, R23 100 Ω ±0.5,
+R11 6.2k, R12 8.2k and R14 75 Ω holds the chip's temperature (heater loop).
+A1, A2 КР140УД8Б with R1 100k, R2 22.1k, R3 1k sum the CVs.
+
+## What is read and what is estimated
+
+Read from the sheet: all values above, part types from the parts table
+(КР140УД8Б for A1–A3 and A6–A8; КР198НТ1А A4; КМ551УД1Б A5), and the
+saw and triangle test-point levels.
+
+**One junction is a reading, not a certainty.** The sheet draws A7 pin 2, R21
+and V7's base meeting at one point. Taken literally A7 can't act as a follower
+(V7's base-emitter junction would hold pin 2 at 0.7 V). I tried every way of
+joining A7, R20, R21, V7 and Z that the scan allows. Only "A7 pin 2 on its own
+output, R21 to V7's base" runs cleanly and gives the sheet's test-point levels
+(saw ≈ 0.6 … 8.6 V, triangle 0 … −3.4 V). The rest either stall, latch up, or
+give a saw of a few volts. **EST**
+
+**EST (estimated):**
+- КР140УД8Б: GBW 1 MHz, slew 2 V/µs, output limit 20 mA (`ud8.lib`)
+- V1 leakage 10 nA (the latch's seed current)
+- КД521Б diode model, КТ315/КТ361 models (from `../models.lib`)
+- In the JS: A10 slew 3 V/µs, the narrow-pulse level (13 % duty), C9's load
+  (100k), and the КР198НТ1А RE 1 Ω, rbb' 100 Ω, β 150
+
+## Results
+
+Pitch of the core alone, ideal current sink, against 1 µA (≈22 Hz):
+
+| I | f Hz | cents | A7 low…high V |
+|---|---|---|---|
+| 20 µA | 449 | −2.5 | 0.59 … 8.59 |
+| 80 µA | 1789 | −7.6 | 0.58 … 8.51 |
+| 160 µA | 3568 | −12.9 | 0.57 … 8.45 |
+| 320 µA | 7101 | −21.4 | 0.55 … 8.33 |
+| 640 µA | 14087 | −35.4 | 0.53 … 8.11 |
+| 1.28 mA | 27797 | −58.7 | 0.49 … 7.72 |
+
+This is the reset's share of the high-note flattening. The cap swing per
+cycle fits ΔV(I) = 7.948 + 35.51·I^0.73 V within 0.15 cents, and the JS VCO
+uses that fit. It barely moves with the estimates: A7 slew 2 → 5 V/µs, A6
+output limit 10 → 40 mA, or leakage 1 → 100 nA each change the 14 kHz figure
+by less than 2 cents.
+
+JS tracking against 440 Hz (one VCO, no drift or mismatch), with the expo
+series resistance (≈2.3 Ω) and with it set to zero:
+
+| note | Hz | full | rb = 0 |
+|---|---|---|---|
+| A1 | 55 | +4.8 | +2.2 |
+| A4 | 440 | 0 | 0 |
+| A5 | 880 | −4.8 | −1.9 |
+| A6 | 1760 | −13.7 | −4.9 |
+| A7 | 3520 | −30.3 | −10.0 |
+| A8 | 7040 | −61.3 | −18.5 |
+
+So about a third of the flattening comes from the reset and two thirds from
+the expo pair's series resistance, which rests on the estimated КР198НТ1А
+values. The sheet has no high-frequency compensation, so the real unit should
+go flat by about this much unless it was trimmed on the CV side.
