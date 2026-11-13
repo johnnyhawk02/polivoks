@@ -1,0 +1,19 @@
+* К118УД1Б, from the datasheet's principal schematic (eandc.ru k118ud1.pdf):
+*   R1, R3 4k collector loads from pin 7; pair bases 3 (out 5) and 10 (out 9);
+*   VT3 current source, base pin 12, emitter pin 2, R2 1.8k pin 2 -> pin 14;
+*   R4 4k pin 12 -> pin 11, R6 5.7k pin 11 -> pin 8;
+*   R5 1.7k pin 12 -> diode-connected transistor -> pin 14.
+* Transistor parameters are EST (generic on-chip NPN).
+.model QK NPN(IS=1e-15 BF=120 VAF=80 CJE=1p CJC=0.8p TF=0.5n RB=100)
+.subckt K118UD1 p2 p3 p5 p7 p8 p9 p10 p11 p12 p14
+R1 p7 p5 4k
+R3 p7 p9 4k
+Q1 p5 p3 tail QK
+Q2 p9 p10 tail QK
+Q3 tail p12 p2 QK
+R2 p2 p14 1.8k
+R4 p12 p11 4k
+R6 p11 p8 5.7k
+R5 p12 nd 1.7k
+Q4 nd nd p14 QK
+.ends K118UD1

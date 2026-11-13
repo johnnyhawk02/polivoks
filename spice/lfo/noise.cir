@@ -1,0 +1,35 @@
+* Noise chain (sheet 10): A2 output (wideband noise, X7 pin 1 to the mixer)
+* -> C4 0.01u, R7 82k, C5 0.01u, R8 100k -> A3 (gain 1 + R9 560k / R10 10k,
+* C9 10u in the ground leg) = control noise (X7 pin 2).  AC response from A2's
+* output to A3's output, and A1/A2's own band (C3 10u + R5 1k, R6 100k).
+.include ../vco/ud8.lib
+Vp vp 0 12.5
+Vn vn 0 -12.5
+* A1: x(1 + 560k/220k)
+Vs src 0 dc 0 ac 1
+XA1 src a1m vp vn a1o UD8S r1=3.2g kc=0.1
+R3 a1o a1m 560k
+R4 a1m 0 220k
+C3 a1o c3 10u
+R5 c3 a2m 1k
+R6 a2m a2o 100k
+XA2 0 a2m vp vn a2o UD8S r1=3.2g kc=0.1
+C4 a2o c4 0.01u
+R7 c4 a3p 82k
+C5 a3p 0 0.01u
+R8 a3p 0 100k
+XA3 a3p a3m vp vn a3o UD8S r1=3.2g kc=0.1
+R9 a3o a3m 560k
+R10 a3m c9 10k
+C9 c9 0 10u
+.control
+ac dec 10 1 100k
+let g2 = vm(a2o)
+let g3 = vm(a3o)/vm(a2o)
+meas ac g2mid MAX g2
+meas ac g3pk MAX g3
+meas ac f3pk WHEN g3=g3pk
+let g3db = db(g3)
+print frequency vm(a2o) g3
+.endc
+.end
