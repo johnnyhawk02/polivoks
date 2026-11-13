@@ -538,6 +538,9 @@ const I_OCT = 1.5 / 100e3;
 // wiper at a (0…1 from the ground end) of a 100k pot with v on top, then rs
 function modOct(a, v) { return -(a * v) / (47e3 + 100e3 * a * (1 - a)) / I_OCT; }
 function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; return -(a / 2) / (100e3 + rth) / I_OCT; }
+// "Pitch" (an addition, not on the original panel): a 100k pot across
+// ±12.5 V into each VCO's summing node through 833k, i.e. ±15 µA = ±1 octave.
+function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
 
 // ============================================================================
@@ -548,13 +551,13 @@ const PARAM_DEFAULTS = {
   power: 0,
   lfoRate: 0.45, lfoMode: 0,
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
-  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0,
-  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0,
+  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0,
+  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0,
   mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -632,8 +635,8 @@ class PolivoksEngine {
       // pitch CVs (octaves relative to A4 at 8')
       const tune = ps.tune * 2 / 12;
       //   key CV −1.5 V/oct (key 53 − 69 = −16 semitones at 0 V), summer inputs
-      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + vco1.mismatch;
-      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + vco2.mismatch;
+      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch) + vco1.mismatch;
+      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.narrow = p.o1wave === 3; vco2.narrow = p.o2wave === 3;
       const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
@@ -697,4 +700,4 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
