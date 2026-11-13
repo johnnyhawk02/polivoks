@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ЭМС «Поливокс» — circuit model</title>
+<title>EMS Polivoks — circuit model</title>
 <meta name="theme-color" content="#fc0fc0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -66,14 +66,6 @@
   }
   .head .ttl::before { content: ""; position: absolute; inset: 2px -4px 0 2px; z-index: -1; background: var(--ink); clip-path: polygon(0 7%, 100% 0, 98.8% 100%, .6% 93%); }
   .head .sub { font: 600 9.5px var(--mono); letter-spacing: .12em; margin-top: 9px; }
-  .head canvas { margin-left: auto; border: 2px solid var(--ink); background: var(--ink); }
-  .lang { display: flex; gap: 4px; align-self: center; }
-  .lang button {
-    background: transparent; color: var(--ink); border: 0; cursor: pointer;
-    font: 400 13px var(--display); letter-spacing: .02em; padding: 6px 9px 4px;
-    clip-path: polygon(0 10%, 100% 0, 96% 100%, 4% 90%); box-shadow: inset 0 0 0 2px var(--ink);
-  }
-  .lang button.on { background: var(--ink); color: var(--pink); box-shadow: none; }
   /* below the panel: a white band cut on a slant, as on the site */
   .foot { margin: 22px -26px 0; padding: 40px 26px 34px; background: var(--paper); color: var(--ink); clip-path: polygon(0 26px, 100% 0, 100% calc(100% - 20px), 0 100%); }
   .info { display: flex; gap: 26px; align-items: center; flex-wrap: wrap; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
@@ -104,7 +96,7 @@
   <div class="panel" id="panel">
     <div class="torn"></div>
     <div class="col">
-      <div class="box"><h2>МОДУЛЯТОР</h2><div class="row" id="g-mod"></div></div>
+      <div class="box"><h2>MODULATOR</h2><div class="row" id="g-mod"></div></div>
       <div class="box" style="flex:1">
         <div class="row" id="g-l1"></div>
         <div class="row" id="g-l2" style="margin-top:8px"></div>
@@ -113,21 +105,19 @@
     </div>
     <div class="col">
       <div class="head">
-        <div><div class="ttl" data-ru="ЭМС «ПОЛИВОКС»">ЭМС «ПОЛИВОКС»</div><div class="sub">CIRCUIT MODEL · К140УД12 OTA-C VCF · КР198НТ1А EXPO · SHOCKLEY-DIODE EG</div></div>
-        <div class="lang" id="lang"><button data-l="ru">РУС</button><button data-l="en">ENG</button></div>
-        <canvas id="scope" width="236" height="56"></canvas>
+        <div><div class="ttl">EMS POLIVOKS</div><div class="sub">CIRCUIT MODEL · K140UD12 OTA-C VCF · KR198NT1A EXPO · SHOCKLEY-DIODE EG</div></div>
       </div>
       <div class="row" style="gap:8px;align-items:stretch">
-        <div class="box" style="flex:1"><h2>ГЕНЕРАТОР I</h2><div class="row" id="g-o1a"></div><div class="row" id="g-o1b"></div></div>
-        <div class="box" style="flex:1"><h2>ГЕНЕРАТОР II</h2><div class="row" id="g-o2a"></div><div class="row" id="g-o2b"></div></div>
+        <div class="box" style="flex:1"><h2>VCO I</h2><div class="row" id="g-o1a"></div><div class="row" id="g-o1b"></div></div>
+        <div class="box" style="flex:1"><h2>VCO II</h2><div class="row" id="g-o2a"></div><div class="row" id="g-o2b"></div></div>
       </div>
-      <div class="box"><h2>МИКШЕР</h2><div class="row" id="g-mix"></div></div>
+      <div class="box"><h2>MIXER</h2><div class="row" id="g-mix"></div></div>
     </div>
     <div class="row" style="gap:8px;align-items:stretch">
-      <div class="box" style="flex:1.4"><h2>ФИЛЬТР</h2>
+      <div class="box" style="flex:1.4"><h2>FILTER</h2>
         <div class="row" id="g-f1"></div><div class="row" id="g-f2"></div><div class="row" id="g-f3"></div><div class="row" id="g-f4"></div>
       </div>
-      <div class="box" style="flex:1"><h2>УСИЛИТЕЛЬ</h2>
+      <div class="box" style="flex:1"><h2>AMPLIFIER</h2>
         <div class="row" id="g-a1"></div><div class="row" id="g-a2" style="margin-top:4px"></div><div class="row" id="g-a3" style="margin-top:8px"></div><div class="row" id="g-a4" style="margin-top:4px"></div>
       </div>
     </div>
@@ -138,19 +128,19 @@
     <span>MIDI: <b id="midi">—</b></span>
     <span>v<b id="ver"></b></span>
     <span>Engine: <b id="emode">off</b></span>
-    <span><span data-ru="ВНЕШ.">ВНЕШ.</span> input: <button class="btn" id="extbtn">LOAD AUDIO FILE</button><input type="file" id="extfile" accept="audio/*" hidden> <span id="extname"></span></span>
+    <span>EXT. input: <button class="btn" id="extbtn">LOAD AUDIO FILE</button><input type="file" id="extfile" accept="audio/*" hidden> <span id="extname"></span></span>
     <button class="btn" id="resetbtn">RESET PANEL</button>
   </div>
   <details>
     <summary>WHAT IS MODELLED (component level)</summary>
     <table>
-      <tr><td>VCO ×2</td><td>КР198НТ1А expo pair (Ebers–Moll with emitter-side series resistance from R4/R5 and the transistor, thermal drift of V<sub>T</sub>) sinking current from node X under the 5600 pF timing cap, which hangs from the A6 +10.24 V reference. Reset by the V1/V5 PNP–NPN latch, gated by V6/V7 and the R18/R19 divider, with A7 buffering the ramp; the cap swing, dump time and trigger lag come from an ngspice model of the core (spice/vco), which also sets the high-note flattening. Saw AC-coupled through C8/R29; A8 precision-rectifier triangle with the КД521 dead zone; A10 comparator pulse.</td></tr>
-      <tr><td>VCF</td><td>Two К140УД12 (uA776) programmable op-amps as OTA-C integrators: dV/dt = (I<sub>set</sub>/C1)·tanh(V<sub>d</sub>/4V<sub>T</sub>) with the 20 % slew asymmetry of the uA776, the exact resistor network at A2’s input (mixer 39k, LP 47k, 1k, resonance pot 100k + 47k), 47k/1k into A3, 2 mV offsets, rail clamping. I<sub>set</sub> comes from A1/V1: V<sub>be</sub> = R2·(I<sub>in</sub> − I<sub>c</sub>/β), summing the cutoff, envelope and modulation pot currents; V1 saturates at ≈224 µA. Checked against a transistor-level ngspice model of the uA776 datasheet schematic (spice/ folder). Solved implicitly at 4× oversampling.</td></tr>
-      <tr><td>Envelopes ×2</td><td>5 µF capacitor charged and discharged through the pots and КД521 diodes (Shockley equation solved per sample); comparator ends attack at +6 V; repeat mode retriggers at the sustain level.</td></tr>
+      <tr><td>VCO ×2</td><td>KR198NT1A expo pair (Ebers–Moll with emitter-side series resistance from R4/R5 and the transistor, thermal drift of V<sub>T</sub>) sinking current from node X under the 5600 pF timing cap, which hangs from the A6 +10.24 V reference. Reset by the V1/V5 PNP–NPN latch, gated by V6/V7 and the R18/R19 divider, with A7 buffering the ramp; the cap swing, dump time and trigger lag come from an ngspice model of the core (spice/vco), which also sets the high-note flattening. Saw AC-coupled through C8/R29; A8 precision-rectifier triangle with the KD521 dead zone; A10 comparator pulse.</td></tr>
+      <tr><td>VCF</td><td>Two K140UD12 (uA776) programmable op-amps as OTA-C integrators: dV/dt = (I<sub>set</sub>/C1)·tanh(V<sub>d</sub>/4V<sub>T</sub>) with the 20 % slew asymmetry of the uA776, the exact resistor network at A2’s input (mixer 39k, LP 47k, 1k, resonance pot 100k + 47k), 47k/1k into A3, 2 mV offsets, rail clamping. I<sub>set</sub> comes from A1/V1: V<sub>be</sub> = R2·(I<sub>in</sub> − I<sub>c</sub>/β), summing the cutoff, envelope and modulation pot currents; V1 saturates at ≈224 µA. Checked against a transistor-level ngspice model of the uA776 datasheet schematic (spice/ folder). Solved implicitly at 4× oversampling.</td></tr>
+      <tr><td>Envelopes ×2</td><td>5 µF capacitor charged and discharged through the pots and KD521 diodes (Shockley equation solved per sample); comparator ends attack at +6 V; repeat mode retriggers at the sustain level.</td></tr>
       <tr><td>VCA</td><td>Differential transistor pair: I<sub>tail</sub>·tanh(V<sub>in</sub>/2V<sub>T</sub>) with control-voltage bleed from pair mismatch; output coupling capacitor.</td></tr>
       <tr><td>Modulator</td><td>Integrator + Schmitt trigger (triangle/square), sample-and-hold of the noise source, filtered noise.</td></tr>
       <tr><td>Mixer / glide</td><td>Op-amp summer saturating at the ±12.5 V rails; glide is an RC lag on each key CV.</td></tr>
-      <tr><td>Estimated values</td><td>C1 (≈25 pF, fitted to the datasheet slew rate and bandwidth), pot tapers, КТ315Г I<sub>s</sub>/β, op-amp excess phase at full resonance, КР140УД8 slew and output current, КР198НТ1А bulk resistance and β, one wire junction at the VCO’s A7/V7 (see spice/vco/README), diode parameters and some pot ranges are estimates where the schematic scan is unreadable or the value is unpublished.</td></tr>
+      <tr><td>Estimated values</td><td>C1 (≈25 pF, fitted to the datasheet slew rate and bandwidth), pot tapers, KT315G I<sub>s</sub>/β, op-amp excess phase at full resonance, KR140UD8 slew and output current, KR198NT1A bulk resistance and β, one wire junction at the VCO’s A7/V7 (see spice/vco/README), diode parameters and some pot ranges are estimates where the schematic scan is unreadable or the value is unpublished.</td></tr>
     </table>
   </details>
   </div>
@@ -829,14 +819,14 @@ const EN = {
   'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
   'ОГИБ.':'ENV','ВКЛ.':'HOLD','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
 };
-let lang = 'ru'; try { lang = localStorage.getItem('polivoks-lang') || 'ru'; } catch (e) {}
+// labels are written in Russian as on the original panel and shown in English
+const lang = 'en';
 const tr = (ru) => lang === 'en' && EN[ru] ? EN[ru] : ru;
 const mark = (e, ru) => { e.setAttribute('data-ru', ru); if (e instanceof SVGElement) e.textContent = tr(ru); else e.innerHTML = tr(ru); return e; };
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll('h2').forEach((h) => { if (!h.hasAttribute('data-ru')) h.setAttribute('data-ru', h.innerHTML); });
   document.querySelectorAll('[data-ru]').forEach((e) => { const ru = e.getAttribute('data-ru'); if (e instanceof SVGElement) e.textContent = tr(ru); else e.innerHTML = tr(ru); });
-  document.querySelectorAll('#lang button').forEach((b) => b.classList.toggle('on', b.dataset.l === lang));
   drawResp();
 }
 
@@ -847,7 +837,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -965,7 +955,6 @@ for (const gid in L) {
   }
 }
 applyLang();
-document.querySelectorAll('#lang button').forEach((b) => b.onclick = () => { lang = b.dataset.l; try { localStorage.setItem('polivoks-lang', lang); } catch (e) {} applyLang(); });
 document.getElementById('resetbtn').onclick = () => { for (const c of S) c.set(c.def); };
 
 // ---------------------------------------------------------------- audio
@@ -1117,23 +1106,6 @@ extfile.onchange = async () => {
     document.getElementById('extname').textContent = f.name + ' — turn up ' + tr('ВНЕШ.');
   } catch (e) { document.getElementById('extname').textContent = 'could not decode file'; }
 };
-
-// ---------------------------------------------------------------- scope
-const sc = document.getElementById('scope'), sx = sc.getContext('2d'); const tb = new Float32Array(2048);
-function draw() {
-  sx.fillStyle = '#0b0b0b'; sx.fillRect(0, 0, sc.width, sc.height);
-  sx.strokeStyle = '#fff'; sx.globalAlpha = 0.25; sx.beginPath(); sx.moveTo(0, sc.height / 2); sx.lineTo(sc.width, sc.height / 2); sx.stroke(); sx.globalAlpha = 1;
-  if (analyser && powered) {
-    analyser.getFloatTimeDomainData(tb);
-    let st = 0; for (let i = 1; i < 1024; i++) if (tb[i - 1] < 0 && tb[i] >= 0) { st = i; break; }
-    let pk = 0.05; for (let i = 0; i < 2048; i++) pk = Math.max(pk, Math.abs(tb[i]));
-    sx.strokeStyle = '#fc0fc0'; sx.lineWidth = 1.5; sx.beginPath();
-    for (let x = 0; x < sc.width; x++) { const v = tb[st + x * 2] / pk; const y = sc.height / 2 - v * (sc.height / 2 - 4); x ? sx.lineTo(x, y) : sx.moveTo(x, y); }
-    sx.stroke();
-  }
-  requestAnimationFrame(draw);
-}
-draw();
 
 // ---------------------------------------------------------------- fit to width
 const stage = document.getElementById('stage');
