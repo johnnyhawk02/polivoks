@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EMS Polivoks — circuit model</title>
+<title>Thee Filf — Polivoks circuit model</title>
 <meta name="theme-color" content="#fc0fc0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -105,7 +105,7 @@
     </div>
     <div class="col">
       <div class="head">
-        <div><div class="ttl">EMS POLIVOKS</div><div class="sub">CIRCUIT MODEL · K140UD12 OTA-C VCF · KR198NT1A EXPO · SHOCKLEY-DIODE EG</div></div>
+        <div><div class="ttl">THEE FILF</div><div class="sub">CIRCUIT MODEL · K140UD12 OTA-C VCF · KR198NT1A EXPO · SHOCKLEY-DIODE EG</div></div>
       </div>
       <div class="row" style="gap:8px;align-items:stretch">
         <div class="box" style="flex:1"><h2>VCO I</h2><div class="row" id="g-o1a"></div><div class="row" id="g-o1b"></div></div>
@@ -837,7 +837,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.7.0';
+const VERSION = '1.7.1';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
