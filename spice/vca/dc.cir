@@ -1,0 +1,17 @@
+* Tail currents of both stages vs control voltage
+.include ../models.lib
+.include k118.lib
+.param vmod=0 venv=0
+Vp vp 0 12.5
+Vn vn 0 -12.5
+Vin fin 0 0
+.include board.inc
+.control
+op
+print i(vmod) v(a1p12) v(a1p2) v(bias) v(a2o) v(a4o)
+dc vmod -1.5 1.5 0.1
+print v(a1p12) (v(a1p2)+12.5)/27k+v(a1p2)/1.8k
+dc venv 0 7 0.25
+print v(a3p12) v(a3p2)/1.8k
+.endc
+.end
