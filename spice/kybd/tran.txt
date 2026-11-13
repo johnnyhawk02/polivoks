@@ -1,0 +1,10 @@
+pilot 16.0 kHz; on the bus 185.4 mV p-p, A6 out 6.01 V p-p, detector 1.66 V
+gate on 8 µs after the key, off 262 µs after the last key lifts, on again 31 µs
+key 5 alone: voice1 key 5.000, ripple 1.09 mV p-p
+keys 5+29:   voice1 key 5.005, voice2 key 28.994
+key 29 only: voice1 key 29.000, voice2 key 28.999
+no keys (hold): voice1 key 29.013, voice2 key 29.013, V6 gate -11.81 V
+key 17: voice1 key 16.999; after release held at key 17.002
+keys 10+40: voice1 key 10.005, voice2 key 39.995; both lifted together: voice1 key 10.016, voice2 key 10.017
+hold before key 17: glide out key 27.422
+29→17 jump: voice1 half-way at 374 µs, 1 % left (0.12 key) at 2325 µs, glide (R48 100k) half-way at 13.09 ms

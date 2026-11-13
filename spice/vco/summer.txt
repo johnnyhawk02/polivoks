@@ -1,0 +1,13 @@
+A2 out per keyboard octave (1.5 V into 100k): 0.3315 V; register step: -0.9933 oct
+mod pot 0.1, bus +1.43 V: SPICE -0.1702 oct, JS -0.1702
+mod pot 0.25, bus +1.43 V: SPICE -0.3625 oct, JS -0.3625
+mod pot 0.5, bus +1.43 V: SPICE -0.6620 oct, JS -0.6620
+mod pot 0.75, bus +1.43 V: SPICE -1.0875 oct, JS -1.0875
+mod pot 1, bus +1.43 V: SPICE -2.0283 oct, JS -2.0284
+FM pot 0.25, triangle +1 V: SPICE -0.0684 oct, JS -0.0684
+FM pot 0.5, triangle +1 V: SPICE -0.1212 oct, JS -0.1212
+FM pot 1, triangle +1 V: SPICE -0.2222 oct, JS -0.2222
+detune 0: SPICE 0.8333 oct, JS 0.8333
+detune 0.25: SPICE 0.4090 oct, JS 0.4090
+detune 0.75: SPICE -0.4090 oct, JS -0.4090
+detune 1: SPICE -0.8333 oct, JS -0.8333
