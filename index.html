@@ -81,6 +81,9 @@
   #resetbtn { transform: rotate(1.5deg); }
   #resetbtn:hover { transform: rotate(-1deg) scale(1.03); }
   .resp { margin-top: 4px; }
+  .dice { display: flex; align-items: center; gap: 10px; }
+  .dice .btn:nth-child(odd) { transform: rotate(-1.2deg); }
+  .dice .btn:nth-child(even) { transform: rotate(1deg); }
   /* knob step sequences (performance feature): label on a black slab while one runs */
   .ctl .lab.seq { background: var(--ink); color: var(--pink); padding: 1px 5px; }
   #seqed { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; padding: 8px; background: rgba(0,0,0,.62); }
@@ -154,6 +157,7 @@
     <span>v<b id="ver"></b></span>
     <span>Engine: <b id="emode">off</b></span>
     <span>EXT. input: <button class="btn" id="extbtn">LOAD AUDIO FILE</button><input type="file" id="extfile" accept="audio/*" hidden> <span id="extname"></span></span>
+    <span class="dice">RANDOM: <button class="btn" id="rnd-nudge">NUDGE</button><button class="btn" id="rnd-groove">GROOVE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-mess">MESS</button></span>
     <button class="btn" id="resetbtn">RESET PANEL</button>
   </div>
   <details>
@@ -1015,7 +1019,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.9.0';
+const VERSION = '1.10.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1184,6 +1188,62 @@ function midiClock(st) {
   } else if (st === 0xfa) send({ t: 'cstart' });
   else if (st === 0xfc) { send({ t: 'cstop' }); clkT = []; }
 }
+// ---------------------------------------------------------------- randomisers
+// Pattern makers for one sequence (the editor's buttons) and panel-wide dice.
+// WALK, EUCLID and STEPS stay musical; CHAOS and MESS are meant to be messy.
+const rnd = (a, b) => a + Math.random() * (b - a), pick = (a) => a[Math.floor(Math.random() * a.length)];
+const q2 = (v) => Math.round(Math.max(-1, Math.min(1, v)) * 100) / 100;
+const RND = {
+  // drifting line: each step a small move from the last
+  walk(s) { let v = rnd(-.5, .5); for (let i = 0; i < 16; i++) { s.steps[i] = q2(v); v += rnd(-.35, .35); if (Math.abs(v) > 1) v *= .7; } s.len = pick([8, 16, 16]); s.slew = Math.max(s.slew, .06); },
+  // k hits spread over n steps (Bjorklund), rotated: hits up, rests down
+  euclid(s) {
+    const n = pick([8, 12, 16, 16]), k = Math.max(2, Math.round(n * rnd(.25, .6))), r = Math.floor(rnd(0, n)), lo = pick([-.6, -.3, 0]);
+    for (let i = 0; i < 16; i++) { const j = (i + r) % n; s.steps[i] = Math.floor((j + 1) * k / n) - Math.floor(j * k / n) ? 1 : lo; }
+    s.len = n; s.slew = Math.min(s.slew, .03);
+  },
+  // a few fixed levels, often repeated, like a riff
+  steps(s) {
+    const lv = [-1, -.5, -.25, 0, .25, .5, 1], pal = [pick(lv), pick(lv), pick(lv), 0]; let v = pal[0];
+    for (let i = 0; i < 16; i++) { if (Math.random() < .55) v = pick(pal); s.steps[i] = v; }
+    s.len = pick([4, 8, 8, 16]); s.slew = Math.min(s.slew, .02);
+  },
+  // anything goes, timing included
+  chaos(s) { for (let i = 0; i < 16; i++) s.steps[i] = q2(rnd(-1, 1)); s.len = 3 + Math.floor(rnd(0, 14)); s.div = pick(DIVS); s.slew = Math.random() < .5 ? 0 : rnd(0, 1.2) ** 2; s.depth = rnd(.3, 1); },
+};
+const knobById = (id) => KNOBS.find((c) => c.id === id);
+const SAFE = (c) => c.id !== 'volume' && c.id !== 'phones';   // never throw the level around
+function seqsOff() { for (const id in seqs) if (seqs[id].on) { seqs[id].on = false; pushSeq(knobById(id)); } }
+const dice = {
+  // small moves of every knob around where it is
+  nudge() { for (const c of KNOBS) if (SAFE(c)) c.set(c.v + rnd(-.08, .08) * (c.scale === 'bip' ? .5 : 1)); },
+  // a tidy rhythm on two or three filter/envelope knobs, everything else off
+  groove() {
+    seqsOff();
+    const pool = ['cutoff', 'fEnv', 'res', 'fD', 'aD', 'o1mod', 'mix2', 'fMod'].sort(() => Math.random() - .5);
+    const n = 2 + Math.floor(rnd(0, 2)), len = pick([8, 16]);
+    for (const id of pool.slice(0, n)) {
+      const s = seqOf(id); pick([RND.euclid, RND.steps, RND.walk])(s);
+      s.len = len === 8 && s.len > 8 ? 8 : s.len; s.div = pick([1, 1, 2]); s.depth = rnd(.2, .45); s.slew = pick([0, .01, .03, .08]); s.on = true; pushSeq(knobById(id));
+    }
+  },
+  // a new sound: every knob and selector at random (level knobs kept)
+  patch() {
+    for (const c of S) {
+      if (c.kind === 'knob' && SAFE(c)) c.set(c.scale === 'bip' ? (c.id === 'tune' ? rnd(-.15, .15) : rnd(-.3, .3)) : Math.random() ** (c.id.startsWith('mix') || c.id === 'cutoff' ? .6 : 1));
+      else if (c.kind === 'sel') c.set(Math.floor(rnd(0, c.opts.length)));
+      else if (c.kind === 'sw' && c.id !== 'outSel') c.set(Math.random() < .5 ? 0 : 1);
+    }
+    if (state.mix1 < .3 && state.mix2 < .3) knobById('mix1').set(.6);
+  },
+  // four to eight knobs on chaotic, out-of-step sequences
+  mess() {
+    seqsOff();
+    const pool = KNOBS.filter(SAFE).sort(() => Math.random() - .5);
+    for (const c of pool.slice(0, 4 + Math.floor(rnd(0, 5)))) { const s = seqOf(c.id); RND.chaos(s); s.on = true; pushSeq(c); }
+  },
+};
+for (const k in dice) document.getElementById('rnd-' + k).onclick = () => { dice[k](); if (edC) drawSeq(); };
 // editor
 const ed = document.createElement('div'); ed.id = 'seqed'; ed.hidden = true;
 ed.innerHTML = `<div class="sq" role="dialog" aria-label="Knob sequence">
@@ -1199,7 +1259,7 @@ ed.innerHTML = `<div class="sq" role="dialog" aria-label="Knob sequence">
   <div class="sq-row">
     <label class="sq-f"><span>CLOCK</span><input type="range" class="sq-bpm" min="40" max="240"><b class="sq-bpmv"></b></label>
     <b class="sq-src"></b><span style="flex:1"></span>
-    <button class="sb" data-a="rand">RANDOM</button><button class="sb" data-a="clear">CLEAR</button>
+    <button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button>
   </div>
 </div>`;
 document.body.appendChild(ed);
@@ -1236,7 +1296,7 @@ ed.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => change((s) => {
   const a = b.dataset.a, di = DIVS.indexOf(s.div);
   if (a === 'len-') s.len = Math.max(1, s.len - 1); else if (a === 'len+') s.len = Math.min(16, s.len + 1);
   else if (a === 'div-') s.div = DIVS[Math.max(0, di - 1)]; else if (a === 'div+') s.div = DIVS[Math.min(DIVS.length - 1, di + 1)];
-  else if (a === 'rand') { for (let i = 0; i < 16; i++) s.steps[i] = Math.round((Math.random() * 2 - 1) * 20) / 20; s.on = true; }
+  else if (RND[a]) { RND[a](s); s.on = true; }
   else if (a === 'clear') s.steps.fill(0);
 }));
 q('.sq-depth').oninput = (e) => change((s) => { s.depth = e.target.value / 100; });
