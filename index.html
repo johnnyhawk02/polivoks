@@ -102,12 +102,12 @@
     <summary>WHAT IS MODELLED (component level)</summary>
     <table>
       <tr><td>VCO ×2</td><td>КР198НТ1А matched pair solved with Ebers–Moll + bulk emitter resistance (high-end flattening) and thermal drift of V<sub>T</sub>; 5600 pF timing cap charged by the collector current and integrated exactly per step; comparator + transistor reset with finite discharge time; precision-rectifier triangle; К140УД8 comparator pulse with 3 V/µs slew.</td></tr>
-      <tr><td>VCF</td><td>Two К140УД12 programmable op-amps as OTA-C integrators: dV/dt = (I<sub>set</sub>/C1)·tanh(V<sub>d</sub>/4V<sub>T</sub>), 47k/1k input dividers, 2 mV input offsets, rail clamping, I<sub>set</sub> from an exponential converter plus leakage floor. Solved implicitly (trapezoidal + Newton) at 4× oversampling.</td></tr>
+      <tr><td>VCF</td><td>Two К140УД12 (uA776) programmable op-amps as OTA-C integrators: dV/dt = (I<sub>set</sub>/C1)·tanh(V<sub>d</sub>/4V<sub>T</sub>) with the 20 % slew asymmetry of the uA776, the exact resistor network at A2’s input (mixer 39k, LP 47k, 1k, resonance pot 100k + 47k), 47k/1k into A3, 2 mV offsets, rail clamping. I<sub>set</sub> comes from A1/V1: V<sub>be</sub> = R2·(I<sub>in</sub> − I<sub>c</sub>/β), summing the cutoff, envelope and modulation pot currents; V1 saturates at ≈224 µA. Checked against a transistor-level ngspice model of the uA776 datasheet schematic (spice/ folder). Solved implicitly at 4× oversampling.</td></tr>
       <tr><td>Envelopes ×2</td><td>5 µF capacitor charged and discharged through the pots and КД521 diodes (Shockley equation solved per sample); comparator ends attack at +6 V; repeat mode retriggers at the sustain level.</td></tr>
       <tr><td>VCA</td><td>Differential transistor pair: I<sub>tail</sub>·tanh(V<sub>in</sub>/2V<sub>T</sub>) with control-voltage bleed from pair mismatch; output coupling capacitor.</td></tr>
       <tr><td>Modulator</td><td>Integrator + Schmitt trigger (triangle/square), sample-and-hold of the noise source, filtered noise.</td></tr>
       <tr><td>Mixer / glide</td><td>Op-amp summer saturating at the ±12.5 V rails; glide is an RC lag on each key CV.</td></tr>
-      <tr><td>Estimated values</td><td>C1 (≈18 pF, from the datasheet slew rate), reset timing, bulk resistance, diode parameters and some pot ranges are estimates where the schematic scan is unreadable or the value is unpublished.</td></tr>
+      <tr><td>Estimated values</td><td>C1 (≈25 pF, fitted to the datasheet slew rate and bandwidth), pot tapers, КТ315Г I<sub>s</sub>/β, op-amp excess phase at full resonance, reset timing, bulk resistance, diode parameters and some pot ranges are estimates where the schematic scan is unreadable or the value is unpublished.</td></tr>
     </table>
   </details>
 </div>
@@ -240,44 +240,109 @@ class VCO {
 }
 
 // ============================================================================
-//  VCF (sheet 7, У4): two К140УД12 programmable op-amps used open-loop.
+//  VCF (sheet 7, У4): two К140УД12 (uA776) programmable op-amps used open-loop.
 //  Each is an OTA charging its own internal compensation capacitor C1:
-//     dV/dt = (Itail/C1) · tanh( Vdiff / 4VT )
-//  (741-style CC–CB input stage → 4 junctions → 4VT).  Inputs come through
-//  the 47k/1k dividers (a = 1/48).  Itail is set by the Iset current from the
-//  A1/V1 exponential converter.  Integrator outputs saturate at the rails.
-//  Solved implicitly (trapezoidal + Newton), so slew-limiting and resonance
-//  blow-ups are handled without instability.
+//     dV/dt = (Iset/C1) · tanh( Vdiff / 4VT )
+//  (CC–CB input stage Q1–Q4 of the uA776 → 4 junctions → 4VT; tail current
+//  = Iset through the Q14/Q15/Q19 loop).  Checked against a transistor-level
+//  ngspice model of the SGS-Thomson UA776 schematic (spice/, see README there).
+//
+//  A2 (inverting input) sums, through a resistor network:
+//     mixer  → R85 39k,   LP (A3 out) → R3 47k,   R4 1k to ground,
+//     BP (A2 out) → R89 100k pot → wiper → R54 47k   ("Резонанс", sheet 11).
+//  Knob up moves the wiper to the ground end, removing the damping.
+//  A3 (non-inverting) gets BP through R6 47k / R7 1k.
+//  State: y1 = −V(A2) = BP, y2 = −V(A3) = LP (both circuit outputs invert).
+//  Solved implicitly (trapezoidal + Newton).
 // ============================================================================
 class K140VCF {
   constructor(h) {
-    this.h = h; this.a = 1 / 48;
-    this.C1 = 18e-12;          // internal comp. cap, from SR = Iset/C1 (datasheet) EST
+    this.h = h; this.a3 = 1 / 48;          // R7/(R6+R7)
+    this.C1 = 25e-12;          // uA776 C1: fits datasheet SR 0.8 V/µs @15 µA and GBW 0.1 MHz @1.5 µA  EST
     this.vos1 = 0.0021; this.vos2 = -0.0014;   // input offset voltages (datasheet typ 2 mV)
-    this.Vs = 11;
+    this.Vs = 11.5;            // output swing on ±12.5 V (datasheet: ±13–14 V on ±15 V)
+    // slew asymmetry of the uA776: in the transistor model the output falls
+    // ~20 % faster than it rises (0.045 vs 0.037 V/µs at Iset 1 µA).  This
+    // rectifies hard-driven signals and shifts LP's DC level.  From SPICE, EST
+    this.dsl = 0.1;
     this.y1 = 0; this.y2 = 0;
+    this.wIn = 0; this.wL = 0; this.wD = 0;
+    this.setRes(0);
   }
-  step(vin, I, k, VT) {
-    const h = this.h, h2 = h * 0.5, a = this.a, c = 1 / (4 * VT), g = I / this.C1;
-    const y1 = this.y1, y2 = this.y2, o1 = this.vos1, o2 = this.vos2;
-    const F1n = g * Math.tanh((a * (vin - y2) - k * a * y1 + o1) * c);
-    const F2n = g * Math.tanh((a * y1 + o2) * c);
-    let z1 = y1 + h * F1n, z2 = y2 + h * F2n;
-    for (let it = 0; it < 3; it++) {
-      const t1 = Math.tanh((a * (vin - z2) - k * a * z1 + o1) * c);
-      const t2 = Math.tanh((a * z1 + o2) * c);
-      const r1 = z1 - y1 - h2 * (F1n + g * t1);
-      const r2 = z2 - y2 - h2 * (F2n + g * t2);
-      const s1 = g * (1 - t1 * t1) * c * a, s2 = g * (1 - t2 * t2) * c * a;
-      const j11 = 1 + h2 * s1 * k, j12 = h2 * s1, j21 = -h2 * s2;
+  // Resonance network weights at A2's inverting input (exact node equation).
+  //   res 0..1 → wiper fraction p = 1 − res (linear taper EST)
+  //   excess: negative damping from the op-amps' excess phase, as a fraction
+  //   of wL.  SPICE puts the real loop right at the edge at full travel; this
+  //   small value lets the last ~0.5 % of the knob self-oscillate.          EST
+  setRes(res) {
+    const p = 1 - res, Rth = 100e3 * p * (1 - p);
+    const gIn = 1 / 39e3, gL = 1 / 47e3, gD = 1 / (47e3 + Rth), G = 1 / 1e3 + gIn + gL + gD;
+    this.wIn = gIn / G; this.wL = gL / G;
+    this.wD = p * gD / G - 0.005 * this.wL;
+  }
+  step(vin, I, VT) {
+    const h = this.h, c = 1 / (4 * VT), g = I / this.C1, d = this.dsl;
+    const wIn = this.wIn, wL = this.wL, wD = this.wD, a3 = this.a3;
+    // θ-method: trapezoidal (θ = ½) while the small-signal ω0·h < 1, sliding to
+    // backward Euler above, so the >20 kHz range V1 can reach (to ~130 kHz)
+    // is damped instead of ringing at Nyquist.
+    const x = g * c * Math.sqrt(wL * a3) * h, th = x < 1 ? 0.5 : x > 3 ? 1 : 0.25 + 0.25 * x;
+    const h2 = h * th, h1 = h - h2;
+    const y1 = this.y1, y2 = this.y2, o1 = this.vos1, o2 = this.vos2, u = wIn * vin + o1;
+    // OTA current: Iset·tanh(x), scaled 1±d for the two slew directions
+    let t = Math.tanh((u - wL * y2 - wD * y1) * c);
+    const F1n = g * t * (1 + d * t);
+    t = Math.tanh((a3 * y1 + o2) * c);
+    const F2n = g * t * (1 + d * t);
+    // Newton from the previous state; steps limited so the saturating tanh
+    // can't throw it into a limit cycle when g·h is large
+    let z1 = y1, z2 = y2;
+    for (let it = 0; it < 4; it++) {
+      const t1 = Math.tanh((u - wL * z2 - wD * z1) * c);
+      const t2 = Math.tanh((a3 * z1 + o2) * c);
+      const r1 = z1 - y1 - h1 * F1n - h2 * g * t1 * (1 + d * t1);
+      const r2 = z2 - y2 - h1 * F2n - h2 * g * t2 * (1 + d * t2);
+      const s1 = g * (1 - t1 * t1) * (1 + 2 * d * t1) * c, s2 = g * (1 - t2 * t2) * (1 + 2 * d * t2) * c * a3;
+      const j11 = 1 + h2 * s1 * wD, j12 = h2 * s1 * wL, j21 = -h2 * s2;
       const det = j11 - j12 * j21;
-      z1 -= (r1 - j12 * r2) / det;
-      z2 -= (j11 * r2 - j21 * r1) / det;
+      const d1 = (r1 - j12 * r2) / det, d2 = (j11 * r2 - j21 * r1) / det;
+      z1 -= d1 > 2 ? 2 : d1 < -2 ? -2 : d1;
+      z2 -= d2 > 2 ? 2 : d2 < -2 ? -2 : d2;
     }
     const Vs = this.Vs;
     this.y1 = z1 > Vs ? Vs : z1 < -Vs ? -Vs : z1;
     this.y2 = z2 > Vs ? Vs : z2 < -Vs ? -Vs : z2;
     if (!(this.y1 === this.y1) || !(this.y2 === this.y2)) { this.y1 = 0; this.y2 = 0; }
+  }
+}
+
+// ============================================================================
+//  VCF control converter (sheet 7: A1 КР140УД8Б, V1 КТ315Г, R2 3k; panel
+//  network sheet 11).  A1 holds V1's base (the summing node) at 0 V and drives
+//  the emitter; R2 sits across base–emitter, so
+//      Vbe = R2·(Iin − Ic/β),   Ic = Is·exp(Vbe/VT)
+//  i.e. the cutoff is exponential in the summed input current
+//  (VT·ln2/R2 ≈ 6 µA per octave, uncompensated for temperature).
+//  Iin = 12.5 V/R1 100k + cutoff pot R90 → R87 47k + envelope pot R96 →
+//        R88 100k + modulation pot R91 → R86 100k.
+//  V1's collector feeds both Iset pins through R5/R8 110k; V1 saturates at
+//  about 224 µA total (2 × 11.8 V / 110k), which is the top of the range.
+// ============================================================================
+class FilterCV {
+  constructor() { this.Is = 2e-14; this.beta = 150; this.R2 = 3e3; this.x = 0.4; }   // КТ315Г Is, β  EST
+  // pot wiper source: fraction t of Vsrc with Thevenin 100k·t(1−t), into Rs
+  static wiper(t, V, Rs) { return t * V / (Rs + 100e3 * t * (1 - t)); }
+  // returns Iset per op-amp
+  iset(Iin, T) {
+    const VT = VT_OF(T), R2 = this.R2, k = R2 * this.Is / this.beta;
+    let v = this.x;
+    for (let i = 0; i < 6; i++) {
+      const e = Math.exp(Math.min(v / VT, 60));
+      v -= (v - R2 * Iin + k * e) / (1 + k * e / VT);
+    }
+    this.x = v;
+    const Ic = this.Is * Math.exp(Math.min(v / VT, 60)), Imax = 224e-6;
+    return 0.5 * Ic / Math.pow(1 + Math.pow(Ic / Imax, 4), 0.25) + 1e-11;
   }
 }
 
@@ -357,7 +422,7 @@ const PARAM_DEFAULTS = {
   o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0,
   o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0,
   mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0,
-  fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.45, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
+  fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
 const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
@@ -372,11 +437,9 @@ class PolivoksEngine {
     this.vcf = new K140VCF(ho);
     this.egF = new EG(hb); this.egA = new EG(hb);
     this.lfo = new LFO(hb, new Rng(4242));
-    this.fexpo = new ExpoPair(0, 4, 303);
+    this.fcv = new FilterCV();
     this.p = Object.assign({}, PARAM_DEFAULTS); this.ps = Object.assign({}, PARAM_DEFAULTS);
-    // filter Iset for 1 kHz:  f = Iset·a / (2π·C1·4VT)
     this.Tchip = 303;
-    this.fexpo.Iref = 1000 * 2 * Math.PI * this.vcf.C1 * 4 * VT_OF(303) / this.vcf.a;
     this.held = []; this.gate = false; this.n1 = 57; this.n2 = 57;
     this.cv1 = 57; this.cv2 = 57;
     this.T1 = 303; this.T2 = 303; this.drift1 = 0; this.drift2 = 0;
@@ -453,10 +516,14 @@ class PolivoksEngine {
       const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
       const fmk = ps.o1fm * ps.o1fm * 2 * LN2 / 5;
 
-      // filter Iset (A1/V1 expo converter) + leakage floor
-      const foct = (ps.cutoff * 9.8 - 5.5) + ef * ps.fEnv * 7 + lfo * ps.fMod * ps.fMod * 3;
-      const Iset = Math.min(this.fexpo.current(foct, this.Tchip), 60e-6) + 15e-9;
-      const kres = 2.2 * Math.pow(1 - ps.res, 1.6) - 0.06;
+      // filter Iset: currents into A1's summing node (sheet 7 + panel, sheet 11)
+      //   cutoff pot log taper EST; amount pots linear EST; LFO bus level EST
+      const tc = (Math.exp(5 * ps.cutoff) - 1) / (Math.exp(5) - 1);
+      const vl = lfo * ((p.lfoMode | 0) === 1 ? 11 : 5);
+      const Iin = 12.5 / 100e3 + FilterCV.wiper(tc, 12.5, 47e3)
+                + FilterCV.wiper(ps.fEnv, ef * this.egF.Vpk, 100e3) + FilterCV.wiper(ps.fMod, vl, 100e3);
+      const Iset = this.fcv.iset(Iin, this.Tchip);
+      vcf.setRes(ps.res);
       const VTf = VT_OF(this.Tchip);
       const lp = p.fMode < 0.5;
 
@@ -476,8 +543,8 @@ class PolivoksEngine {
         const o1 = vco1.out(w1);
         this.noiseLP += (rng.g() * 3.2 - this.noiseLP) * nk;
         const vmix = rail(g1 * o1 + g2 * o2 + gn * this.noiseLP + ge * ext, 11);
-        vcf.step(vmix, Iset, kres, VTf);
-        const vf = lp ? vcf.y2 : vcf.y1 * 0.8;
+        vcf.step(vmix, Iset, VTf);
+        const vf = lp ? -vcf.y2 : -vcf.y1;          // both outputs invert
         const vca = env * Math.tanh(vf * vcaAtt) * 1.05 + env * 0.004; // + CV bleed (pair mismatch)
         const b = this.buf, i0 = this.bi;
         b[i0] = vca; b[i0 + N] = vca; this.bi = (i0 + 1) % N;
@@ -497,7 +564,7 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, VCO, K140VCF, EG, ExpoPair, VT_OF };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF };
 </script>
 <script>
 (() => {
@@ -528,7 +595,7 @@ const L = {
   'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0), knob('mixE', 'ВНЕШ.', '06', 0)],
   'g-f1': [knob('fA', 'АТАКА', 'mm', .05), { kind: 'spacer' }, sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
   'g-f2': [knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
-  'g-f3': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .45), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0)],
+  'g-f3': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0)],
   'g-f4': [knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), { kind: 'resp' }],
   'g-a1': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5)],
   'g-a2': [knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
@@ -702,7 +769,8 @@ registerProcessor('polivoks', PolivoksProc);`;
     analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
     let ok = false;
     for (const url of [URL.createObjectURL(new Blob([src], { type: 'application/javascript' })), 'data:application/javascript;charset=utf-8,' + encodeURIComponent(src)]) {
-      try { await ctx.audioWorklet.addModule(url); ok = true; break; } catch (e) { /* try next */ }
+      // some hosts (headless browsers, sandboxed frames) never settle addModule: give up after 3 s
+      try { await Promise.race([ctx.audioWorklet.addModule(url), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000))]); ok = true; break; } catch (e) { /* try next */ }
     }
     if (ok) {
       node = new AudioWorkletNode(ctx, 'polivoks', { numberOfInputs: 0, outputChannelCount: [2] });
