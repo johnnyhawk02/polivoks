@@ -1,0 +1,64 @@
+* Polivoks VCO core, sheet 5 (У2/У3), one oscillator.
+*
+* C5 5600 pF hangs from Vref (A6 output, +10.2 V) down to node X.  The expo
+* collector (A4 pin 10) sinks I from X, so X ramps down.  A7 buffers X
+* (sawtooth test point: 0 .. +10 V on the sheet).  V1 (КТ361Г) and V5
+* (КТ315Г) form a PNP/NPN latch across C5; when it fires it dumps C5 and X
+* jumps back up.  V6 (КТ315Г, diode-connected) ties the latch's gate node Y to
+* Z, the R18/R19 6.19k divider off Vref.  V7 (КТ315Б) holds Z near 0 V while
+* A7's output is high; as the ramp nears 0 V, V7 runs out of base current,
+* Z rises, and the latch fires.  During the reset A7 slews up again, V7 pulls
+* Z down, V6 clamps Y and the latch lets go.
+*
+* Reading of the scan (see README):
+*   A7 pin 2 is tied to A7's output and R21 3.3k runs from the output to V7's
+*   base.  The sheet draws pin 2, R21 and V7's base meeting at one point; taken
+*   literally A7 could not work as a follower, and the follower reading is the
+*   only one that gives the sheet's own test-point levels (saw 0..+10 V,
+*   triangle 0..-5 V).                                                      EST
+*
+* The expo pair is replaced by an ideal current sink I1 here: this bench
+* measures the core only (threshold, reset, levels).
+.include ../models.lib
+.include ud8.lib
+.param ileak=10n iexp=100u tstop=1m tstep=0.1u
+.param sr6=2 isc6=20m sr7=2
+VP vp 0 12.5
+VN vn 0 -12.5
+* A6: Vref = 12.5 * 10k / 12.21k = 10.24 V, follower (R17 3.3k)
+R15 vp a6p 2.21k
+R16 a6p 0 10k
+XA6 a6p a6m vp vn vref UD8S sr={sr6} isc={isc6}
+R17 vref a6m 3.3k
+* timing capacitor and expo current
+C5 vref x 5600p
+I1 x vn {iexp}
+* reset latch V1/V5, V2 КД521Б from V1 collector to the gate node Y
+Q1 c1 b1 vref KT361B
+* V1 collector-base leakage, the latch's seed current.  КТ361Г Icbo is
+* specified at 1 uA max; 1 nA .. 100 nA changes the pitch by < 1 cent.     EST
+IL1 b1 c1 {ileak}
+D2 c1 y D521
+Q5 b1 y x KT315G
+* threshold: V6 diode Y -> Z, R18/R19 divider, V7 pulls Z low
+Q6 y y z KT315G
+R18 vref z 6.19k
+R19 z 0 6.19k
+Q7 z b7 0 KT315G
+* A7 buffer: R20 22k into pin 3, follower, R21 3.3k to V7 base
+R20 x p3 22k
+XA7 p3 o vp vn o UD8S sr={sr7}
+R21 o b7 3.3k
+* КД521Б small-signal diode                                               EST
+.model D521 D(IS=2n N=1.9 RS=5 CJO=1p TT=4n)
+.ic v(x)=9 v(o)=9
+.options reltol=1e-4 abstol=1e-12 vntol=1e-7
+.tran {tstep} {tstop} 0 {tstep}
+.control
+run
+meas tran t3 when v(o)=4.5 rise=3
+meas tran t10 when v(o)=4.5 rise=10
+meas tran omin min v(o) from=t3 to=t10
+meas tran omax max v(o) from=t3 to=t10
+.endc
+.end

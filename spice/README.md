@@ -76,3 +76,5 @@ Overdrive, LP output, Iset 1 µA, res 0.5 (ngspice / JS):
 The DC shift under hard drive comes from the uA776 slewing about 20 % faster
 down than up, which the JS now includes. Not modelled in JS: the small
 crossover distortion of the class-AB output at low Iset (the 0.55 % at 300 Hz).
+
+The oscillator board (sheet 5) has its own bench and notes in `vco/README.md`.
