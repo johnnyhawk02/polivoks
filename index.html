@@ -26,19 +26,19 @@
   }
   /* the panels are flat hot pink */
   ::selection { background: var(--ink); color: var(--paper); }
-  #stage { transform-origin: 0 0; width: 1580px; padding: 26px 26px 18px; }
-  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr); gap: 16px; padding: 24px 20px 20px; position: relative; isolation: isolate; color: var(--ink); }
+  #stage { transform-origin: 0 0; width: 1580px; padding: 14px 26px 0; }
+  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr); gap: 14px; padding: 18px 18px 14px; position: relative; isolation: isolate; color: var(--ink); }
   .torn { position: absolute; inset: 0; z-index: -1; background: var(--pink); pointer-events: none; }
-  .box { border: 2px solid var(--ink); padding: 20px 8px 10px; position: relative; }
+  .box { border: 2px solid var(--ink); padding: 16px 8px 6px; position: relative; }
   /* section names: white letters on a plain black slab over the top edge */
   .box h2 {
     position: absolute; top: -10px; left: 10px; margin: 0;
     font: 400 14px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--paper);
     padding: 4px 8px 3px; background: var(--ink);
   }
-  .col { display: flex; flex-direction: column; gap: 16px; }
+  .col { display: flex; flex-direction: column; gap: 14px; }
   .row { display: flex; justify-content: space-around; align-items: flex-start; gap: 4px; }
-  .row + .row { margin-top: 8px; }
+  .row + .row { margin-top: 2px; }
   .ctl { display: flex; flex-direction: column; align-items: center; user-select: none; -webkit-user-select: none; touch-action: none; }
   .ctl svg { display: block; cursor: ns-resize; overflow: visible; }
   .ctl .lab { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: .07em; text-align: center; margin-top: 2px; white-space: nowrap; }
@@ -53,14 +53,14 @@
     font: 400 32px/1 var(--display); letter-spacing: -.01em; text-transform: uppercase; padding: 8px 12px 6px;
   }
   /* below the panels: a plain white band */
-  .foot { margin: 24px -26px 0; padding: 26px 26px 28px; background: var(--paper); color: var(--ink); }
-  .info { display: flex; gap: 26px; align-items: center; flex-wrap: wrap; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
+  .foot { margin: 12px -26px 0; padding: 10px 26px 12px; background: var(--paper); color: var(--ink); }
+  .info { display: flex; gap: 8px 20px; align-items: center; flex-wrap: wrap; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
   .info b { font-weight: 600; }
   .btn {
     position: relative; isolation: isolate; cursor: pointer;
     border: 0; background: var(--ink); color: var(--paper);
     font: 400 15px var(--display); text-transform: uppercase; letter-spacing: .02em;
-    padding: 10px 16px 8px;
+    padding: 6px 11px 5px; font-size: 13px;
   }
   .btn:hover, .sb:hover { color: var(--pink); }
   .resp { margin-top: 4px; }
@@ -68,19 +68,19 @@
   /* knob step sequences (performance feature): label on a black slab while one runs */
   .ctl .lab.seq { background: var(--ink); color: var(--pink); padding: 1px 5px; }
   /* sequencer panel: a second pink panel under the synth */
-  #seqpanel { margin-top: 16px; }
-  .sq { position: relative; isolation: isolate; color: var(--ink); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  #seqpanel { margin-top: 12px; }
+  .sq { position: relative; isolation: isolate; color: var(--ink); padding: 14px 18px; display: flex; flex-direction: column; gap: 9px; }
   .sq-pick { display: flex; flex-wrap: wrap; gap: 5px 6px; }
-  .sq-pick button { border: 2px solid var(--ink); background: transparent; color: var(--ink); font: 500 10.5px var(--mono); letter-spacing: .07em; text-transform: uppercase; padding: 4px 7px 3px; cursor: pointer; }
+  .sq-pick button { border: 2px solid var(--ink); background: transparent; color: var(--ink); font: 500 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px 1px; cursor: pointer; }
   .sq-pick button.run { background: var(--ink); color: var(--pink); }
   .sq-pick button.sel { outline: 3px solid var(--paper); outline-offset: -1px; }
   .sq-head { display: flex; align-items: center; gap: 12px; }
-  .sq-ttl { font: 400 20px/1 var(--display); color: var(--paper); background: var(--ink); text-transform: uppercase; padding: 6px 10px 4px; white-space: nowrap; }
+  .sq-ttl { font: 400 16px/1 var(--display); color: var(--paper); background: var(--ink); text-transform: uppercase; padding: 5px 9px 3px; white-space: nowrap; }
   .sq-sub { font: 600 10px var(--mono); letter-spacing: .12em; }
-  .sb { cursor: pointer; border: 0; background: var(--ink); color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 7px 12px 5px; touch-action: manipulation; }
-  .sb.sm { padding: 4px 9px 2px; font-size: 14px; }
+  .sb { cursor: pointer; border: 0; background: var(--ink); color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 5px 10px 4px; touch-action: manipulation; }
+  .sb.sm { padding: 2px 8px 1px; font-size: 13px; }
   .sb.lit { color: var(--pink); }
-  .sq-grid { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; height: 180px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+  .sq-grid { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; height: 92px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
   .bar { position: relative; border: 2px solid var(--ink); }
   .bar::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--ink); }
   .bar i { position: absolute; left: 0; right: 0; background: var(--ink); }
@@ -91,10 +91,6 @@
   .sq-f b, .sq-src { font: 600 12px var(--mono); min-width: 3.4em; text-align: center; }
   .sq-src { font-size: 10.5px; letter-spacing: .1em; }
   .sq-f input[type=range] { width: 110px; accent-color: var(--ink); }
-  details { margin-top: 22px; font: 400 14px/1.5 var(--sans); max-width: 1100px; }
-  details summary { cursor: pointer; font: 400 17px var(--display); text-transform: uppercase; letter-spacing: .01em; }
-  details td { padding: 4px 14px 4px 0; vertical-align: top; border-bottom: 1.5px solid var(--ink); }
-  details td:first-child { font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; padding-top: 6px; }
 </style>
 </head>
 <body>
@@ -130,7 +126,7 @@
   </div>
   <div class="foot">
   <div class="info">
-    <span>Keys: <b>A W S E D F T G Y H U J K O L P</b> · octave <b>Z / X</b> (<span id="octv">4</span>)</span>
+    <span>Keys <b>A–P</b> · octave <b>Z/X</b> (<span id="octv">4</span>)</span>
     <span>MIDI: <b id="midi">—</b></span>
     <span>v<b id="ver"></b></span>
     <span>Engine: <b id="emode">off</b></span>
@@ -138,20 +134,6 @@
     <span class="dice">RANDOM: <button class="btn" id="rnd-nudge">NUDGE</button><button class="btn" id="rnd-groove">GROOVE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-mess">MESS</button></span>
     <button class="btn" id="resetbtn">RESET PANEL</button>
   </div>
-  <details>
-    <summary>WHAT IS MODELLED (component level)</summary>
-    <table>
-      <tr><td>VCO ×2</td><td>KR198NT1A expo pair (Ebers–Moll with emitter-side series resistance from R4/R5 and the transistor, thermal drift of V<sub>T</sub>) sinking current from node X under the 5600 pF timing cap, which hangs from the A6 +10.24 V reference. Reset by the V1/V5 PNP–NPN latch, gated by V6/V7 and the R18/R19 divider, with A7 buffering the ramp; the cap swing, dump time and trigger lag come from an ngspice model of the core (spice/vco), which also sets the high-note flattening. Saw AC-coupled through C8/R29; A8 precision-rectifier triangle with the KD521 dead zone; A10 comparator pulse.</td></tr>
-      <tr><td>VCF</td><td>Two K140UD12 (uA776) programmable op-amps as OTA-C integrators: dV/dt = (I<sub>set</sub>/C1)·tanh(V<sub>d</sub>/4V<sub>T</sub>) with the 20 % slew asymmetry of the uA776, the exact resistor network at A2’s input (mixer 39k, LP 47k, 1k, resonance pot 100k + 47k), 47k/1k into A3, 2 mV offsets, rail clamping. I<sub>set</sub> comes from A1/V1: V<sub>be</sub> = R2·(I<sub>in</sub> − I<sub>c</sub>/β), summing the cutoff, envelope and modulation pot currents; V1 saturates at ≈224 µA. Checked against a transistor-level ngspice model of the uA776 datasheet schematic (spice/ folder). Solved implicitly at 4× oversampling.</td></tr>
-      <tr><td>Envelopes ×2</td><td>5 µF capacitor charged and discharged through the pots and KD521 diodes (Shockley equation solved per sample); comparator ends attack at +6 V; repeat mode retriggers at the sustain level.</td></tr>
-      <tr><td>VCA</td><td>Differential transistor pair: I<sub>tail</sub>·tanh(V<sub>in</sub>/2V<sub>T</sub>) with control-voltage bleed from pair mismatch; output coupling capacitor.</td></tr>
-      <tr><td>Modulator</td><td>Integrator + Schmitt trigger (triangle/square), sample-and-hold of the noise source, filtered noise.</td></tr>
-      <tr><td>Keyboard</td><td>Key string of 47 × 100 Ω fed 1.25 mA (125 mV per key); one key bus, so two keys give the lower key directly and the upper one through A4 from the shorted string. A 16–23 kHz pilot detects a pressed key and opens the KP303V track-and-hold (≈0.4 ms to settle); with no key down both voices hold and voice 2 falls to voice 1. Glide (R48 1 MΩ, C4 0.22 µF) only on VCO I; the 1/2-voice switch gives VCO II the lower or the upper key. Legato does not retrigger the envelopes (spice/kybd).</td></tr>
-      <tr><td>VCO CV summer</td><td>A2 virtual earth at 15 µA per octave: keyboard and registers through 100k, modulation pots through 47k (±2 octaves at full), Generator II FM through R64/R66/R63, detune through 1 MΩ (±10 semitones). Checked in spice/vco/summer.cir.</td></tr>
-      <tr><td>Mixer</td><td>Op-amp summer saturating at the ±12.5 V rails.</td></tr>
-      <tr><td>Estimated values</td><td>C1 (≈25 pF, fitted to the datasheet slew rate and bandwidth), pot tapers, KT315G I<sub>s</sub>/β, op-amp excess phase at full resonance, KR140UD8 slew and output current, KR198NT1A bulk resistance and β, one wire junction at the VCO’s A7/V7 (see spice/vco/README), diode parameters and some pot ranges are estimates where the schematic scan is unreadable or the value is unpublished.</td></tr>
-    </table>
-  </details>
   </div>
 </div>
 
@@ -1000,7 +982,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.13.0';
+const VERSION = '1.14.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1455,7 +1437,13 @@ extfile.onchange = async () => {
 
 // ---------------------------------------------------------------- fit to width
 const stage = document.getElementById('stage');
-function fit() { const s = Math.min(1, innerWidth / 1580); stage.style.transform = `scale(${s})`; document.body.style.height = (stage.offsetHeight * s) + 'px'; }
+// scale to the window's width; on a laptop or bigger screen also to its height, so the whole page fits without scrolling
+function fit() {
+  let s = Math.min(1, innerWidth / 1580);
+  if (innerWidth >= 1100) s = Math.min(s, innerHeight / stage.offsetHeight);
+  stage.style.transform = `scale(${s})`; stage.style.marginLeft = Math.max(0, (innerWidth - 1580 * s) / 2) + 'px';
+  document.body.style.height = (stage.offsetHeight * s) + 'px';
+}
 addEventListener('resize', fit); fit();
 })();
 </script>
