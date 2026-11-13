@@ -2,10 +2,17 @@
 * GBW 1 MHz, Av 2e5, swing +-11 V on +-12.5 V.
 * sr   = slew rate in V/us (datasheet range 2-5; 2 used)
 * isc  = output short-circuit current (20 mA)
-.subckt UD8S inp inm vp vn out params: sr=2 isc=20m
+* r1   = integrator load: open-loop gain = 62.8u*r1.  The default 3.2meg
+*        gives only Av = 200 (the VCO sweep was run with it); 3.2g gives
+*        the 2e5 stated above.  The modulator benches pass r1=3.2g.
+* kc   = clamp on the integrator node above +-12 V (A/V).  0 (off) by
+*        default, as in the VCO sweep; with r1=3.2g it is needed or a
+*        saturated output winds up and recovers far too slowly (0.1 used).
+.subckt UD8S inp inm vp vn out params: sr=2 isc=20m r1=3.2meg kc=0
 B1 0 n1 I = (sr*10u)*tanh(62.8u*(v(inp)-v(inm))/(sr*10u))
 C1 n1 0 10p
-R1 n1 0 3.2meg
+R1 n1 0 {r1}
+Bc n1 0 I = kc*(max(v(n1)-12, 0) + min(v(n1)+12, 0))
 B2 n2 0 V = max(min(v(n1), 11), -11)
 Bo 0 out I = isc*tanh((v(n2)-v(out))/(50*isc))
 Ro out 0 1meg

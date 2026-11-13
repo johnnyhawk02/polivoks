@@ -1,0 +1,39 @@
+* Modulator core (sheet 10, У7): A5 Schmitt (R13 100k / R14 15k), C7 10u to
+* the -12.5 V rail, timing R21 4.3k + panel "Частота" R107 100k (sheet 1,
+* wired as a rheostat on X7 pins 4/5), A6 follower (triangle out, X7 pin 6),
+* V6 + R16 100k / R17 15k + A7 follower (square out 0/+1.5 V, X7 pin 7).
+* Parameter rp = R107 setting in ohms.
+.include ../vco/ud8.lib
+.model D521 D(IS=2n N=1.9 RS=5 CJO=1p TT=4n)
+.param rp=50k
+Vp vp 0 12.5
+Vn vn 0 -12.5
+XA5 a5p tri vp vn a5o UD8S r1=3.2g kc=0.1
+R13 a5o a5p 100k
+R14 a5p 0 15k
+R21 a5o x4 4.3k
+Rpot x4 tri {rp}
+C7 tri vn 10u
+XA6 tri a6o vp vn a6o UD8S r1=3.2g kc=0.1
+D6 a5o v6k D521
+R16 v6k a7p 100k
+R17 a7p 0 15k
+XA7 a7p a7o vp vn a7o UD8S r1=3.2g kc=0.1
+.ic v(tri)=0
+.control
+foreach r 0 1k 3k 10k 30k 100k
+  alterparam rp = $r
+  reset
+  tran 20u 6
+  meas tran t1 WHEN v(a5o)=5 RISE=2
+  meas tran t2 WHEN v(a5o)=5 RISE=4
+  meas tran trmax MAX v(a6o) from=2 to=6
+  meas tran trmin MIN v(a6o) from=2 to=6
+  meas tran sqmax MAX v(a7o) from=2 to=6
+  meas tran sqmin MIN v(a7o) from=2 to=6
+  meas tran a5max MAX v(a5o) from=2 to=6
+  let f = 2/(t2-t1)
+  echo RESULT rp $r f $&f tri $&trmin $&trmax sq $&sqmin $&sqmax a5 $&a5max
+end
+.endc
+.end
