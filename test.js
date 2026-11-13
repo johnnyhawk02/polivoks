@@ -100,3 +100,18 @@ console.log('--- stability sweep ---');
   fs.writeFileSync('demo.wav', buf);
   let pk = 0; for (const v of out) pk = Math.max(pk, Math.abs(v)); console.log('demo peak', pk.toFixed(3));
 }
+// knob sequencer (performance feature, seq.js): rides on the knob, off = untouched
+{
+  const { KnobSeq } = require('./seq.js');
+  const e = new PolivoksEngine(SR); const q = new KnobSeq(SR, e);
+  q.msg({ t: 'p', id: 'cutoff', v: 0.5 });
+  const out = new Float32Array(128), seen = new Set();
+  q.setBpm(120);
+  q.setSeq('cutoff', { on: true, len: 4, div: 1, depth: 0.5, slew: 0, steps: [1, -1, 0.5, 0, 0,0,0,0,0,0,0,0,0,0,0,0] }, [0, 1]);
+  for (let b = 0; b < SR / 128; b++) { q.render(out, 128); seen.add(e.p.cutoff.toFixed(3)); }
+  q.msg({ t: 'p', id: 'cutoff', v: 0.4 });  // knob moves the centre
+  q.render(out, 128); const moved = e.p.cutoff;
+  q.setSeq('cutoff', { on: false, len: 4, div: 1, depth: 0.5, slew: 0, steps: [] });
+  console.log('seq cutoff values', [...seen].sort().join(' '), '| moved', moved.toFixed(3), '| off ->', e.p.cutoff);
+  if (![...seen].includes('1.000') || ![...seen].includes('0.000') || ![...seen].includes('0.750') || e.p.cutoff !== 0.4) { console.log('SEQ TEST FAILED'); process.exitCode = 1; }
+}
