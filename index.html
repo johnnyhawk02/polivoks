@@ -787,7 +787,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -987,11 +987,45 @@ addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (held.has(k
 // losing focus drops computer-key notes only; MIDI notes keep playing
 addEventListener('blur', () => { for (const n of held.values()) off(n, 'kb'); held.clear(); });
 // MIDI: every input, all channels. Note on/off, sustain pedal (CC64),
-// all-notes-off (CC120/123). Tap the MIDI label to ask for access again.
+// all-notes-off (CC120/123), Bass Station II knobs (below). Tap the MIDI label to ask for access again.
 const midiEl = document.getElementById('midi');
 const sustained = new Set(); let pedal = false;
-function midiMsg(m) {
+// Novation Bass Station II: found by its port name, its knobs move the
+// nearest Polivoks controls. CC numbers from the BSII MIDI chart. Kinds:
+// u = 0..1, c = centred knob, positive half only (env depth), a = centred
+// knob, distance from centre (LFO depth), b = centred -> bipolar −1..+1,
+// or a function giving a selector position (undefined = no equivalent).
+const BSII = {
+  16: ['cutoff', 'u'], 82: ['res', 'u'], 85: ['fEnv', 'c'], 17: ['fMod', 'a'],
+  84: ['fMode', (v) => v === 0 ? 0 : v === 1 ? 1 : undefined],          // LP / BP (HP: none)
+  102: ['fA', 'u'], 103: ['fD', 'u'], 104: ['fS', 'u'], 105: ['fR', 'u'],
+  90: ['aA', 'u'], 91: ['aD', 'u'], 92: ['aS', 'u'], 93: ['aR', 'u'],
+  5: ['glide', 'u'], 7: ['volume', 'u'],
+  18: ['lfoRate', 'u'], 88: ['lfoMode', (v) => [0, undefined, 1, 2][v]],  // tri / saw: none / sq / S&H
+  28: ['o1mod', 'a'], 31: ['o2mod', 'a'],
+  70: ['o1range', (v) => v >= 63 && v <= 66 ? v - 62 : undefined],     // 16' 8' 4' 2'
+  75: ['o2range', (v) => v >= 63 && v <= 66 ? v - 62 : undefined],
+  26: ['tune', 'b'], 29: ['o2detune', 'b'],
+  20: ['mix1', 'u'], 21: ['mix2', 'u'], 23: ['mixN', 'u'], 25: ['mixE', 'u'],
+};
+const BSII_LSB = {}; for (const cc of [16, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31]) BSII_LSB[cc + 32] = cc;
+const bsiiMsb = {};
+function bsiiCC(cc, val) {
+  let lsb = 0;
+  if (BSII_LSB[cc]) { lsb = val; cc = BSII_LSB[cc]; val = bsiiMsb[cc]; if (val === undefined) return true; }
+  const m = BSII[cc]; if (!m) return false;
+  bsiiMsb[cc] = val;
+  const c = S.find((x) => x.id === m[0]); if (!c) return true;
+  const k = m[1];
+  if (typeof k === 'function') { const i = k(val); if (i !== undefined && i !== c.v) c.set(i); return true; }
+  const u = Math.min(1, (val + lsb / 128) / 127), d = (val + lsb / 128 - 64) / 63;
+  c.set(k === 'u' ? u : k === 'c' ? Math.max(0, Math.min(1, d)) : k === 'a' ? Math.min(1, Math.abs(d)) : Math.max(-1, Math.min(1, d)));
+  return true;
+}
+const isBSII = (name) => /bass\s*station\s*(ii|2)/i.test(name || '');
+function midiMsg(m, bsii) {
   const [st, d1, d2] = m.data, ty = st & 0xf0;
+  if (bsii && ty === 0xb0 && bsiiCC(d1, d2)) return;
   if (ty === 0x90 && d2 > 0) { sustained.delete(d1); on(d1, 'midi'); }
   else if (ty === 0x80 || ty === 0x90) { if (pedal) sustained.add(d1); else off(d1, 'midi'); }
   else if (ty === 0xb0 && d1 === 64) { pedal = d2 >= 64; if (!pedal) { for (const n of sustained) off(n, 'midi'); sustained.clear(); } }
@@ -1002,7 +1036,7 @@ function midiInit() {
   midiEl.textContent = '…';
   navigator.requestMIDIAccess().then((acc) => {
     const bind = () => {
-      const names = []; acc.inputs.forEach((inp) => { names.push(inp.name); inp.onmidimessage = midiMsg; });
+      const names = []; acc.inputs.forEach((inp) => { names.push(inp.name); const b = isBSII(inp.name); inp.onmidimessage = (m) => midiMsg(m, b); });
       midiEl.textContent = names.length === 1 ? names[0] : names.length ? names.length + ' inputs' : 'no devices';
     };
     bind(); acc.onstatechange = bind;
