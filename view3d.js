@@ -369,14 +369,24 @@ let title = null, titleU = null;
   // the CRT housing: like a tube's case, its four sides bow outward (the same barrel curve as
   // the screen inside) and its edges are rounded; kept shallow, so tipping the top panel up
   // never lets it cover the AMPLIFIER name
-  const BX = w * 0.035, BY = h * 0.07, BS = 3, BEZ = h * 0.06;          // side bow, top/bottom bow, edge round, bezel
-  const HX = w / 2 - BX - BS, HY = h / 2 - BY - BS;                        // half-size of the case before its bow
-  {
+  const BX = w * 0.012, BY = h * 0.025, BS = 3, BEZ = h * 0.06, FR = 11;  // side bow, top/bottom bow (subtle), edge round, bezel, frame width
+  const HX = w / 2 - BX - BS - FR, HY = h / 2 - BY - BS - FR;              // half-size of the case before its bow (the frame goes round it)
+  const bowShape = (hx, hy) => {
     const sh = new THREE.Shape();
-    sh.moveTo(-HX, -HY); sh.quadraticCurveTo(0, -HY - 2 * BY, HX, -HY); sh.quadraticCurveTo(HX + 2 * BX, 0, HX, HY);
-    sh.quadraticCurveTo(0, HY + 2 * BY, -HX, HY); sh.quadraticCurveTo(-HX - 2 * BX, 0, -HX, -HY);
+    sh.moveTo(-hx, -hy); sh.quadraticCurveTo(0, -hy - 2 * BY, hx, -hy); sh.quadraticCurveTo(hx + 2 * BX, 0, hx, hy);
+    sh.quadraticCurveTo(0, hy + 2 * BY, -hx, hy); sh.quadraticCurveTo(-hx - 2 * BX, 0, -hx, -hy); return sh;
+  };
+  {
+    const sh = bowShape(HX, HY);
     const hg = new THREE.ExtrudeGeometry(sh, { depth: 6, bevelEnabled: true, bevelThickness: 3, bevelSize: BS, bevelSegments: 4, curveSegments: 24 });
     hg.translate(w / 2, -h / 2, 3); p.geometry.dispose(); p.geometry = hg;     // front face at z 12
+    // a bevelled frame round the case, the same bowed outline: a rounded lip of dark satin
+    // metal standing a little proud, so the tube looks seated and its rim catches the side lights
+    const fs = bowShape(HX + FR, HY + FR); fs.holes.push(bowShape(HX + 1, HY + 1));
+    const fg2 = new THREE.ExtrudeGeometry(fs, { depth: 4, bevelEnabled: true, bevelThickness: 4, bevelSize: 3, bevelSegments: 6, curveSegments: 24 });
+    fg2.translate(w / 2, -h / 2, 4);                                            // front of the lip at z 16
+    const frame = new THREE.Mesh(fg2, new THREE.MeshStandardMaterial({ color: 0x242424, roughness: 0.32, metalness: 0.65, envMapIntensity: 1.2 }));
+    frame.castShadow = true; frame.receiveShadow = true; p.add(frame);
   }
   const layer = (blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
@@ -410,7 +420,7 @@ let title = null, titleU = null;
         float edge = smoothstep(0., 10., min(ex, ey));
         if (edge <= 0.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
         vec2 cuv = q / vec2(scr.x + scr.z, scr.y + scr.w);     // the picture fills the screen
-        cuv *= 1. + 0.07 * dot(cuv, cuv);                     // barrel: the glass bulges
+        cuv *= 1. + 0.03 * dot(cuv, cuv);                     // barrel: the glass bulges, just a little
         vec2 uv0 = cuv * .5 + .5;
         if (uv0.x < 0. || uv0.x > 1. || uv0.y < 0. || uv0.y > 1.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
         vec2 px = uv0 * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
@@ -438,7 +448,7 @@ let title = null, titleU = null;
       for (let i = 0; i < a.count; i++) {
         const nx = a.getX(i) / (gw / 2), ny = a.getY(i) / (gh / 2);
         a.setX(i, a.getX(i) * (1 + (BX / (gw / 2)) * (1 - ny * ny))); a.setY(i, a.getY(i) * (1 + (BY / (gh / 2)) * (1 - nx * nx)));
-        a.setZ(i, lift + 9 * (1 - nx * nx) * (1 - ny * ny));
+        a.setZ(i, lift + 4 * (1 - nx * nx) * (1 - ny * ny));
       }
       g.computeVertexNormals(); return g;
     };
