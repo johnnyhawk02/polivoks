@@ -186,7 +186,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
     <div class="box" id="g-mix" style="grid-area:3/13/4/16;--n:3;--m:1"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/13;--n:9;--m:1"><h2>ECHO</h2></div>
-    <div class="box" id="g-f" style="grid-area:1/10/3/16;--n:6;--m:2"><h2>FILTER</h2></div>
+    <div class="box" id="g-f" style="grid-area:1/10/2/16;--n:6;--m:1"><h2>FILTER</h2></div>
+    <div class="box" id="g-fe" style="grid-area:2/10/3/16;--n:6;--m:1"><h2>FILTER ENVELOPE</h2></div>
     <div class="ttl" style="grid-area:1/16/2/20"><span id="ttlw">FILTH</span></div>
     <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
@@ -1565,11 +1566,12 @@ const L = {
     knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0), knob('o2pw', 'PULSE W.', '06', 0, { added: true })],
   'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0)],
   // FILTER and AMPLIFIER share their bottom two rows: MOD, depth, envelope mode, then A D S R
-  // two rows of six: cutoff, resonance, type and its sketch, then the two modulation amounts;
-  // the envelope (A D S R) and its mode below
+  // FILTER: cutoff, resonance, type and its sketch, then the two modulation amounts;
+  // its envelope (A D S R and mode) has its own box, FILTER ENVELOPE, underneath
   'g-f': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0, 'ТИП'), { kind: 'resp' },
     knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0),
-    knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
+  ],
+  'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
   'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
     knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
@@ -1643,7 +1645,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.63.0';
+const VERSION = '1.64.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1790,7 +1792,7 @@ for (const gid in L) {
 // FILTER, MIXER and AMPLIFIER sit on their own grid: equal columns across
 // the box and their own, shorter row height, rows from the top, so the knobs
 // are closer together vertically.  Any spare height falls at the bottom.
-for (const gid of ['g-f', 'g-mix', 'g-a']) document.getElementById(gid).classList.add('own');
+for (const gid of ['g-f', 'g-fe', 'g-mix', 'g-a']) document.getElementById(gid).classList.add('own');
 applyLang();
 document.getElementById('resetbtn').onclick = () => {
   for (const c of S) c.set(c.def);
@@ -1929,7 +1931,7 @@ const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod:
   fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD',
   eTime: 'ECHO TIME', eFb: 'ECHO FEEDBACK', eTone: 'ECHO TONE', eSpread: 'ECHO SPREAD', eMix: 'ECHO MIX' };
 const knobSel = q('.sq-knob'), pickO = {}, ORDER = [];
-for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-a', 'g-echo']) {
+for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-fe', 'g-a', 'g-echo']) {
   const h = document.querySelector('#' + gid + ' h2'), og = document.createElement('optgroup');
   og.label = h ? h.textContent : 'PERFORMANCE';
   for (const c of L[gid]) if (c.kind === 'knob') {
