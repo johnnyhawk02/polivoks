@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Thee Filf — Polivoks circuit model</title>
+<title>FILTH — Polivoks circuit model</title>
 <meta name="theme-color" content="#fc0fc0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,51 +57,44 @@
   .sw .t { font: 500 10px/12px var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
   .ttl { display: flex; align-items: center; justify-content: center; background: var(--ink); color: var(--paper);
     font: 400 40px/1 var(--display); letter-spacing: -.01em; text-transform: uppercase; white-space: nowrap; }
-  /* below the panels: a plain white band */
-  .foot { margin: 12px -26px 0; padding: 10px 26px 12px; background: var(--paper); color: var(--ink); }
-  .info { display: flex; gap: 8px 20px; align-items: center; flex-wrap: wrap; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
-  .info b { font-weight: 600; }
-  .btn {
-    position: relative; isolation: isolate; cursor: pointer;
-    border: 0; background: var(--ink); color: var(--paper);
-    font: 400 15px var(--display); text-transform: uppercase; letter-spacing: .02em;
-    padding: 6px 11px 5px; font-size: 13px;
+  /* below the synth: a second pink panel on the same 18 columns, then a thin
+     white strip for read-outs.  Every control down here is a "field": a small
+     label over a 30 px control, one or more cells wide. */
+  .low { grid-template-rows: auto auto; margin-top: 12px; row-gap: 22px; }
+  .low .box { display: grid; grid-template-columns: repeat(var(--n), var(--cw)); grid-template-rows: none; grid-auto-rows: auto;
+    gap: 10px var(--g); padding: 22px 0 12px; align-content: start; }
+  .f { display: flex; flex-direction: column; gap: 4px; margin: 0 8px; min-width: 0; }
+  .f > span { font: 500 10.5px/12px var(--mono); text-transform: uppercase; letter-spacing: .07em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .f .row { display: flex; align-items: center; gap: 4px; height: 30px; }
+  /* buttons in a field several cells wide still sit one per cell */
+  .f .row.cells { gap: calc(var(--g) + 16px); }
+  .btn, .sb {
+    height: 30px; width: 100%; cursor: pointer; border: 0; background: var(--ink); color: var(--paper);
+    font: 400 12px/1 var(--display); text-transform: uppercase; letter-spacing: 0; padding: 0 2px;
+    white-space: nowrap; touch-action: manipulation; min-width: 0; overflow: hidden;
   }
   .btn:hover, .sb:hover { color: var(--pink); }
-  .dice { display: flex; align-items: center; gap: 8px; }
+  .sb.lit { color: var(--pink); }
+  .sb.sm { width: 30px; flex: none; }
+  .val { flex: 1; text-align: center; font: 600 12px var(--mono); letter-spacing: .04em; white-space: nowrap; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; }
+  .f input[type=range] { flex: 1; min-width: 0; margin: 0; accent-color: var(--ink); }
+  .f select { height: 30px; flex: 1; min-width: 0; border: 0; background: var(--ink); color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 0 6px; cursor: pointer; }
   /* knob step sequences (performance feature): label on a black slab while one runs */
   .ctl .lab.seq { background: var(--ink); color: var(--pink); padding: 1px 5px; }
-  /* sequencer panel: a second pink panel under the synth */
-  #seqpanel { margin-top: 12px; }
-  .sq { position: relative; isolation: isolate; color: var(--ink); padding: 14px 18px; display: flex; flex-direction: column; gap: 9px; }
-  .sq-pick { display: flex; flex-wrap: wrap; gap: 5px 6px; }
-  .sq-pick button { border: 2px solid var(--ink); background: transparent; color: var(--ink); font: 500 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px 1px; cursor: pointer; }
-  .sq-pick button.run { background: var(--ink); color: var(--pink); }
-  .sq-pick button.sel { outline: 3px solid var(--paper); outline-offset: -1px; }
-  .sq-head { display: flex; align-items: center; gap: 12px; }
-  .sq-ttl { font: 400 16px/1 var(--display); color: var(--paper); background: var(--ink); text-transform: uppercase; padding: 5px 9px 3px; white-space: nowrap; }
-  .sq-sub { font: 600 10px var(--mono); letter-spacing: .12em; }
-  .sb { cursor: pointer; border: 0; background: var(--ink); color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 5px 10px 4px; touch-action: manipulation; }
-  .sb.sm { padding: 2px 8px 1px; font-size: 13px; }
-  .sb.lit { color: var(--pink); }
-  .sq-grid { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; height: 92px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+  .sq-grid { grid-column: 1 / -1; margin: 0 8px; display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; height: 104px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
   .bar { position: relative; border: 2px solid var(--ink); }
   .bar::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--ink); }
   .bar i { position: absolute; left: 0; right: 0; background: var(--ink); }
   .bar.off { opacity: .25; }
   .bar.now { background: var(--paper); }
-  .sq-row { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
-  .sq-f { display: flex; align-items: center; gap: 7px; font: 500 11px var(--mono); letter-spacing: .08em; }
-  .sq-f b, .sq-src { font: 600 12px var(--mono); min-width: 3.4em; text-align: center; }
-  .sq-src { font-size: 10.5px; letter-spacing: .1em; }
-  .sq-f input[type=range] { width: 110px; accent-color: var(--ink); }
-  /* preset bar: names are made up by names.js, never typed */
-  .pre { display: flex; align-items: center; gap: 4px; }
-  .pre-name { display: inline-block; width: 300px; padding: 4px 8px 3px; border: 2px solid var(--ink); font: 400 13px var(--display); letter-spacing: .02em;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
-  .pre-name.kept { background: var(--pink); }
-  .pre-n { min-width: 3.6em; text-align: center; }
-  .pre select { border: 0; background: var(--ink); color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 6px 6px 5px; width: 64px; cursor: pointer; }
+  /* preset names are made up by names.js, never typed */
+  .pre-name { flex: 1; min-width: 0; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 2px solid var(--ink); font: 400 13px var(--display); letter-spacing: .02em; text-transform: uppercase; }
+  .pre-name > i { font-style: normal; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pre-name > b { font: 600 11px var(--mono); }
+  .pre-name.kept { background: var(--paper); }
+  .foot { margin: 12px -26px 0; padding: 8px 44px 9px; background: var(--paper); color: var(--ink); display: flex; gap: 24px;
+    font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
+  .foot b { font-weight: 600; }
 </style>
 </head>
 <body>
@@ -116,21 +109,37 @@
     <div class="box down" id="g-mix" style="grid-area:1/9/3/11;--n:2;--m:2"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/11;--n:7;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/11/4/15;--n:4;--m:3"><h2>FILTER</h2></div>
-    <div class="ttl" style="grid-area:1/15/2/19">THEE FILF</div>
+    <div class="ttl" style="grid-area:1/15/2/19">FILTH</div>
     <div class="box" id="g-a" style="grid-area:2/15/4/19;--n:4;--m:2"><h2>AMPLIFIER</h2></div>
   </div>
-  <div class="foot">
-  <div class="info">
-    <span class="pre">PRESET: <button class="btn" id="pre-prev" aria-label="Previous preset">◀</button><span class="pre-name" id="pre-name"></span><button class="btn" id="pre-next" aria-label="Next preset">▶</button>
-      <b class="pre-n" id="pre-n"></b><select id="pre-list" aria-label="Saved presets"></select><button class="btn" id="pre-roll">NEW NAME</button><button class="btn" id="pre-save">SAVE</button><button class="btn" id="pre-del">DELETE</button></span>
-    <span>Keys <b>A–P</b> · octave <b>Z/X</b> (<span id="octv">4</span>)</span>
-    <span>MIDI: <b id="midi">—</b></span>
-    <span>v<b id="ver"></b></span>
-    <span>Engine: <b id="emode">off</b></span>
-    <span>EXT. input: <button class="btn" id="extbtn">LOAD AUDIO FILE</button><input type="file" id="extfile" accept="audio/*" hidden> <span id="extname"></span></span>
-    <span class="dice">RANDOM: <button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-nudge">NUDGE</button><button class="btn" id="rnd-groove">GROOVE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-mess">MESS</button></span>
-    <button class="btn" id="resetbtn">RESET PANEL</button>
+  <div class="panel low" id="low">
+    <div class="torn"></div>
+    <div class="box" id="seqpanel" style="grid-area:1/1/2/15;--n:14" aria-label="Knob sequencer"><h2>SEQUENCER</h2></div>
+    <div class="box" id="g-clock" style="grid-area:1/15/2/19;--n:4"><h2>CLOCK / MIDI</h2>
+      <div class="f" style="grid-column:span 4"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
+      <div class="f" style="grid-column:span 4"><span>SYNC</span><div class="row"><b class="val sq-src" style="text-align:left">INTERNAL</b></div></div>
+      <div class="f" style="grid-column:span 4"><span>MIDI IN</span><div class="row"><b class="val" id="midi" style="text-align:left">—</b></div></div>
+      <div class="f" style="grid-column:span 4"><span>COMPUTER KEYS</span><div class="row"><b class="val" style="text-align:left">A–P · OCTAVE Z/X (<span id="octv">4</span>)</b></div></div>
+    </div>
+    <div class="box" id="g-pre" style="grid-area:2/1/3/10;--n:9"><h2>PRESETS</h2>
+      <div class="f" style="grid-column:span 5"><span>PRESET</span><div class="row"><button class="sb sm" id="pre-prev" aria-label="Previous preset">◀</button><div class="pre-name" id="pre-name"><i></i><b id="pre-n"></b></div><button class="sb sm" id="pre-next" aria-label="Next preset">▶</button></div></div>
+      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><select id="pre-list" aria-label="Saved presets"></select></div></div>
+      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-roll" aria-label="New name">NEW</button></div></div>
+      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-save">SAVE</button></div></div>
+      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-del">DELETE</button></div></div>
+    </div>
+    <div class="box" id="g-rnd" style="grid-area:2/10/3/15;--n:5"><h2>RANDOMISE</h2>
+      <div class="f" style="grid-column:span 3"><span>SOUND</span><div class="row cells"><button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-nudge">NUDGE</button></div></div>
+      <div class="f" style="grid-column:span 2"><span>SEQUENCES</span><div class="row cells"><button class="btn" id="rnd-groove">GROOVE</button><button class="btn" id="rnd-mess">MESS</button></div></div>
+    </div>
+    <div class="box" id="g-panel" style="grid-area:2/15/3/19;--n:4"><h2>INPUT / RESET</h2>
+      <div class="f" style="grid-column:span 2"><span id="extname">EXT. INPUT</span><div class="row"><button class="btn" id="extbtn">LOAD FILE</button><input type="file" id="extfile" accept="audio/*" hidden></div></div>
+      <div class="f" style="grid-column:span 2"><span>&nbsp;</span><div class="row"><button class="btn" id="resetbtn">RESET PANEL</button></div></div>
+    </div>
   </div>
+  <div class="foot">
+    <span>Engine: <b id="emode">off</b></span>
+    <span style="margin-left:auto">FILTH v<b id="ver"></b></span>
   </div>
 </div>
 
@@ -1401,7 +1410,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.18.0';
+const VERSION = '1.19.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1630,37 +1639,35 @@ const dice = {
   },
 };
 for (const k in dice) document.getElementById('rnd-' + k).onclick = () => { dice[k](); if (edC) drawSeq(); };
-// editor
-const ed = document.createElement('div'); ed.id = 'seqpanel';
-ed.innerHTML = `<div class="torn"></div><div class="sq" aria-label="Knob sequencer">
-  <div class="sq-head"><div class="sq-ttl">SEQUENCER</div><div class="sq-sub"></div><span style="flex:1"></span>
-    <button class="sb sq-on"></button></div>
-  <div class="sq-pick"></div>
+// editor: lives in the SEQUENCER box of the lower panel; TEMPO and SYNC sit in CLOCK / MIDI
+const ed = document.getElementById('seqpanel');
+ed.insertAdjacentHTML('beforeend', `
+  <div class="f" style="grid-column:span 3"><span>KNOB</span><div class="row"><button class="sb sm" data-k="-1" aria-label="Previous knob">◀</button><select class="sq-knob" aria-label="Knob to sequence"></select><button class="sb sm" data-k="1" aria-label="Next knob">▶</button></div></div>
+  <div class="f"><span>RUN</span><div class="row"><button class="sb sq-on"></button></div></div>
+  <div class="f" style="grid-column:span 2"><span>STEPS</span><div class="row"><button class="sb sm" data-a="len-">−</button><b class="val sq-len"></b><button class="sb sm" data-a="len+">+</button></div></div>
+  <div class="f" style="grid-column:span 2"><span>RATE</span><div class="row"><button class="sb sm" data-a="div-">−</button><b class="val sq-div"></b><button class="sb sm" data-a="div+">+</button></div></div>
+  <div class="f" style="grid-column:span 3"><span>DEPTH</span><div class="row"><input type="range" class="sq-depth" min="0" max="100"><b class="val sq-depthv" style="flex:none;width:56px"></b></div></div>
+  <div class="f" style="grid-column:span 3"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
   <div class="sq-grid"></div>
-  <div class="sq-row">
-    <div class="sq-f"><span>STEPS</span><button class="sb sm" data-a="len-">−</button><b class="sq-len"></b><button class="sb sm" data-a="len+">+</button></div>
-    <div class="sq-f"><span>RATE</span><button class="sb sm" data-a="div-">−</button><b class="sq-div"></b><button class="sb sm" data-a="div+">+</button></div>
-    <label class="sq-f"><span>DEPTH</span><input type="range" class="sq-depth" min="0" max="100"><b class="sq-depthv"></b></label>
-    <label class="sq-f"><span>SLEW</span><input type="range" class="sq-slew" min="0" max="100"><b class="sq-slewv"></b></label>
-  </div>
-  <div class="sq-row">
-    <label class="sq-f"><span>CLOCK</span><input type="range" class="sq-bpm" min="40" max="240"><b class="sq-bpmv"></b></label>
-    <b class="sq-src"></b><span style="flex:1"></span>
-    <button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button>
-  </div>
-</div>`;
-ed.style.position = 'relative'; ed.style.isolation = 'isolate';
-document.getElementById('stage').insertBefore(ed, document.querySelector('.foot'));
-const q = (s) => ed.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
-// one button per knob: black = its sequence is running, white outline = the one being edited
-const pickB = {};
+  <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>`);
+const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
+// which knob is being edited: a list grouped by panel section (● = its sequence runs);
+// holding a knob on the panel picks it too
 const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE', mixE: 'MIX EXT.',
   fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD',
   eTime: 'ECHO TIME', eFb: 'ECHO FEEDBACK', eTone: 'ECHO TONE', eSpread: 'ECHO SPREAD', eMix: 'ECHO MIX' };
-for (const c of KNOBS) {
-  const b = document.createElement('button'); b.textContent = PICK[c.id] || tr(c.label);
-  b.onclick = () => selSeq(c); q('.sq-pick').appendChild(b); pickB[c.id] = b;
+const knobSel = q('.sq-knob'), pickO = {}, ORDER = [];
+for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-a', 'g-echo']) {
+  const h = document.querySelector('#' + gid + ' h2'), og = document.createElement('optgroup');
+  og.label = h ? h.textContent : 'PERFORMANCE';
+  for (const c of L[gid]) if (c.kind === 'knob') {
+    const o = document.createElement('option'); o.value = c.id; o.dataset.n = PICK[c.id] || tr(c.label);
+    og.appendChild(o); pickO[c.id] = o; ORDER.push(c);
+  }
+  knobSel.appendChild(og);
 }
+knobSel.onchange = () => selSeq(knobById(knobSel.value));
+ed.querySelectorAll('[data-k]').forEach((b) => b.onclick = () => { const i = ORDER.indexOf(edC), n = ORDER.length; selSeq(ORDER[(i + +b.dataset.k + n) % n]); });
 const bars = [];
 for (let i = 0; i < 16; i++) { const b = document.createElement('div'); b.className = 'bar'; const f = document.createElement('i'); b.appendChild(f); grid.appendChild(b); bars.push(b); }
 let edC = null, nowStep = -1;
@@ -1675,8 +1682,8 @@ function drawSeq() {
     b.classList.toggle('off', i >= s.len);
   });
   const on = q('.sq-on'); on.textContent = s.on ? 'ON' : 'OFF'; on.classList.toggle('lit', s.on);
-  q('.sq-sub').textContent = 'EDITING: ' + pickB[edC.id].textContent;
-  for (const id in pickB) { pickB[id].classList.toggle('sel', id === edC.id); pickB[id].classList.toggle('run', !!(seqs[id] && seqs[id].on)); }
+  for (const id in pickO) pickO[id].textContent = (seqs[id] && seqs[id].on ? '● ' : '') + pickO[id].dataset.n;
+  knobSel.value = edC.id;
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
   q('.sq-depth').value = Math.round(s.depth * 100); q('.sq-depthv').textContent = Math.round(s.depth * 100) + '%';
   q('.sq-slew').value = Math.round(Math.sqrt(s.slew / 2) * 100); q('.sq-slewv').textContent = s.slew < 1 ? Math.round(s.slew * 1000) + ' ms' : s.slew.toFixed(2) + ' s';
@@ -1733,9 +1740,9 @@ const freshName = () => { let n = makeName(); for (let t = 0; t < 20 && presets.
 if (!preName) preName = freshName();
 const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, steps: new Array(16).fill(0) });
 const savePre = () => { try { localStorage.setItem(PRE_STORE, JSON.stringify(presets)); localStorage.setItem(PRE_CUR, JSON.stringify({ i: preI, name: preName })); } catch (e) {} };
-const preEl = { name: document.getElementById('pre-name'), n: document.getElementById('pre-n'), list: document.getElementById('pre-list'), del: document.getElementById('pre-del') };
+const preEl = { name: document.getElementById('pre-name'), txt: document.querySelector('#pre-name i'), n: document.getElementById('pre-n'), list: document.getElementById('pre-list'), del: document.getElementById('pre-del') };
 function drawPre() {
-  preEl.name.textContent = preName; preEl.name.title = ''; preEl.name.classList.toggle('kept', preI >= 0);
+  preEl.txt.textContent = preName; preEl.name.classList.toggle('kept', preI >= 0);
   preEl.n.textContent = preI >= 0 ? (preI + 1) + '/' + presets.length : 'NEW';
   preEl.list.innerHTML = '<option value="" selected disabled>LIST</option>' + presets.map((p, i) => `<option value="${i}">${p.name.replace(/[<&]/g, '')}</option>`).join('');
 }
