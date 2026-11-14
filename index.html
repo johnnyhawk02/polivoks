@@ -1531,7 +1531,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.37.1';
+const VERSION = '1.37.2';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2100,7 +2100,8 @@ window.filthApp = {
   get edC() { return edC; }, get lastPos() { return lastPos; },
   get lfoV() { return lfoV; }, get outRms() { return outRms; }, get vco() { return vcoI; },
 };
-if (document.documentElement.classList.contains('v3d')) import('./view3d.js');
+// the version in the address, so a new release is never served from the browser's cache
+if (document.documentElement.classList.contains('v3d')) import('./view3d.js?v=' + VERSION);
 })();
 </script>
 </body>
