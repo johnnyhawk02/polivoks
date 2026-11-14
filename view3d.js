@@ -56,7 +56,7 @@ Object.assign(vignette.style, { position: 'fixed', inset: '0', pointerEvents: 'n
 document.body.appendChild(vignette);
 const corner = document.createElement('div');
 corner.textContent = `FILTH v${A.VERSION}`;
-Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: PINK });
+Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: 'rgba(255,255,255,.5)' });   // no magenta anywhere: a quiet grey
 document.body.appendChild(corner);
 
 const scene = new THREE.Scene();
@@ -210,11 +210,11 @@ function paintCtl(ctx, c) {
       for (const w of l.split(' ')) { const t = cur ? cur + ' ' + w : w; if (cur && ctx.measureText(t).width > cell) { lines.push(cur); cur = w; } else cur = t; }
       if (cur) lines.push(cur);
     }
-    if (seq && lines.length) {   // a running sequence: label on a black slab in pink, as on the 2D panel
+    if (seq && lines.length) {   // a running sequence: label in white on a black slab
       const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 12;
       ctx.fillStyle = INK; ctx.fillRect(r.x + r.w / 2 - w / 2, r.y - 1, w, lines.length * lh + 2);
     }
-    lines.forEach((l, i) => text(ctx, l, r.x + r.w / 2, r.y + lh / 2 + i * lh, font, seq ? PINK : INK, 'center', .5));
+    lines.forEach((l, i) => text(ctx, l, r.x + r.w / 2, r.y + lh / 2 + i * lh, font, seq ? PAPER : INK, 'center', .5));
   }
   const r = rel(c.el, panel);
   if (c.kind === 'knob') {
@@ -521,7 +521,10 @@ sectionNames(low, lower);
 for (const el of low.querySelectorAll('button')) {
   if (el.closest('[hidden]')) continue;
   const r = rel(el, low); if (!r.w) continue;
-  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, el.classList.contains('lit') ? PINK : PAPER);
+  const draw = (ctx, w, h) => {   // a lit key turns over: black lettering on white (no magenta)
+    const lit = el.classList.contains('lit'); if (lit) { ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h); }
+    text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, lit ? INK : PAPER);
+  };
   const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
   p.userData.btn = el; hits.push(p);
   let last = el.textContent + el.className, lastF = 1, n = 0;
