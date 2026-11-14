@@ -38,8 +38,11 @@ function makeTone(rand) {
   };
 
   // ---- oscillators: waves, ranges, interval
-  const wave = () => +wpick({ 1: 4, 2: 3, 3: 2, 0: 1 });        // saw, square, pulse, triangle
-  k.o1wave = wave(); k.o2wave = R() < 0.5 ? k.o1wave : wave();
+  // saw, square, narrow pulse (square + PULSE W. near the old switch's 13 %), triangle
+  const wave = () => wpick({ 1: 4, 2: 3, p: 2, 0: 1 });
+  const w1 = wave(), w2 = R() < 0.5 ? w1 : wave();
+  k.o1wave = w1 === 'p' ? 2 : +w1; k.o1pw = w1 === 'p' ? mid(0.75, 0.93) : 0;
+  k.o2wave = w2 === 'p' ? 2 : +w2; k.o2pw = w2 === 'p' ? (w1 === 'p' ? k.o1pw : mid(0.75, 0.93)) : 0;
   k.o1range = kind === 'bass' ? +wpick({ 1: 3, 0: 1 }) : kind === 'lead' ? +wpick({ 2: 3, 3: 1 }) : +wpick({ 2: 3, 1: 1 });
   let iv = wpick({ uni: 6, octUp: 2, octDown: kind === 'bass' ? 0 : 1, fifth: 2, fourth: bold() ? 1 : 0, twelfth: bold() ? 1 : 0 });
   k.o2range = k.o1range;
