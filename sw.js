@@ -11,7 +11,7 @@ const LIB = 'filth-lib-1';
 const OWN = ['./', 'view3d.js?v=' + V, 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
 const THREE = 'https://cdn.jsdelivr.net/npm/three@0.160.0/';
-const LIBS = [THREE + 'build/three.module.js', THREE + 'examples/jsm/environments/RoomEnvironment.js'];
+const LIBS = [THREE + 'build/three.module.js', THREE + 'examples/jsm/environments/RoomEnvironment.js', THREE + 'examples/jsm/geometries/RoundedBoxGeometry.js'];
 const isLib = (u) => u.startsWith(THREE) || u.startsWith('https://fonts.googleapis.com/') || u.startsWith('https://fonts.gstatic.com/');
 
 self.addEventListener('install', (ev) => ev.waitUntil((async () => {
