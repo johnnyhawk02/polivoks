@@ -169,3 +169,8 @@ the switch swaps the 56k for 560k in that position (chosen, **EST** as wiring):
 the knob narrows 13 → 7 % at 450 Hz and ends on the same −3.3 V floor.
 `node test.js` renders the whole knob range and fails if the RMS drops below
 0.2 of its knob-0 level.
+
+From v1.23.0 the narrow-pulse switch position is gone (a departure from the
+original panel). The pulse with PULSE W. at 0.93 gives the same duty (13.8 %
+at 220 Hz), and panels or presets saved with the old position load that way.
+The 560k wafer above went with it.

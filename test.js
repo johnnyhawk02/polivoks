@@ -83,14 +83,14 @@ console.log('--- pulse width knobs (an addition; SPICE in spice/vco/pw.txt) ---'
     return (hi / n * 100).toFixed(1);
   };
   for (const note of [57, 81]) console.log('note', note, 'PW 0/0.25/0.5/0.75/1 duty %:', [0, 0.25, 0.5, 0.75, 1].map((v) => duty(v, note)).join(' '));
-  console.log('old preset (no PW saved) duty %:', duty(undefined, 57), ' narrow switch duty %:', duty(undefined, 57, { o1wave: 3 }));
+  console.log('old preset (no PW saved) duty %:', duty(undefined, 57), ' PW 0.93 (old narrow-pulse presets load here; the switch gave 13 %) duty %:', duty(0.93, 57));
   const f = (pw) => { const { out } = run(Object.assign({}, open, { o1wave: 2, o1pw: pw }), 1, [57]); return freqOf(out, SR); };
   console.log('pitch PW 0 vs 1:', (1200 * Math.log2(f(1) / f(0))).toFixed(2), 'cents');
 }
-console.log('--- pulse width never silences the output (regression: v1.20.0 went quiet past ~40 % on the narrow-pulse position) ---');
+console.log('--- pulse width never silences the output (regression: v1.20.0 went quiet past ~40 % with the old narrow-pulse position) ---');
 {
   // whole engine at normal mixer/filter/VCA settings; RMS over the knob's range
-  // against the RMS at knob 0, square and narrow-pulse positions, both VCOs
+  // against the RMS at knob 0, both VCOs, 55 Hz to 3.5 kHz
   const rms = (set, note) => {
     const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
     for (const x in set) { e.setParam(x, set[x]); e.ps[x] = set[x]; }
@@ -99,10 +99,10 @@ console.log('--- pulse width never silences the output (regression: v1.20.0 went
     return Math.sqrt(a / n);
   };
   let worst = 1, where = '';
-  for (const [v, mix] of [[1, { mix1: 0.65, mix2: 0 }], [2, { mix1: 0, mix2: 0.65 }]]) for (const w of [2, 3]) for (const note of [33, 57, 81, 105]) {
+  for (const [v, mix] of [[1, { mix1: 0.65, mix2: 0 }], [2, { mix1: 0, mix2: 0.65 }]]) for (const w of [2]) for (const note of [33, 45, 57, 69, 81, 93, 105]) {
     const base = { vcaHold: 1, ['o' + v + 'wave']: w }; Object.assign(base, mix);
     const r0 = rms(Object.assign({}, base, { ['o' + v + 'pw']: 0 }), note);
-    for (let k = 1; k <= 8; k++) { const r = rms(Object.assign({}, base, { ['o' + v + 'pw']: k / 8 }), note) / r0; if (r < worst) { worst = r; where = `VCO ${v} ${w === 2 ? 'square' : 'narrow'} note ${note} knob ${k / 8}`; } }
+    for (let k = 1; k <= 8; k++) { const r = rms(Object.assign({}, base, { ['o' + v + 'pw']: k / 8 }), note) / r0; if (r < worst) { worst = r; where = `VCO ${v} pulse note ${note} knob ${k / 8}`; } }
   }
   const ok = worst > 0.2;
   console.log(`lowest RMS vs knob 0: ${worst.toFixed(2)} (${where}) ${ok ? 'PASS' : 'FAIL: below 0.2'}`);
@@ -131,7 +131,7 @@ console.log('--- stability sweep ---');
   const keys = Object.keys(e.p); let bad = 0, pk = 0; const out = new Float32Array(128);
   const t0 = Date.now(); let blocks = 0;
   for (let b = 0; b < 3000; b++) {
-    if (b % 40 === 0) { for (const k of keys) if (k !== 'power') { const v = Math.random(); const map = { lfoMode: 3, o1range: 4, o2range: 4, o1wave: 3, o2wave: 3 }; e.setParam(k, map[k] ? Math.floor(v * (map[k] + 1)) : (k === 'tune' || k === 'o2detune' || k.endsWith('pitch')) ? v * 2 - 1 : v); } e.noteOn(30 + Math.floor(Math.random() * 60)); }
+    if (b % 40 === 0) { for (const k of keys) if (k !== 'power') { const v = Math.random(); const map = { lfoMode: 3, o1range: 4, o2range: 4, o1wave: 2, o2wave: 2 }; e.setParam(k, map[k] ? Math.floor(v * (map[k] + 1)) : (k === 'tune' || k === 'o2detune' || k.endsWith('pitch')) ? v * 2 - 1 : v); } e.noteOn(30 + Math.floor(Math.random() * 60)); }
     if (b % 40 === 25) e.allOff();
     e.render(out, 128); blocks++;
     for (const v of out) { if (!isFinite(v)) bad++; pk = Math.max(pk, Math.abs(v)); }
@@ -236,7 +236,7 @@ console.log('--- stability sweep ---');
   const kinds = {}; let n = 0;
   for (let i = 0; i < 5000; i++) {
     const { kind, k } = makeTone(); kinds[kind] = (kinds[kind] || 0) + 1;
-    for (const id in k) { const lo = id === 'o2detune' || id === 'o2pitch' ? -1 : 0, hi = /range/.test(id) ? 4 : /wave|lfoMode/.test(id) ? 3 : 1; if (!(k[id] >= lo && k[id] <= hi)) { bad++; if (n++ < 5) console.log('out of range', id, k[id]); } }
+    for (const id in k) { const lo = id === 'o2detune' || id === 'o2pitch' ? -1 : 0, hi = /range/.test(id) ? 4 : /wave/.test(id) ? 2 : /lfoMode/.test(id) ? 3 : /pw$/.test(id) ? 1 : 1; if (!(k[id] >= lo && k[id] <= hi)) { bad++; if (n++ < 5) console.log('out of range', id, k[id]); } }
     if (k.vcaHold || k.fMode || k.res > 0.8 || k.cutoff < 0.38 || k.mix1 < 0.4 || 'volume' in k || 'phones' in k || 'outSel' in k || k.o1mod > 0.01 || k.aMod > 0.07 || k.fMod > 0.1 || k.eFb > 0.55 || k.eSync !== 1) { bad++; if (n++ < 5) console.log('outside the usable zone', kind, JSON.stringify(k)); }
   }
   console.log('5000 tones by kind:', JSON.stringify(kinds), bad ? 'FAILED' : 'all in range');

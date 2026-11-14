@@ -24,7 +24,7 @@ function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Ma
 const KNOBS = ['lfoRate', 'tune', 'glide', 'o1mod', 'o1fm', 'o1pitch', 'o2mod', 'o2detune', 'o2pitch', 'mix1', 'mix2', 'mixN', 'mixE',
   'fA', 'fD', 'fS', 'fR', 'cutoff', 'res', 'fMod', 'fEnv', 'aA', 'aD', 'aS', 'aR', 'aMod', 'eTime', 'eFb', 'eTone', 'eSpread', 'eMix'];
 const BIP = { tune: 1, o1pitch: 1, o2pitch: 1, o2detune: 1 };
-const SELS = { lfoMode: 4, o1range: 5, o1wave: 4, o2range: 5, o2wave: 4 };
+const SELS = { lfoMode: 4, o1range: 5, o1wave: 3, o2range: 5, o2wave: 3 };
 const SWS = ['voice', 'fEgMode', 'fMode', 'aEgMode', 'vcaHold', 'eSync'];
 // PATCH as in index.html (dice.patch)
 function patchDice(R) {

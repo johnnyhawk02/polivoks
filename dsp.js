@@ -85,12 +85,9 @@ class ExpoPair {
 //  not from the Polivoks.  Checked in ngspice (spice/vco/pw.cir): 50 → 8 %
 //  duty at 450 Hz, 47 → 5 % at 3.6 kHz, pitch unchanged; this model is
 //  within 1 % of those (spice/vco/pw_compare.txt).
-//  The narrow-pulse switch position already holds A10 (+) at ≈ −2.85 V, and
-//  adding the full pot on top of that put the threshold below the bottom of
-//  the ramp: the pulse stopped (silence from about 40 % on the knob).  So a
-//  second wafer on the switch swaps the 56k for 560k in that position: the
-//  knob still narrows the pulse (13 → 7 % at 450 Hz) and its far end lands
-//  on the same −3.3 V floor as in the square position.
+//  The original switch's fourth position (a fixed narrow pulse, ≈13 %) is
+//  removed: a departure from the original panel.  Its sound is the square
+//  with PULSE W. at 0.93, which is what old presets that used it load as.
 // ============================================================================
 class VCO {
   constructor(h, seed) {
@@ -113,8 +110,6 @@ class VCO {
     // R36 20k to ground: 0.4·V behind 12k.  R35 is barely legible and R36
     // unreadable on the scan: EST.
     this.Rout = [0, 20e3, 12e3, 12e3];
-    this.narrow = false;             // pulse switch: square or narrow pulse
-    this.narrowRef = 0.355;          // narrow pulse level, fraction of ΔV below the mean (13 % duty at 450 Hz)  EST
     this.vpw = 0;                    // A10 (+) volts from the added PULSE WIDTH pot (vpwOf)
     this.vc = 0; this.ce = 0; this.dumping = false; this.rem = 0; this.dA = 0;
     this.o = this.Vref - 5; this.dc = this.Vref - 5; this.tdc = -1.4;
@@ -135,9 +130,8 @@ class VCO {
   step(I) {
     const C = this.C, h = this.h, Vref = this.Vref, lo = this.vcLow, tau = this.tauD;
     const dv = this.dV(I), hi = lo + dv - I * this.tDump / C;
-    // A10 (+): 0 V (square) or below the ramp's mean (narrow, switch line),
-    // plus the added PULSE WIDTH pot's volts
-    this.vplus = this.vpw - (this.narrow ? this.narrowRef * dv : 0);
+    // A10 (+): the added PULSE WIDTH pot's volts (0 V = the original square)
+    this.vplus = this.vpw;
     // A7 can't follow the reset: it climbs back at SR7 until it meets X again
     // (≈4 µs).  ce is that climb in cap-voltage terms; while it runs, A7's
     // output (the saw, and what A10 sees through C8) is Vref − ce, not X.
@@ -589,7 +583,7 @@ function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; 
 // ±12.5 V into each VCO's summing node through 833k, i.e. ±15 µA = ±1 octave.
 function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
 // "Pulse width" (an addition): A10 (+) volts for the pot at a (see VCO above)
-function vpwOf(a, narrow) { return -12.5 * a * 20e3 / ((narrow ? 580e3 : 76e3) + 100e3 * a * (1 - a)); }
+function vpwOf(a) { return -12.5 * a * 20e3 / (76e3 + 100e3 * a * (1 - a)); }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
 
 // ============================================================================
@@ -691,9 +685,8 @@ class PolivoksEngine {
       const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch) + vco1.mismatch;
       const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
-      vco1.narrow = p.o1wave === 3; vco2.narrow = p.o2wave === 3;
-      vco1.vpw = vpwOf(ps.o1pw, vco1.narrow); vco2.vpw = vpwOf(ps.o2pw, vco2.narrow);
-      const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
+      vco1.vpw = vpwOf(ps.o1pw); vco2.vpw = vpwOf(ps.o2pw);
+      const w1 = Math.min(2, p.o1wave | 0), w2 = Math.min(2, p.o2wave | 0);   // 0 tri, 1 saw, 2 pulse
       const fmk = fmOctPerVolt(ps.o1fm) * LN2;      // nepers per volt of VCO II triangle
 
       // filter Iset: currents into A1's summing node (sheet 7 + panel, sheet 11)
@@ -714,7 +707,7 @@ class PolivoksEngine {
       const venv = (p.vcaHold >= 0.5 ? 1 : ea) * this.egA.Vpk;
       this.vca.control(ps.aMod * lfo, 100e3 * ps.aMod * (1 - ps.aMod), venv);
       // mixer (sheet 9): per-channel gain into A2's virtual earth
-      const g1 = mixGain(ps.mix1, vco1.Rout[p.o1wave | 0]), g2 = mixGain(ps.mix2, vco2.Rout[p.o2wave | 0]);
+      const g1 = mixGain(ps.mix1, vco1.Rout[w1]), g2 = mixGain(ps.mix2, vco2.Rout[w2]);
       const gn = mixGain(ps.mixN, 0), ge = mixGain(ps.mixE, 0);
       let ext = 0;
       if (this.ext && ge > 0.001) { ext = this.ext[this.extPos]; if (++this.extPos >= this.ext.length) this.extPos = 0; }   // 1 V peak line level EST
