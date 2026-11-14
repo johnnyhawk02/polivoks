@@ -115,7 +115,10 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   /* the knob shown has three sources, each with its own on key: STEP (the sequence, left of the
      bars), ENV and LFO (a depth knob each, right of the bars); an off source is greyed */
   .sq-main { display: flex; gap: 10px; align-items: stretch; margin: 0 8px; }
-  .sq-main > .sq-grid { flex: 1; margin: 0; height: auto; min-height: 96px; }
+  /* MOD SOURCE: a box inside the knob's box, under the knob's name */
+  .low .box.sub { padding: 20px 0 10px; gap: 8px var(--g); margin-top: 8px; }
+  .sq-kn .row { height: 40px; gap: 8px; } .sq-kn .val { flex: none; width: auto; min-width: 0; text-align: left; }
+  .sq-main > .sq-grid { flex: 1; margin: 0; height: auto; min-height: 86px; }
   .sq-main .f { margin: 0; }
   .sq-mods { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; flex: none; }
   .sq-mods .row { height: 40px; gap: 8px; }
@@ -210,7 +213,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   </div>
   <div class="panel low" id="low">
     <div class="torn"></div>
-    <div class="box" id="seqpanel" style="grid-area:1/1/3/14;--n:13" aria-label="Knob sequencer"><h2>SEQUENCER</h2></div>
+    <div class="box" id="seqpanel" style="grid-area:1/1/3/14;--n:13" aria-label="Knob modulation"><h2>MODULATE</h2></div>
     <div class="box" id="g-pre" style="grid-area:1/14/2/20;--n:6"><h2>PRESETS</h2>
       <div class="f" style="grid-column:span 6"><span>PRESET</span><div class="row"><button class="sb sm" id="pre-prev" aria-label="Previous preset">◀</button><div class="pre-name" id="pre-name"><i></i><b id="pre-n"></b></div><button class="sb sm" id="pre-next" aria-label="Next preset">▶</button></div></div>
       <div class="f nolab" style="grid-column:span 3"><span>&nbsp;</span><div class="row"><select id="pre-list" aria-label="Saved presets"></select></div></div>
@@ -1719,7 +1722,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.84.0';
+const VERSION = '1.85.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1993,23 +1996,25 @@ for (const k in dice) document.getElementById('rnd-' + k).onclick = () => { dice
 // editor: lives in the SEQUENCER box of the lower panel; TEMPO and SYNC sit in CLOCK / MIDI
 const ed = document.getElementById('seqpanel');
 ed.insertAdjacentHTML('beforeend', `
-  <div class="f" style="grid-column:span 4"><span>KNOB</span><div class="row"><button class="sb sm" data-k="-1" aria-label="Previous knob">◀</button><select class="sq-knob" aria-label="Knob to modulate"></select><button class="sb sm" data-k="1" aria-label="Next knob">▶</button></div></div>
-  <div class="f dim" style="grid-column:span 2"><span>LENGTH</span><div class="row"><button class="sb sm" data-a="len-">−</button><b class="val sq-len"></b><button class="sb sm" data-a="len+">+</button></div></div>
-  <div class="f dim" style="grid-column:span 2"><span>RATE</span><div class="row"><button class="sb sm" data-a="div-">−</button><b class="val sq-div"></b><button class="sb sm" data-a="div+">+</button></div></div>
-  <div class="f dim" style="grid-column:span 2"><span>DEPTH</span><div class="row"><input type="range" class="sq-depth" min="0" max="100"><b class="val sq-depthv" style="flex:none;width:56px"></b></div></div>
-  <div class="f dim" style="grid-column:span 2"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
+  <div class="f nolab" style="grid-column:span 6"><span>KNOB</span><div class="row"><button class="sb sm" data-k="-1" aria-label="Previous knob">◀</button><select class="sq-knob" aria-label="Knob to modulate"></select><button class="sb sm" data-k="1" aria-label="Next knob">▶</button></div></div>
   <div class="f" style="grid-column:span 4;display:none"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
-  <div class="sq-main" style="grid-column:1/-1">
+  <div class="f notekeys nolab" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>
+  <div class="box sub" style="grid-column:1/-1;--n:13" aria-label="Mod sources for the knob"><h2>MOD SOURCE</h2>
     <div class="f sq-lane"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
-    <div class="sq-grid dim"></div>
-    <div class="sq-mods">
-      <div class="f sq-lane"><span>ENV</span><div class="row"><button class="sb sm sym sq-eon" aria-label="Envelope to this knob on or off">●</button><div class="mknob" data-m="eDepth" aria-label="ENV depth"></div><b class="val sq-envv"></b></div></div>
-      <div class="f sq-lane"><span>LFO</span><div class="row"><button class="sb sm sym sq-lon" aria-label="LFO to this knob on or off">●</button><div class="mknob" data-m="lDepth" aria-label="LFO depth"></div><b class="val sq-lfov"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 2"><span>LENGTH</span><div class="row"><div class="mknob" data-m="len" aria-label="LENGTH"></div><b class="val sq-len"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 2"><span>RATE</span><div class="row"><div class="mknob" data-m="div" aria-label="RATE"></div><b class="val sq-div"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 2"><span>DEPTH</span><div class="row"><div class="mknob" data-m="depth" aria-label="DEPTH"></div><b class="val sq-depthv"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 2"><span>SLEW</span><div class="row"><div class="mknob" data-m="slew" aria-label="SLEW"></div><b class="val sq-slewv"></b></div></div>
+    <div class="f dim" style="grid-column:span 2"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>
+    <div class="sq-main" style="grid-column:1/-1">
+      <div class="sq-grid dim"></div>
+      <div class="sq-mods">
+        <div class="f sq-lane"><span>ENV</span><div class="row"><button class="sb sm sym sq-eon" aria-label="Envelope to this knob on or off">●</button><div class="mknob" data-m="eDepth" aria-label="ENV depth"></div><b class="val sq-envv"></b></div></div>
+        <div class="f sq-lane"><span>LFO</span><div class="row"><button class="sb sm sym sq-lon" aria-label="LFO to this knob on or off">●</button><div class="mknob" data-m="lDepth" aria-label="LFO depth"></div><b class="val sq-lfov"></b></div></div>
+      </div>
     </div>
-  </div>
-  <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
-  <div class="f dim" style="grid-column:span 4"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>
-  <div class="f notekeys" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>`);
+    <div class="f dim nolab" style="grid-column:span 6"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
+  </div>`);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
 // PLAY: note keys for a phone with no keyboard: press to sound, release to stop, through the same on/off as the computer keys and MIDI
 ed.querySelectorAll('[data-note]').forEach((b) => {
@@ -2056,8 +2061,8 @@ function drawSeq() {
   for (const id in pickO) pickO[id].textContent = (seqAct(seqs[id]) ? '● ' : '') + pickO[id].dataset.n;
   knobSel.value = edC.id;
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
-  q('.sq-depth').value = Math.round(s.depth * 100); q('.sq-depthv').textContent = Math.round(s.depth * 100) + '%';
-  q('.sq-slew').value = Math.round(Math.sqrt(s.slew / 2) * 100); q('.sq-slewv').textContent = s.slew < 1 ? Math.round(s.slew * 1000) + ' ms' : s.slew.toFixed(2) + ' s';
+  q('.sq-depthv').textContent = Math.round(s.depth * 100) + '%';
+  q('.sq-slewv').textContent = s.slew < 1 ? Math.round(s.slew * 1000) + ' ms' : s.slew.toFixed(2) + ' s';
   q('.sq-drift').value = s.drift || 0; q('.sq-driftv').textContent = (s.drift > 0 ? '+' : '') + (s.drift || 0) + '%';
   q('.sq-bpm').value = bpm; q('.sq-bpmv').textContent = bpm + ' BPM';
   markStep();
@@ -2072,26 +2077,31 @@ const change = (fn) => { const s = seqOf(edC.id); fn(s); pushSeq(edC); drawSeq()
 q('.sq-on').onclick = () => change((s) => { s.on = !s.on; });
 q('.sq-eon').onclick = () => change((s) => { s.eOn = !s.eOn; });
 q('.sq-lon').onclick = () => change((s) => { s.lOn = !s.lOn; });
-// ENV DEPTH and LFO DEPTH: two small knobs (drawn in 3D) that send the filter envelope or the
-// modulator to the knob shown; ± of its travel, snapping to 0 within 2 %; turning one switches it on
+// the MOD SOURCE knobs (drawn in 3D as small knobs, dragged like the panel's): for the knob shown,
+// the step sequence's LENGTH (1…16, stepped), RATE (the 8 divisions, stepped), DEPTH and SLEW, and the
+// ENV and LFO depths (± of its travel, snapping to 0 within 2 %; turning one switches that source on)
+const MK = {
+  len: { get: (s) => (s.len - 1) / 15, set: (s, u) => { s.len = 1 + Math.round(u * 15); } },
+  div: { get: (s) => DIVS.indexOf(s.div) / (DIVS.length - 1), set: (s, u) => { s.div = DIVS[Math.round(u * (DIVS.length - 1))]; } },
+  depth: { get: (s) => s.depth, set: (s, u) => { s.depth = Math.round(u * 100) / 100; } },
+  slew: { get: (s) => Math.sqrt(s.slew / 2), set: (s, u) => { s.slew = 2 * u * u; } },
+  eDepth: { bip: true, get: (s) => s.eDepth, set: (s, v) => { s.eDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.eOn = true; } },
+  lDepth: { bip: true, get: (s) => s.lDepth, set: (s, v) => { s.lDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.lOn = true; } },
+};
 const seqMods = [...ed.querySelectorAll('.mknob')].map((el) => {
-  const k = el.dataset.m, onK = k === 'eDepth' ? 'eOn' : 'lOn';
-  return { id: 'seq-' + k, kind: 'knob', scale: 'bip', def: 0, el,
-    get v() { return edC ? seqOf(edC.id)[k] : 0; },
-    set(v) { v = Math.max(-1, Math.min(1, v)); if (Math.abs(v) <= .02) v = 0; change((s) => { s[k] = Math.round(v * 100) / 100; s[onK] = true; }); } };
+  const m = MK[el.dataset.m];
+  return { id: 'seq-' + el.dataset.m, kind: 'knob', scale: m.bip ? 'bip' : 'u', def: m.bip ? 0 : m.get(SEQ_DEF()), el,
+    get v() { return edC ? m.get(seqOf(edC.id)) : 0; },
+    set(v) { const lo = m.bip ? -1 : 0; v = Math.max(lo, Math.min(1, v)); if (Math.abs(v - this.v) < 1e-6) return; change((s) => m.set(s, v)); } };
 });
 ed.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => change((s) => {
   const a = b.dataset.a, di = DIVS.indexOf(s.div);
-  if (a === 'len-') s.len = Math.max(1, s.len - 1); else if (a === 'len+') s.len = Math.min(16, s.len + 1);
-  else if (a === 'div-') s.div = DIVS[Math.max(0, di - 1)]; else if (a === 'div+') s.div = DIVS[Math.min(DIVS.length - 1, di + 1)];
-  else if (RND[a]) { RND[a](s); s.on = true; }
+  if (RND[a]) { RND[a](s); s.on = true; }
   else if (a === 'clear') s.steps.fill(0);
 }));
-q('.sq-depth').oninput = (e) => change((s) => { s.depth = e.target.value / 100; });
 // DRIFT: 0 % is exactly the tempo; the dial snaps to it within 2 %
 q('.sq-drift').oninput = (e) => change((s) => { let v = +e.target.value; if (Math.abs(v) <= 2) v = 0; s.drift = v; });
 q('.sq-drift').ondblclick = () => change((s) => { s.drift = 0; });
-q('.sq-slew').oninput = (e) => change((s) => { const u = e.target.value / 100; s.slew = 2 * u * u; });
 q('.sq-bpm').oninput = (e) => { bpm = +e.target.value; send({ t: 'bpm', v: bpm }); saveSeq(); drawSeq(); };
 // draw steps by dragging across the bars; drawing switches the sequence on
 let paint = null;

@@ -200,7 +200,7 @@ function paintCtl(ctx, c) {
   ctx.globalAlpha = c.el.classList.contains('inactive') ? 0.35 : 1;   // greyed out: label and scale fade too
   const svg = c.el.querySelector('svg'), lab = c.el.querySelector('.lab');
   if (lab) {
-    const r = rel(lab, panel), seq = lab.classList.contains('seq'), size = fs(lab), lh = size + 2, font = `600 ${size}px ${MONO}`;
+    const r = rel(lab, panel), seq = false, size = fs(lab), lh = size + 2, font = `600 ${size}px ${MONO}`;
     const cell = rel(c.el, panel).w - 4;
     ctx.font = font; if ('letterSpacing' in ctx) ctx.letterSpacing = '.5px';
     // wrap at spaces where a line is wider than the cell
@@ -284,6 +284,20 @@ sectionNames(panel, upper);
 // filter response sketch: painted into the panel face, which is repainted when the filter type changes
 { let last = fmCtl && fmCtl.v; ticks.push(() => { if (fmCtl && fmCtl.v !== last) { last = fmCtl.v; upSlab.userData.repaint(); } }); }
 
+// a small red LED up and right of every knob: lit while its STEP, ENV or LFO is on (the page marks
+// the knob's label with .seq then); like the CLIP LED, a lamp and a soft halo
+const ledGeoS = new THREE.CylinderGeometry(3.6, 3.6, 3, 24); ledGeoS.rotateX(Math.PI / 2);
+const ledHaloTex = (() => { const [c, x] = canvas(64, 64), g = x.createRadialGradient(32, 32, 3, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,40,20,1)'); g.addColorStop(1, 'rgba(255,20,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+const ledHaloGeo = new THREE.PlaneGeometry(26, 26), LED_OFF = new THREE.Color(0x3a0008), LED_ON = new THREE.Color(0xff3020);
+function knobLed(c, cx, cy) {
+  const lab = c.el.querySelector('.lab'); if (!lab) return;
+  const x = cx + KR + 13, y = cy - KR - 6;
+  const lm = new THREE.MeshBasicMaterial({ color: LED_OFF }), led = new THREE.Mesh(ledGeoS, lm); led.position.copy(pos(x, y, 1.5)); upper.add(led);
+  const hm = new THREE.MeshBasicMaterial({ map: ledHaloTex, transparent: true, opacity: 0, depthWrite: false }), halo = new THREE.Mesh(ledHaloGeo, hm); halo.position.copy(pos(x, y, 3.2)); upper.add(halo);
+  let last = null;
+  ticks.push(() => { const on = lab.classList.contains('seq'); if (on === last) return; last = on; lm.color.copy(on ? LED_ON : LED_OFF); hm.opacity = on ? 0.55 : 0; });
+}
 // knobs, selectors, switches
 const levers = new Set();
 for (const c of CTL) {
@@ -294,6 +308,7 @@ for (const c of CTL) {
     if (c.kind === 'knob') g.add(new THREE.Mesh(pointerGeo, mat.lit));
     else { g.add(new THREE.Mesh(selBarGeo, mat.lit)); g.add(new THREE.Mesh(selInGeo, mat.ink)); }
     upper.add(g); body.userData.ctl = c; hits.push(body); c.obj3 = body;
+    if (c.kind === 'knob') knobLed(c, cx, cy);
     let last = null;
     let arc = null, halo = null;
     if (c.kind === 'knob') {
@@ -509,7 +524,7 @@ function paintLower(ctx) {
     const r = rel(m, low), cx = r.x + r.w / 2, cy = r.y + r.h / 2, R = (KR + 5.2) * 0.62;
     ctx.globalAlpha = fade(m); ctx.strokeStyle = 'rgba(11,11,11,.55)'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2 + ang(0), -Math.PI / 2 + ang(1)); ctx.stroke(); ctx.lineCap = 'butt';
-    ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(cx, cy - R - 3); ctx.lineTo(cx, cy - R - 6); ctx.stroke();
+    if (/Depth$/.test(m.dataset.m)) { ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(cx, cy - R - 3); ctx.lineTo(cx, cy - R - 6); ctx.stroke(); }   // ENV / LFO: a centre tick (bipolar)
   }
   ctx.globalAlpha = 1;
   for (const e of lowEls.ranges) { const r = rel(e, low); ctx.globalAlpha = fade(e); ctx.fillStyle = INK; ctx.fillRect(r.x, r.y + r.h / 2 - 2, r.w, 4); }
@@ -527,7 +542,13 @@ for (const el of low.querySelectorAll('button')) {
   if (el.closest('[hidden]')) continue;
   const r = rel(el, low); if (!r.w) continue;
   const draw = (ctx, w, h) => {   // a lit key turns over: black lettering on white (no magenta)
-    const lit = el.classList.contains('lit'); if (lit) { ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h); }
+    const lit = el.classList.contains('lit');
+    if (el.classList.contains('sym')) {   // STEP / ENV / LFO on keys: a red LED on a black key, lit while that source is on
+      const cx = w / 2, cy = h / 2;
+      if (lit) { const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 12); g.addColorStop(0, 'rgba(255,50,30,.9)'); g.addColorStop(1, 'rgba(255,20,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); }
+      ctx.fillStyle = lit ? '#ff3020' : '#3a0008'; ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, 7); ctx.fill();
+      return;
+    } if (lit) { ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h); }
     text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, lit ? INK : PAPER);
   };
   const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
@@ -550,7 +571,7 @@ for (const c of A.seqMods || []) {
   ticks.push(() => {
     const v = c.v; if (v !== last) {
       last = v; g.rotation.z = -ang(toU(c, v));
-      const a0 = 0, a1 = ang(toU(c, v)), lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+      const a0 = c.scale === 'bip' ? 0 : ang(0), a1 = ang(toU(c, v)), lo = Math.min(a0, a1), hi = Math.max(a0, a1);
       arc.geometry.dispose(); arc.geometry = new THREE.RingGeometry(KR + 3.4, KR + 7, 48, 1, Math.PI / 2 - hi, Math.max(0.0001, hi - lo)); arc.visible = hi - lo > 0.01;
     }
     if (++n % 5 === 0) {   // greyed while its source is off
