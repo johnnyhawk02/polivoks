@@ -266,7 +266,8 @@ function buildUpper() {
   // FILTH: a thick nameplate, tipped up toward you
   {
     const x0 = colX(16), y0 = rowY(1), w = colX(19) + CW - x0, h = RH;
-    const p = plate(w, h, 18, (ctx) => text(ctx, 'FILTH', w / 2, h / 2 + 4, `400 86px ${DISPLAY}`, PAPER, 'center', .9));
+    const p = plate(w, h, 18, () => {});
+    p.add(titleFace(w, h));
     const hinge = new THREE.Group(); hinge.position.copy(pos(x0, y0 + h, 0)); hinge.rotation.x = 0.22;
     p.position.set(0, h, 0); hinge.add(p); upper.add(hinge);
     // a black skirt fills the gap under the tipped plate
@@ -277,6 +278,41 @@ function buildUpper() {
   for (const [c, x, y] of ctls) addControl(upper, c, x, y);
 }
 let title = null;
+// The letters of FILTH sit on their own layer: pushed about by a fixed noise
+// whose depth is the modulator's output (as on the 2D panel), and lit up by
+// how loud the synth is.  Both are two numbers per frame into one shader.
+const TITLE = { lfo: 0, level: 0, wobble: true };
+try { const w = localStorage.getItem('polivoks-wobble'); TITLE.wobble = w ? w === '1' : !matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+let titleU = null;
+function titleFace(w, h) {
+  const layer = (blur) => {
+    const [cv, ctx] = canvas(w, h);
+    if (blur) ctx.filter = `blur(${blur}px)`;
+    text(ctx, 'FILTH', w / 2, h / 2 + 4, `400 86px ${DISPLAY}`, PAPER, 'center', .9);
+    const t = new THREE.CanvasTexture(cv); t.anisotropy = 4; return t;
+  };
+  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) } };
+  const m = new THREE.ShaderMaterial({
+    uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `
+      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; varying vec2 vUv;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+      float fbm(vec2 p) { return .65 * vn(p) + .35 * vn(p * 2.); }
+      void main() {
+        vec2 px = vUv * size * .045;
+        vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
+        vec2 uv = vUv + d * amt / size;
+        float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
+        vec3 c = vec3(.74 + .26 * lvl) * t + vec3(1., .62, .95) * g * lvl * 1.2;
+        gl_FragColor = vec4(c, 1.);
+      }`,
+  });
+  const g = new THREE.PlaneGeometry(w, h); g.translate(w / 2, -h / 2, 18.15);
+  return new THREE.Mesh(g, m);
+}
 function addControl(parent, c, x, y) {
   const cx = x + CW / 2, cy = y + TOP + CY;
   if (c.kind === 'knob' || c.kind === 'sel') {
@@ -403,7 +439,7 @@ const target = new THREE.Vector3(0, -10, 0);
 function placeCamera(time, still) {
   if (!still) {
   const sway = 0, bob = 0;
-  yaw += (sway + px * 0.025 + uyaw - yaw) * 0.06; pitch += (bob - py * 0.015 + upitch - pitch) * 0.06; }
+  yaw += (sway + uyaw - yaw) * 0.06; pitch += (bob + upitch - pitch) * 0.06; }
   camera.position.set(target.x + dist * Math.sin(yaw) * Math.cos(pitch), target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(yaw) * Math.cos(pitch));
   camera.lookAt(target);
 }
@@ -476,19 +512,23 @@ async function powerOn() {
   const src = lib + `
 class PolivoksProc extends AudioWorkletProcessor {
   constructor() { super(); this.e = new PolivoksEngine(sampleRate); this.fx = new TapeEcho(sampleRate);
-    this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx), () => {}); this.port.onmessage = (m) => this.q.msg(m.data); }
+    this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx), () => {}); this.port.onmessage = (m) => this.q.msg(m.data); this.n = 0; this.ss = 0; }
   process(i, o) { const out = o[0], L = out[0], R = out[1] || new Float32Array(L.length);
-    this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length); return true; }
+    this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length);
+    for (let k = 0; k < L.length; k++) this.ss += L[k] * L[k] + R[k] * R[k];
+    if ((this.n += L.length) >= sampleRate / 60) { this.port.postMessage({ t: 'lfo', v: this.e.lfoV, rms: Math.sqrt(this.ss / (2 * this.n)) }); this.n = 0; this.ss = 0; }
+    return true; }
 }
 registerProcessor('polivoks3d', PolivoksProc);`;
   let ok = false;
   try { await Promise.race([ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'application/javascript' }))), new Promise((_, r) => setTimeout(r, 3000))]); ok = true; } catch (e) {}
-  if (ok) { node = new AudioWorkletNode(ctx, 'polivoks3d', { numberOfInputs: 0, outputChannelCount: [2] }); node.connect(ctx.destination); }
+  if (ok) { node = new AudioWorkletNode(ctx, 'polivoks3d', { numberOfInputs: 0, outputChannelCount: [2] }); node.port.onmessage = (m) => { if (m.data.t === 'lfo') meter(m.data.v, m.data.rms); }; node.connect(ctx.destination); }
   else {
     const [Eng, KS, Echo, Rack] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack];')();
     const fx = new Echo(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx), () => {});
     const sp = ctx.createScriptProcessor(1024, 0, 2);
-    sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); };
+    sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length);
+      let ss = 0; for (let k = 0; k < L0.length; k++) ss += L0[k] * L0[k] + R0[k] * R0[k]; meter(eng.lfoV, Math.sqrt(ss / (2 * L0.length))); };
     node = { port: { postMessage: (d) => qs.msg(d) } }; sp.connect(ctx.destination);
   }
   for (const id in P) send({ t: 'p', id, v: toEngine(id, P[id]) });
@@ -496,6 +536,8 @@ registerProcessor('polivoks3d', PolivoksProc);`;
   for (const m of early.splice(0)) send(m);
   ctx.resume();
 }
+// −42 dB and below: no glow; −6 dB: full
+function meter(v, rms) { TITLE.lfo = v || 0; TITLE.level = Math.max(0, Math.min(1, (20 * Math.log10(rms + 1e-9) + 42) / 36)); }
 function start() { if (ctx) { ctx.resume(); return; } if (!starting) starting = powerOn().catch(() => {}); }
 addEventListener('keydown', start, true);
 // computer keys as on the 2D panel: A–P play, Z/X octave
@@ -520,7 +562,7 @@ fontsReady.then(() => {
   renderer.shadowMap.needsUpdate = true;
   // for headless checks: where a control is on screen
   const where = (id) => { const v = new THREE.Vector3().setFromMatrixPosition(OBJ[id].matrixWorld).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; };
-  window.filth3d = { P, setP, where, engine: () => !!node, ready: true };
+  window.filth3d = { P, setP, where, engine: () => !!node, title: TITLE, ready: true };
   renderer.setAnimationLoop(frame);
 });
 function frame(time) {
@@ -529,6 +571,12 @@ function frame(time) {
     const d = lev.userData.target - lev.userData.y; lev.userData.y += d * 0.35;
     if (Math.abs(d) < 0.2) { lev.userData.y = lev.userData.target; moving.delete(lev); }
     lev.userData.place(); renderer.shadowMap.needsUpdate = true;
+  }
+  if (titleU) {
+    const a = TITLE.wobble ? 9 * TITLE.lfo / 1.43 : 0;
+    titleU.amt.value = Math.abs(a) < .05 ? 0 : a;
+    const l = titleU.lvl.value, k = TITLE.level > l ? 0.45 : 0.07;   // quick to light, slow to fade
+    titleU.lvl.value = l + (TITLE.level - l) * k;
   }
   renderer.render(scene, camera);
 }
