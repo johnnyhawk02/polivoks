@@ -68,14 +68,7 @@ const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
 const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 1.0); scene.add(amb);
 const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
-// The colour of the whole view is a hue on the colour wheel, always fully
-// saturated.  Each VCO has one: its wave shape picks the base (triangle
-// magenta, sawtooth blue, pulse orange), PULSE W. pushes a pulse on through
-// gold to yellow, and RANGE nudges it a little.  The two hues are blended
-// around the wheel by the MIXER levels (blue and orange meet in green, not
-// grey), and the filter CUTOFF swings the result as you play.
-const HUE = [0.88, 0.57, 0.10];
-const ambCol = new THREE.Color(0xffffff), ambWant = new THREE.Color(); let bgHex = '';
+let bgHex = '';
 // the pink of every face is swapped for this colour in the shader (black ink and white stay as they are)
 const tintMats = [], TINT = { uTint: { value: new THREE.Color(0xff1fa8) }, uAmt: { value: 0.9 } };
 function tintable(m) {
@@ -87,31 +80,17 @@ function tintable(m) {
   };
   tintMats.push(m); return m;
 }
-const byId = (id) => A.S.find((c) => c.id === id);
-const AMB = { w1: byId('o1wave'), w2: byId('o2wave'), m1: byId('mix1'), m2: byId('mix2'), p1: byId('o1pw'), p2: byId('o2pw') };
-const cut = byId('cutoff'), rg1 = byId('o1range'), rg2 = byId('o2range');
-function hueOf(w, pw, rg) {
-  w = Math.min(2, w | 0);
-  return HUE[w] + (w === 2 ? 0.12 * Math.max(0, Math.min(1, pw || 0)) : 0) + 0.025 * ((rg == null ? 2 : rg) - 2);
-}
+// steady too: the ambient and front light as set in OPTIONS, the pink of the
+// faces swapped for the PANEL COLOUR, and a glow of it in the room behind
+const panelCol = new THREE.Color();
 function driveAmbient() {
-  let a = AMB.m1 ? AMB.m1.v : 0.5, b = AMB.m2 ? AMB.m2.v : 0.5;
-  if (a + b < 0.02) a = b = 0.5;                 // both off: an even blend
-  const h1 = hueOf(AMB.w1 ? AMB.w1.v : 1, AMB.p1 && AMB.p1.v, rg1 && rg1.v), h2 = hueOf(AMB.w2 ? AMB.w2.v : 2, AMB.p2 && AMB.p2.v, rg2 && rg2.v);
-  // weighted mean of the two angles on the wheel
-  const x = a * Math.cos(2 * Math.PI * h1) + b * Math.cos(2 * Math.PI * h2), y = a * Math.sin(2 * Math.PI * h1) + b * Math.sin(2 * Math.PI * h2);
-  let h = Math.atan2(y, x) / (2 * Math.PI) + 0.3 * ((cut ? cut.v : 0.5) - 0.5);
-  // COLOUR CHANGE (OPTIONS): 0 keeps the panel colour, 1 goes all the way to the sound's hue
-  const base = A.look.hue, dh = ((h - base) % 1 + 1.5) % 1 - 0.5;
-  h = (((base + dh * A.look.depth) % 1) + 1) % 1;
-  ambWant.setHSL(h, 1, 0.5);
-  ambCol.lerp(ambWant, 0.2);                    // a short fade when a wave changes
-  amb.color.copy(ambCol); amb.groundColor.copy(ambCol).multiplyScalar(0.25); front.color.copy(ambCol);
-  TINT.uTint.value.copy(ambCol);
-  // the room behind the panel takes the same colour
-  const hex = ambCol.getHexString();
-  if (hex !== bgHex) { bgHex = hex; const c = ambCol.clone().multiplyScalar(0.8);
-    document.body.style.background = `radial-gradient(120% 90% at 50% 40%, #${c.getHexString()} 0%, #0b0b0b 75%)`; }
+  const L = A.look.lights, sig = A.look.hue + JSON.stringify(L);
+  if (sig === bgHex) return; bgHex = sig;
+  amb.color.set(L.amb.c); amb.groundColor.copy(amb.color).multiplyScalar(0.25); amb.intensity = 0.45 * L.amb.i;
+  front.color.set(L.amb.c); front.intensity = 0.35 * L.amb.i;
+  panelCol.setHSL(A.look.hue, 0.97, 0.52); TINT.uTint.value.copy(panelCol);
+  const c = panelCol.clone().multiplyScalar(0.45);
+  document.body.style.background = `radial-gradient(120% 90% at 50% 40%, #${c.getHexString()} 0%, #0b0b0b 75%)`;
 }
 const side = (color, x) => {
   const l = new THREE.SpotLight(color, 0.6, 0, 0.62, 1, 0);
@@ -123,14 +102,11 @@ const side = (color, x) => {
 const lamps = [side(0x3d8bff, -1300), side(0xffa020, 1300)];
 const LAMP = [{ base: new THREE.Color(0x2f7dff), hi: new THREE.Color(0xbfe4ff), b: 0.6, t: 0 },
               { base: new THREE.Color(0xff9a10), hi: new THREE.Color(0xfff0b0), b: 0.6, t: 0 }];
+// the side lamps are steady: colour and brightness as set in OPTIONS
 function driveLamps() {
-  const v = A.vco || [0, 0, 0, 0];
-  LAMP.forEach((L, k) => {
-    const t = Math.max(0, Math.min(1, (v[2 + k] + 4) / 7));          // 32' low notes .. 2' high notes
-    const want = 2 * (0.3 + 5 * v[k] * (0.55 + 0.45 * t));
-    L.b += (want - L.b) * (want > L.b ? 0.5 : 0.1); L.t += (t - L.t) * 0.2;
-    lamps[k].intensity = L.b; lamps[k].color.copy(L.base).lerp(L.hi, L.t * 0.6);
-  });
+  const L = A.look.lights;
+  lamps[0].color.set(L.left.c); lamps[0].intensity = 1.6 * L.left.i;
+  lamps[1].color.set(L.right.c); lamps[1].intensity = 1.6 * L.right.i;
 }
 
 const rig = new THREE.Group(); scene.add(rig);
