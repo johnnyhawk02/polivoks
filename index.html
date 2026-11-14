@@ -14,11 +14,10 @@
 <meta name="apple-mobile-web-app-title" content="FILTH">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <script>
-// two views of the same synth: the 3D panel (view3d.js, the main view) or
-// the flat 2D panel.  ?view=2d / ?view=3d picks one and is remembered.
-(() => { let v = new URLSearchParams(location.search).get('view');
-  try { if (v) localStorage.setItem('polivoks-view', v); else v = localStorage.getItem('polivoks-view'); } catch (e) {}
-  if (v !== '2d') document.documentElement.classList.add('v3d'); })();
+// FILTH is the 3D panel (view3d.js).  The flat panel below is still built,
+// unseen: the 3D view takes its layout from it and works its controls.
+document.documentElement.classList.add('v3d');
+try { localStorage.removeItem('polivoks-view'); } catch (e) {}
 </script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
@@ -212,7 +211,6 @@
   <div id="spare" hidden><b class="val sq-src" style="text-align:left">INTERNAL</b><b class="val" id="midi">—</b><span id="octv">4</span><span id="extname">EXT. INPUT</span><button class="btn" id="extbtn">LOAD FILE</button><input type="file" id="extfile" accept="audio/*" hidden><button class="btn" id="resetbtn">RESET</button><button class="sb" id="wobbtn" aria-pressed="true">ON</button></div>
   <div class="foot">
     <span>Engine: <b id="emode">off</b></span>
-    <span style="margin-left:auto"><a href="?view=3d">3D VIEW</a></span>
     <span>FILTH v<b id="ver"></b></span>
   </div>
 </div>
@@ -1646,7 +1644,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.59.0';
+const VERSION = '1.60.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2323,7 +2321,7 @@ window.filthApp = {
   get lfoV() { return lfoV; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },
 };
 // the version in the address, so a new release is never served from the browser's cache
-if (document.documentElement.classList.contains('v3d')) import('./view3d.js?v=' + VERSION);
+import('./view3d.js?v=' + VERSION);
 // offline copy for the installed app (sw.js); a new version means a new
 // worker and a fresh cache, so an old release is never kept
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js?v=' + VERSION).catch(() => {});

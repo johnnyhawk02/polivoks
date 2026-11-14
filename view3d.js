@@ -55,7 +55,7 @@ const vignette = document.createElement('div');
 Object.assign(vignette.style, { position: 'fixed', inset: '0', pointerEvents: 'none', background: 'radial-gradient(130% 110% at 50% 45%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%)' });
 document.body.appendChild(vignette);
 const corner = document.createElement('div');
-corner.innerHTML = `FILTH v${A.VERSION} · <a href="?view=2d" style="color:inherit">2D VIEW</a>`;
+corner.textContent = `FILTH v${A.VERSION}`;
 Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: PINK });
 document.body.appendChild(corner);
 
