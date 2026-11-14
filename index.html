@@ -59,6 +59,8 @@
   .ctl, .sw, .resp { width: var(--cw); height: var(--rh); padding-top: var(--top); display: flex; flex-direction: column; align-items: center;
     user-select: none; -webkit-user-select: none; }
   .ctl { touch-action: none; }
+  .led { --on: 0; width: 18px; height: 18px; margin: 24px 0 20px; border-radius: 50%; border: 2px solid var(--ink);
+    background: color-mix(in srgb, #ff2a2a calc(var(--on) * 100%), #3a0008); box-shadow: 0 0 calc(var(--on) * 14px) calc(var(--on) * 4px) rgba(255, 40, 40, calc(var(--on) * .9)); }
   .ctl svg { display: block; cursor: ns-resize; overflow: visible; }
   .lab { font: 500 10.5px/12px var(--mono); text-transform: uppercase; letter-spacing: .07em; text-align: center; margin-top: 2px; white-space: nowrap; height: 24px; }
   .ctl svg text { fill: var(--ink); font-family: var(--mono); font-size: 9.5px; }
@@ -1104,10 +1106,29 @@ class TapeEcho {
 
       // dry stays full up to half MIX, then fades; wet comes up to full by half
       const m = Math.min(1, Math.max(0, ps.eMix)), dg = Math.min(1, 2 - 2 * m), wg = Math.min(1, 2 * m);
-      L[s] = TapeEcho.lim(x * dg + yL * wg);
-      R[s] = TapeEcho.lim(x * dg + yR * wg);
+      L[s] = x * dg + yL * wg;   // the soft clipper (SoftClip) follows
+      R[s] = x * dg + yR * wg;
     }
   }
+  static lim(x) { return SoftClip.lim(x); }
+}
+
+// The output stage (added, not circuit): a soft clipper after the echo.
+// Transparent below 0.7, then a soft knee up to 1, so nothing can hard clip.
+// `hit` is how far into the knee the loudest sample went since it was last
+// read (0 = never reached it, 1 = driven well past it): the CLIP LED.
+class SoftClip {
+  constructor() { this.hit = 0; }
+  process(L, R, n) {
+    let pk = 0;
+    for (let i = 0; i < n; i++) {
+      const a = L[i] < 0 ? -L[i] : L[i], b = R[i] < 0 ? -R[i] : R[i];
+      if (a > pk) pk = a; if (b > pk) pk = b;
+      L[i] = SoftClip.lim(L[i]); R[i] = SoftClip.lim(R[i]);
+    }
+    if (pk > 0.7) this.hit = Math.max(this.hit, Math.min(1, (pk - 0.7) / 0.5));
+  }
+  read() { const h = this.hit; this.hit = 0; return h; }
   // transparent below 0.7, then a soft knee up to 1
   static lim(x) { const a = x < 0 ? -x : x; if (a <= 0.7) return x; const y = 0.7 + 0.3 * Math.tanh((a - 0.7) / 0.3); return x < 0 ? -y : y; }
 }
@@ -1139,7 +1160,7 @@ class Level {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
+if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, SoftClip, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
 </script>
 <script type="text/plain" id="tone-src">// ============================================================================
 // TONE: a random patch that is meant to be PLAYABLE, for the RANDOM row.
@@ -1448,8 +1469,8 @@ const at = (c, col, row) => Object.assign(c, { at: [col, row] });
 const gap = { kind: 'spacer' };
 const L = {
   'g-mod': [knob('lfoRate', 'ЧАСТОТА', 'mm', .45), sw('lfoRange', 'БЫСТР.', 'МЕДЛ.', 0, 'ДИАПАЗОН'), sel('lfoMode', 'РЕЖИМ', [{i:'tri'},{i:'sq'},{i:'sh'},{i:'nz'}], 0)],
-  'g-perf': [at(knob('phones', 'ТЛФ.', '06', .6), 1, 2), at(knob('tune', 'НАСТРОЙКА', 'bip', 0), 1, 1), at(knob('glide', 'ГЛИССАНДО', 'mm', 0), 2, 1), at(sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1), 3, 1),
-    at(knob('volume', 'ГРОМКОСТЬ', '06', .7), 2, 2), at(sw('outSel', 'ЛИН.', 'ТЛФ.', 0, 'ВЫХОД'), 3, 2)],
+  'g-perf': [at(knob('tune', 'НАСТРОЙКА', 'bip', 0), 1, 1), at(knob('glide', 'ГЛИССАНДО', 'mm', 0), 2, 1), at(sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1), 3, 1),
+    at(knob('volume', 'ГРОМКОСТЬ', '06', .7), 1, 2), at({ kind: 'led', label: 'CLIP' }, 2, 2)],
   'g-o1': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 1),
     knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0), knob('o1pw', 'PULSE W.', '06', 0, { added: true })],
   'g-o2': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 2),
@@ -1531,7 +1552,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.38.0';
+const VERSION = '1.39.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1634,6 +1655,20 @@ function makeSwitch(c) {
   wrap.addEventListener('click', () => c.set(c.v ? 0 : 1));
   return wrap;
 }
+// CLIP LED: lights when the output reaches the soft clipper (added output stage)
+let clipIn = 0, clipLed = 0, ledEl = null;
+function makeLed(c) {
+  const d = document.createElement('div'); d.className = 'ctl ledc';
+  ledEl = document.createElement('div'); ledEl.className = 'led'; d.appendChild(ledEl);
+  const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = c.label; d.appendChild(lab);
+  return d;
+}
+(function ledFrame() {
+  // quick to light, fades over about a fifth of a second
+  clipLed = Math.max(clipIn, clipLed * 0.86); clipIn = 0;
+  if (ledEl) ledEl.style.setProperty('--on', clipLed.toFixed(3));
+  requestAnimationFrame(ledFrame);
+})();
 let respSvg = null;
 function makeResp() {
   const d = document.createElement('div'); d.className = 'resp';
@@ -1654,6 +1689,7 @@ for (const gid in L) {
   for (const c of L[gid]) {
     if (c.kind === 'spacer') { host.appendChild(document.createElement('div')); continue; }
     if (c.kind === 'resp') { host.appendChild(makeResp()); continue; }
+    if (c.kind === 'led') { host.appendChild(makeLed(c)); if (c.at) host.lastChild.style.gridArea = `${c.at[1]} / ${c.at[0]}`; continue; }
     const e = host.appendChild(c.kind === 'knob' ? makeKnob(c) : c.kind === 'sel' ? makeSel(c) : makeSwitch(c));
     if (c.at) e.style.gridArea = `${c.at[1]} / ${c.at[0]}`;
     S.push(c);
@@ -1938,11 +1974,11 @@ async function powerOn() {
 class PolivoksProc extends AudioWorkletProcessor {
   constructor() { super(); this.e = new PolivoksEngine(sampleRate); this.fx = new TapeEcho(sampleRate);
     this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx), (m) => this.port.postMessage(m));
-    this.port.onmessage = (m) => this.q.msg(m.data); this.lev = new Level(sampleRate); }
+    this.port.onmessage = (m) => this.q.msg(m.data); this.lev = new Level(sampleRate); this.clip = new SoftClip(); }
   process(i, o) { const out = o[0], L = out[0], R = out[1] || new Float32Array(L.length);
-    this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length);
+    this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length); this.clip.process(L, R, L.length);
     // the modulator's output for the panel edges, about 60 times a second
-    if (this.lev.add(L, R, L.length)) this.port.postMessage({ t: 'lfo', v: this.e.lfoV, a: this.lev.rms, vco: vcoInfo(this.e) });
+    if (this.lev.add(L, R, L.length)) this.port.postMessage({ t: 'lfo', v: this.e.lfoV, a: this.lev.rms, vco: vcoInfo(this.e), clip: this.clip.read() });
     return true; }
 }
 registerProcessor('polivoks', PolivoksProc);`;
@@ -1954,16 +1990,16 @@ registerProcessor('polivoks', PolivoksProc);`;
     }
     if (ok) {
       node = new AudioWorkletNode(ctx, 'polivoks', { numberOfInputs: 0, outputChannelCount: [2] });
-      node.port.onmessage = (m) => { if (m.data.t === 'lfo') { lfoV = m.data.v; outRms = m.data.a; vcoI = m.data.vco; } else onSeqPos(m.data); };
+      node.port.onmessage = (m) => { if (m.data.t === 'lfo') { lfoV = m.data.v; outRms = m.data.a; vcoI = m.data.vco; clipIn = Math.max(clipIn, m.data.clip || 0); } else onSeqPos(m.data); };
       node.connect(analyser);
       engineMode = 'AudioWorklet';
     } else {
       // Fallback for sandboxed frames that refuse worklet modules: run the same
       // engine on the main thread through a ScriptProcessorNode.
-      const [Eng, KS, Echo, Rack, Lev, vInfo] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, Level, vcoInfo];')(), lev = new Lev(ctx.sampleRate);
-      const fx = new Echo(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx), onSeqPos);
+      const [Eng, KS, Echo, Rack, Lev, vInfo, Clip] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, Level, vcoInfo, SoftClip];')(), lev = new Lev(ctx.sampleRate);
+      const sclip = new Clip(), fx = new Echo(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx), onSeqPos);
       const sp = ctx.createScriptProcessor(1024, 0, 2);
-      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); lfoV = eng.lfoV; if (lev.add(L0, R0, L0.length)) { outRms = lev.rms; vcoI = vInfo(eng); } };
+      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); sclip.process(L0, R0, L0.length); clipIn = Math.max(clipIn, sclip.read()); lfoV = eng.lfoV; if (lev.add(L0, R0, L0.length)) { outRms = lev.rms; vcoI = vInfo(eng); } };
       node = { port: { postMessage: (d) => qs.msg(d) } };
       sp.connect(analyser);
       engineMode = 'main thread';
@@ -2098,7 +2134,7 @@ addEventListener('resize', fit); fit();
 window.filthApp = {
   S, KNOBS, seqOf, change, pickSeq, on, off, WOB, VERSION,
   get edC() { return edC; }, get lastPos() { return lastPos; },
-  get lfoV() { return lfoV; }, get outRms() { return outRms; }, get vco() { return vcoI; },
+  get lfoV() { return lfoV; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },
 };
 // the version in the address, so a new release is never served from the browser's cache
 if (document.documentElement.classList.contains('v3d')) import('./view3d.js?v=' + VERSION);

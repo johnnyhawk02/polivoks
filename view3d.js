@@ -252,6 +252,12 @@ function recess(ctx, r) { ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRe
 function paintUpper(ctx) {
   for (const b of panel.querySelectorAll('.box')) recess(ctx, rel(b, panel));
   for (const c of CTL) paintCtl(ctx, c);
+  // CLIP LED: its label, and a black bezel the lamp sits in
+  for (const el of panel.querySelectorAll('.ledc')) {
+    const lab = el.querySelector('.lab'), l = rel(lab, panel), d = rel(el.querySelector('.led'), panel);
+    text(ctx, lab.textContent, l.x + l.w / 2, l.y + (fs(lab) + 2) / 2, `600 ${fs(lab)}px ${MONO}`, INK, 'center', .5);
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(d.x + d.w / 2, d.y + d.h / 2, d.w / 2 + 3, 0, 7); ctx.fill();
+  }
   if (respEl) { const r = rel(respEl.querySelector('svg') || respEl, panel); ctx.save(); ctx.translate(r.x, r.y); paintResp(ctx, fmCtl && fmCtl.v >= 0.5); ctx.restore(); }
 }
 const respEl = panel.querySelector('.resp'), fmCtl = A.S.find((c) => c.id === 'fMode');
@@ -316,6 +322,23 @@ for (const c of CTL) {
     const at = (v) => { const down = c.id === 'fMode' ? !v : !!v; return down ? q.y + q.h - 2 - 6 : q.y + 2 + 6; };
     let last = c.v; lev.userData = { y: at(c.v), target: at(c.v), place: () => lev.position.copy(pos(cx, lev.userData.y, 0)) }; lev.userData.place();
     ticks.push(() => { if (c.v !== last) { last = c.v; lev.userData.target = at(c.v); levers.add(lev); } });
+  }
+}
+
+// ---------------------------------------------------------------- CLIP LED
+// a red lamp that lights when the output reaches the soft clipper
+{
+  const el = panel.querySelector('.ledc .led');
+  if (el) {
+    const d = rel(el, panel), r = d.w / 2, cx = d.x + r, cy = d.y + r;
+    const lm = new THREE.MeshBasicMaterial({ color: 0x3a0008 });
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 4, 32), lm); lamp.rotation.x = Math.PI / 2; lamp.position.copy(pos(cx, cy, 2)); upper.add(lamp);
+    const [gc, gx] = canvas(64, 64), gr = gx.createRadialGradient(32, 32, 4, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,60,40,1)'); gr.addColorStop(1, 'rgba(255,0,0,0)'); gx.fillStyle = gr; gx.fillRect(0, 0, 64, 64);
+    const hm = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(r * 7, r * 7), hm); halo.position.copy(pos(cx, cy, 4.5)); upper.add(halo);
+    const off = new THREE.Color(0x3a0008), on = new THREE.Color(0xff3020);
+    ticks.push(() => { const v = Math.min(1, A.clip || 0); lm.color.copy(off).lerp(on, Math.min(1, v * 1.6)); hm.opacity = 0.9 * v; });
   }
 }
 

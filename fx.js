@@ -92,10 +92,29 @@ class TapeEcho {
 
       // dry stays full up to half MIX, then fades; wet comes up to full by half
       const m = Math.min(1, Math.max(0, ps.eMix)), dg = Math.min(1, 2 - 2 * m), wg = Math.min(1, 2 * m);
-      L[s] = TapeEcho.lim(x * dg + yL * wg);
-      R[s] = TapeEcho.lim(x * dg + yR * wg);
+      L[s] = x * dg + yL * wg;   // the soft clipper (SoftClip) follows
+      R[s] = x * dg + yR * wg;
     }
   }
+  static lim(x) { return SoftClip.lim(x); }
+}
+
+// The output stage (added, not circuit): a soft clipper after the echo.
+// Transparent below 0.7, then a soft knee up to 1, so nothing can hard clip.
+// `hit` is how far into the knee the loudest sample went since it was last
+// read (0 = never reached it, 1 = driven well past it): the CLIP LED.
+class SoftClip {
+  constructor() { this.hit = 0; }
+  process(L, R, n) {
+    let pk = 0;
+    for (let i = 0; i < n; i++) {
+      const a = L[i] < 0 ? -L[i] : L[i], b = R[i] < 0 ? -R[i] : R[i];
+      if (a > pk) pk = a; if (b > pk) pk = b;
+      L[i] = SoftClip.lim(L[i]); R[i] = SoftClip.lim(R[i]);
+    }
+    if (pk > 0.7) this.hit = Math.max(this.hit, Math.min(1, (pk - 0.7) / 0.5));
+  }
+  read() { const h = this.hit; this.hit = 0; return h; }
   // transparent below 0.7, then a soft knee up to 1
   static lim(x) { const a = x < 0 ? -x : x; if (a <= 0.7) return x; const y = 0.7 + 0.3 * Math.tanh((a - 0.7) / 0.3); return x < 0 ? -y : y; }
 }
@@ -127,4 +146,4 @@ class Level {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
+if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, SoftClip, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
