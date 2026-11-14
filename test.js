@@ -312,3 +312,36 @@ console.log('--- stability sweep ---');
   for (let i = 0; i < 20; i++) k2.tick(0.01);
   if (!rep || !('cutoff' in rep.ph) || 'res' in rep.ph) { console.log('DRIFT REPORT FAILED', JSON.stringify(rep && rep.ph)); process.exitCode = 1; }
 }
+// MIDI pitch bend into the VCO summing nodes, and the mod wheel on the modulation bus
+{
+  const { bendOct, wheelOct } = require('./dsp.js');
+  const ln = 1 / 2 ** 13, st = (b, r) => 12 * bendOct(b, r);
+  const fq = (bend, range, wheel) => {
+    const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
+    for (const k in open) { e.setParam(k, open[k]); e.ps[k] = open[k]; }
+    e.setBendRange(range); e.setBend(bend); e.setModWheel(wheel || 0); e.noteOn(57);
+    const out = new Float32Array(SR); for (let i = 0; i < out.length; i += 128) e.render(out.subarray(i, i + 128), 128);
+    return freqOf(out, SR);
+  };
+  const f0 = fq(0, 2), cents = (f) => 1200 * Math.log2(f / f0);
+  const r = [cents(fq(1, 2)), cents(fq(-1, 2)), cents(fq(0.5, 2)), cents(fq(1, 12)), cents(fq(-1, 12))];
+  console.log('--- MIDI pitch bend ---\nformula: full up', st(1, 2).toFixed(3), 'st, half up', st(0.5, 2).toFixed(3), 'st (range 2)');
+  console.log('measured (cents): range 2 up', r[0].toFixed(1), 'down', r[1].toFixed(1), 'half', r[2].toFixed(1), '; range 12 up', r[3].toFixed(1), 'down', r[4].toFixed(1));
+  if (Math.abs(r[0] - 200) > 3 || Math.abs(r[1] + 200) > 3 || Math.abs(r[2] - 100) > 3 || Math.abs(r[3] - 1200) > 8 || Math.abs(r[4] + 1200) > 8) { console.log('PITCH BEND FAILED'); process.exitCode = 1; }
+  // mod wheel: depth of the triangle LFO on pitch, from the per-period frequency spread
+  const wob = (wheel) => {
+    const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
+    for (const k in open) { e.setParam(k, open[k]); e.ps[k] = open[k]; }
+    e.setParam('lfoRate', 0.3); e.ps.lfoRate = 0.3; e.setModWheel(wheel); e.noteOn(57);
+    let lo = Infinity, hi = 0, last = -1, prev = 0; const blk = new Float32Array(1);
+    for (let i = 0; i < SR * 3; i++) {
+      e.render(blk, 1); const v = blk[0];
+      if (i > SR && prev < 0 && v >= 0) { const t = i - 1 + prev / (prev - v); if (last > 0) { const f = SR / (t - last); lo = Math.min(lo, f); hi = Math.max(hi, f); } last = t; }
+      prev = v;
+    }
+    return 1200 * Math.log2(hi / lo);
+  };
+  const w = [wob(0), wob(0.5), wob(1)];
+  console.log('mod wheel vibrato, peak to peak (cents): off', w[0].toFixed(1), ', half', w[1].toFixed(1), ', full', w[2].toFixed(1), '(formula full', (2400 * wheelOct(1, -1.428)).toFixed(1) + ')');
+  if (w[0] > 15 || w[2] < 350 || w[2] > 650 || w[1] > w[2]) { console.log('MOD WHEEL FAILED'); process.exitCode = 1; }
+}

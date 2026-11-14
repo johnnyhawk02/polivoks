@@ -129,6 +129,9 @@ class FxRack {
   allOff() { this.e.allOff(); }
   setPrio(last) { this.e.setPrio(last); }
   setFmMod(on) { this.e.setFmMod(on); }
+  setBend(v) { this.e.setBend(v); }
+  setModWheel(v) { this.e.setModWheel(v); }
+  setBendRange(st) { this.e.setBendRange(st); }
   render(out, n) { this.e.render(out, n); }
 }
 

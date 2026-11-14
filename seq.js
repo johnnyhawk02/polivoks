@@ -91,6 +91,9 @@ class KnobSeq {
     else if (d.t === 'all') this.e.allOff();
     else if (d.t === 'prio') this.e.setPrio(d.v);
     else if (d.t === 'fmmod') this.e.setFmMod(d.v);
+    else if (d.t === 'bend') this.e.setBend(d.v);
+    else if (d.t === 'modw') this.e.setModWheel(d.v);
+    else if (d.t === 'bendst') this.e.setBendRange(d.v);
   }
 }
 
