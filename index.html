@@ -137,6 +137,8 @@
   .v3d .lab { font-size: 15px; line-height: 17px; height: 36px; white-space: normal; }
   .v3d .sw .t { font-size: 13px; line-height: 14px; }
   .v3d .sw .grp { height: 68px; }
+  .v3d .ctl svg { margin-bottom: 12px; }   /* bigger knobs in 3D: labels sit lower */
+  .v3d .led { margin: 30px 0 26px; }
   .v3d .box h2 { font-size: 18px; }
   .v3d .f > span { font-size: 14px; line-height: 16px; }
   .v3d .val { font-size: 15px; }
@@ -1567,7 +1569,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.40.0';
+const VERSION = '1.41.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
