@@ -135,3 +135,29 @@ So full modulation is ±2.03 octaves for the ±1.43 V triangle (it was scaled
 to ±1 octave before), full FM ±0.38 octave for VCO II's ±1.7 V triangle, and
 detune ±10 semitones (was ±7). Pot tapers linear **EST**; which way detune
 turns is not on the sheet (kept sharp to the right, **EST**).
+
+## Pulse width (an addition, `pw.cir`, `node spice/vco/pw.js`)
+
+Not on the original panel. A10 (+) has R34 20k to ground and the panel's
+pulse-switch line (X2 pin 10), so the addition goes there: a 100k linear pot
+from 0 V to −12.5 V, wiper through 56k onto A10 (+) (pot and 56k chosen, not
+from the Polivoks). Knob 0 puts 0 V there, the original square; knob 1 puts
+−3.29 V there, so A10 trips near the bottom of the ramp. The bench adds C8/R29,
+an estimated 100k load for A8, and A10 as the open-loop ud8.lib op-amp (slew
+3 V/µs **EST**). Duty (A10 output > 0), SPICE | JS (`pw_js.js`, full table in
+`pw_compare.txt`):
+
+| knob | 450 Hz | 1.8 kHz | 3.6 kHz | 7.1 kHz | 14 kHz |
+|---|---|---|---|---|---|
+| 0 | 49.9 \| 48.8 | 48.1 \| 47.8 | 47.3 \| 47.3 | 46.7 \| 46.8 | 46.4 \| 46.5 |
+| 0.5 | 34.2 \| 33.2 | 32.4 \| 32.1 | 31.6 \| 31.3 | 30.8 \| 30.4 | 30.1 \| 29.2 |
+| 0.8 | 22.3 \| 21.4 | 20.5 \| 20.2 | 19.6 \| 19.3 | 18.7 \| 18.1 | 17.8 \| 16.2 |
+| 0.9 | 16.3 \| 15.4 | 14.5 \| 14.1 | 13.6 \| 13.2 | 12.6 \| 11.8 | 11.2 \| 4.1 |
+| 1 | 8.1 \| 7.2 | 6.3 \| 5.9 | 5.4 \| 4.9 | 2.6 \| 0 | 0 \| 0 |
+
+The pitch doesn't move (within 0.3 cents in SPICE). The square sits a little
+under 50 % because A10's finite gain-bandwidth delays the edge where the slow
+ramp crosses its threshold (33 µs at 450 Hz in SPICE). At the top, the narrowest
+pulses get too short for A10 to reach full swing and fade out. In the JS they
+fade out about an octave earlier than in SPICE, because the 4× oversampled step
+(5.2 µs) blurs the bottom of the ramp.
