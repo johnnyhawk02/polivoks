@@ -113,6 +113,21 @@
     font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
   .foot b { font-weight: 600; }
   .foot a { color: inherit; }
+  /* OPTIONS: a box that opens when FILTH is tapped */
+  .ttl { cursor: pointer; }
+  #opts { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
+  #opts.open { display: flex; }
+  #opts .win { position: relative; width: min(520px, 92vw); background: var(--pink); color: var(--ink); box-shadow: inset 0 0 0 3px var(--ink); padding: 30px 22px 10px; font-family: var(--mono); }
+  #opts h2 { position: absolute; top: -12px; left: 14px; margin: 0; font: 400 18px/1 var(--display); letter-spacing: .03em; color: var(--paper); background: var(--ink); padding: 5px 10px 4px; }
+  #opts .x { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; font-size: 16px; }
+  #opts .f { margin: 0 0 16px; }
+  #opts .f > span { font-size: 13px; line-height: 15px; }
+  #opts .row { height: 34px; gap: 12px; }
+  #opts input[type=range] { flex: 1; min-width: 0; accent-color: var(--ink); }
+  #opts .val { flex: none; width: 82px; text-align: right; font-size: 14px; }
+  #opts .hue { -webkit-appearance: none; appearance: none; height: 16px; border: 2px solid var(--ink); background: linear-gradient(to right, hsl(0 97% 52%), hsl(60 97% 52%), hsl(120 97% 52%), hsl(180 97% 52%), hsl(240 97% 52%), hsl(300 97% 52%), hsl(360 97% 52%)); }
+  #opts .hue::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 28px; background: var(--ink); border: 2px solid var(--paper); }
+  #opts .hue::-moz-range-thumb { width: 14px; height: 28px; background: var(--ink); border: 2px solid var(--paper); border-radius: 0; }
   /* 3D view: the 2D panel keeps working underneath, unseen; view3d.js draws it in 3D and drives its controls */
   .v3d body { height: 100vh !important; overflow: hidden; }
   .v3d #stage { visibility: hidden; position: fixed; left: 0; top: 0; pointer-events: none; z-index: -1; }
@@ -1552,7 +1567,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.39.0';
+const VERSION = '1.40.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1886,6 +1901,40 @@ grid.addEventListener('pointermove', (e) => { if (paint && e.buttons) paintTo(e)
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addEventListener(ev, () => { paint = null; });
 { let id = 'cutoff'; try { id = localStorage.getItem('polivoks-seq-sel') || id; } catch (e) {} selSeq(knobById(id) || knobById('cutoff')); }
 
+// ---------------------------------------------------------------- options
+// Tapping FILTH opens OPTIONS: TEMPO (its slider moves in here from the
+// sequencer), the panel colour, and how far the 3D view's colour follows the
+// sound (0 = always the panel colour, 100 % = led by the wave shapes).
+const LOOK_STORE = 'polivoks-look';
+const look = { hue: 316 / 360, depth: 1 };
+try { Object.assign(look, JSON.parse(localStorage.getItem(LOOK_STORE) || '{}')); } catch (e) {}
+const lookCss = (h) => `hsl(${Math.round(h * 360)} 97% 52%)`;
+function applyLook() {
+  document.documentElement.style.setProperty('--pink', lookCss(look.hue));
+  try { localStorage.setItem(LOOK_STORE, JSON.stringify(look)); } catch (e) {}
+}
+const optsEl = document.createElement('div'); optsEl.id = 'opts';
+optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTIONS</h2><button class="btn x" aria-label="Close">✕</button>
+  <div class="f"><span>TEMPO</span><div class="row" id="opt-tempo"></div></div>
+  <div class="f"><span>PANEL COLOUR</span><div class="row"><input type="range" class="hue" min="0" max="359" id="opt-hue" aria-label="Panel colour"><b class="val" id="opt-huev"></b></div></div>
+  <div class="f"><span>COLOUR CHANGE</span><div class="row"><input type="range" min="0" max="100" id="opt-depth" aria-label="Colour change"><b class="val" id="opt-depthv"></b></div></div></div>`;
+document.body.appendChild(optsEl);
+{ const tf = q('.sq-bpm').closest('.f'); optsEl.querySelector('#opt-tempo').append(...tf.querySelector('.row').childNodes); tf.remove(); }
+const optHue = optsEl.querySelector('#opt-hue'), optDepth = optsEl.querySelector('#opt-depth');
+function drawOpts() {
+  optHue.value = Math.round(look.hue * 360) % 360; optsEl.querySelector('#opt-huev').textContent = Math.abs(look.hue * 360 - 316) < 3 ? 'PINK' : Math.round(look.hue * 360) + '°';
+  optDepth.value = Math.round(look.depth * 100); optsEl.querySelector('#opt-depthv').textContent = Math.round(look.depth * 100) + '%';
+}
+optHue.oninput = () => { look.hue = optHue.value / 360; applyLook(); drawOpts(); };
+optDepth.oninput = () => { look.depth = optDepth.value / 100; applyLook(); drawOpts(); };
+function openOptions() { drawOpts(); optsEl.classList.add('open'); }
+function closeOptions() { optsEl.classList.remove('open'); }
+optsEl.querySelector('.x').onclick = closeOptions;
+optsEl.addEventListener('pointerdown', (e) => { if (e.target === optsEl) closeOptions(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') closeOptions(); });
+document.querySelector('.ttl').addEventListener('click', openOptions);
+applyLook();
+
 // ---------------------------------------------------------------- presets
 // A preset is the whole panel: every knob and switch (echo included), every
 // knob sequence and the clock.  Names come from names.js, never typed.
@@ -2134,6 +2183,7 @@ addEventListener('resize', fit); fit();
 window.filthApp = {
   S, KNOBS, seqOf, change, pickSeq, on, off, WOB, VERSION,
   get edC() { return edC; }, get lastPos() { return lastPos; },
+  look, openOptions,
   get lfoV() { return lfoV; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },
 };
 // the version in the address, so a new release is never served from the browser's cache
