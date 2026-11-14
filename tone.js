@@ -118,8 +118,11 @@ function makeTone(rand, amount) {
   // SLEW is about half a step, so it glides rather than steps.  Cutoff steps are kept
   // mostly upward so the knob never dips toward the near-silent zone.
   const walk = (lo, hi) => { let v = mid(-0.2, 0.5); const st = []; for (let i = 0; i < 16; i++) { st.push(Math.round(Math.max(lo, Math.min(hi, v)) * 100) / 100); v += (R() - 0.5) * 0.8; } return st; };
+  // DRIFT stays near the centre: half the sequences play exactly to the tempo, the rest wander
+  // a percent or two against it (a little more at the higher TONE MOD settings, never over 6 %)
+  const drift = () => (R() < 0.5 ? 0 : (R() < 0.5 ? -1 : 1) * Math.round(Math.min(6, mid(0.5, 2.5) * fac)));
   const seqs = {};
-  const mk = (id, depth, lo, hi, divs) => { const div = pick(divs || [4, 8, 16, 32]); seqs[id] = { on: true, len: pick([8, 16, 16]), div, depth: Math.round(depth * 10000) / 10000, slew: Math.round(Math.max(0.08, Math.min(2, div * 0.125 * mid(0.3, 0.6))) * 1000) / 1000, steps: walk(lo, hi) }; };
+  const mk = (id, depth, lo, hi, divs) => { const div = pick(divs || [4, 8, 16, 32]); seqs[id] = { on: true, len: pick([8, 16, 16]), div, drift: drift(), depth: Math.round(depth * 10000) / 10000, slew: Math.round(Math.max(0.08, Math.min(2, div * 0.125 * mid(0.3, 0.6))) * 1000) / 1000, steps: walk(lo, hi) }; };
   mk('cutoff', mid(0.02, 0.05) * fac, -0.4, 1);
   if (R() < 0.5) mk('res', mid(0.02, 0.06) * fac, -1, 1);
   if (R() < 0.4) mk('fEnv', mid(0.03, 0.07) * fac, -1, 1);
