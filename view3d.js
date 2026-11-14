@@ -411,13 +411,20 @@ let title = null, titleU = null;
   // room, plus a faint diagonal glare; the lettering shows straight through (GLASS in OPTIONS)
   {
     const gm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.1, envMapIntensity: 3, depthWrite: false });
-    const pane = new THREE.Mesh(new THREE.BoxGeometry(w - 6, h - 6, 2), gm); pane.position.set(w / 2, -h / 2, 8 + 4); p.add(pane);
+    // the glass bulges gently like a CRT face: highest in the middle, falling to the rim,
+    // so its reflections and highlights slide round the curve
+    const bulged = (lift) => {
+      const g = new THREE.PlaneGeometry(w - 6, h - 6, 40, 24), a = g.attributes.position;
+      for (let i = 0; i < a.count; i++) { const nx = a.getX(i) / ((w - 6) / 2), ny = a.getY(i) / ((h - 6) / 2); a.setZ(i, lift + 9 * (1 - nx * nx) * (1 - ny * ny)); }
+      g.computeVertexNormals(); return g;
+    };
+    const pane = new THREE.Mesh(bulged(0), gm); pane.position.set(w / 2, -h / 2, 8 + 2); p.add(pane);
     const [gc, gx] = canvas(w, h), gr = gx.createLinearGradient(0, 0, w, h);
     gr.addColorStop(0.18, 'rgba(255,255,255,0)'); gr.addColorStop(0.3, 'rgba(255,255,255,.16)'); gr.addColorStop(0.36, 'rgba(255,255,255,.05)');
     gr.addColorStop(0.42, 'rgba(255,255,255,.12)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)');
     gx.fillStyle = gr; gx.fillRect(0, 0, w, h);
-    const glare = new THREE.Mesh(new THREE.PlaneGeometry(w - 6, h - 6), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-    glare.position.set(w / 2, -h / 2, 8 + 5.1); p.add(glare);
+    const glare = new THREE.Mesh(bulged(0.4), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    glare.position.set(w / 2, -h / 2, 8 + 2); p.add(glare);
     ticks.push(() => { pane.visible = glare.visible = A.look.glass !== false; });
   }
   const hinge = new THREE.Group(); hinge.position.copy(pos(r.x, r.y + h, 0)); hinge.rotation.x = TILT;
