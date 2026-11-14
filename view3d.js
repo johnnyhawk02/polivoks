@@ -7,6 +7,7 @@
 // presets, RANDOMISE, the sequencer, MIDI and saving are the app's, not a copy.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const A = window.filthApp;
 const PINK = '#fc0fc0', INK = '#0b0b0b', PAPER = '#ffffff';
@@ -365,7 +366,10 @@ for (const c of CTL) {
 let title = null, titleU = null;
 {
   const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0;   // flat, raised plate
-  const p = plate(w, h, 8, () => {});   // a thin plate, so tipping the top panel up never lets it cover the AMPLIFIER name
+  const p = plate(w, h, 8, () => {});
+  // the CRT housing: the plate's edges and corners rounded off like a tube's case (kept shallow,
+  // so tipping the top panel up never lets it cover the AMPLIFIER name)
+  { const HD = 12, hg = new RoundedBoxGeometry(w, h, HD, 5, 6); hg.translate(w / 2, -h / 2, HD / 2); p.geometry.dispose(); p.geometry = hg; }
   const layer = (blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
     // FILTH stretched to fill its box: sized by the letters' own outline, a margin all round
@@ -405,7 +409,7 @@ let title = null, titleU = null;
         gl_FragColor = vec4(c, 1.);
       }`,
   });
-  const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 8.15);
+  const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 12.15);
   p.add(new THREE.Mesh(fg, sm));
   // a glass cover over the plate: a clear, glossy pane that catches the side lights and the
   // room, plus a faint diagonal glare; the lettering shows straight through (GLASS in OPTIONS)
@@ -418,13 +422,13 @@ let title = null, titleU = null;
       for (let i = 0; i < a.count; i++) { const nx = a.getX(i) / ((w - 6) / 2), ny = a.getY(i) / ((h - 6) / 2); a.setZ(i, lift + 9 * (1 - nx * nx) * (1 - ny * ny)); }
       g.computeVertexNormals(); return g;
     };
-    const pane = new THREE.Mesh(bulged(0), gm); pane.position.set(w / 2, -h / 2, 8 + 2); p.add(pane);
+    const pane = new THREE.Mesh(bulged(0), gm); pane.position.set(w / 2, -h / 2, 12 + 1); p.add(pane);
     const [gc, gx] = canvas(w, h), gr = gx.createLinearGradient(0, 0, w, h);
     gr.addColorStop(0.18, 'rgba(255,255,255,0)'); gr.addColorStop(0.3, 'rgba(255,255,255,.16)'); gr.addColorStop(0.36, 'rgba(255,255,255,.05)');
     gr.addColorStop(0.42, 'rgba(255,255,255,.12)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)');
     gx.fillStyle = gr; gx.fillRect(0, 0, w, h);
     const glare = new THREE.Mesh(bulged(0.4), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-    glare.position.set(w / 2, -h / 2, 8 + 2); p.add(glare);
+    glare.position.set(w / 2, -h / 2, 12 + 1); p.add(glare);
     ticks.push(() => { pane.visible = glare.visible = A.look.glass !== false; });
   }
   const hinge = new THREE.Group(); hinge.position.copy(pos(r.x, r.y + h, 0)); hinge.rotation.x = TILT;
