@@ -193,7 +193,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-echo" style="grid-area:3/4/4/10;--n:6;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTER</h2></div>
     <div class="box" id="g-fe" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>FILTER ENVELOPE</h2></div>
-    <div class="ttl" style="grid-area:1/16/2/20"><span id="ttlw">FILTH</span></div>
+    <div class="ttl" style="grid-area:1/15/3/20"><span id="ttlw">FILTH</span></div>
     <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
     <div class="box" id="g-a" style="grid-area:3/13/4/20;--n:7;--m:1"><h2>AMPLIFIER</h2></div>
@@ -1662,7 +1662,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.70.0';
+const VERSION = '1.71.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
