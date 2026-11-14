@@ -226,7 +226,6 @@ function paintCtl(ctx, c) {
     for (let i = 0; i < n; i++) { const a = ang(i / (n - 1)); ctx.beginPath(); ctx.moveTo(cx + Math.sin(a) * (KR + 8.5), cy - Math.cos(a) * (KR + 8.5)); ctx.lineTo(cx + Math.sin(a) * (KR + 11), cy - Math.cos(a) * (KR + 11)); ctx.stroke(); }
     const g = ctx.createRadialGradient(cx, cy, KR, cx, cy, KR + 5); g.addColorStop(0, 'rgba(0,0,0,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, KR + 5, 0, 7); ctx.fill();
-    if (c.added) { ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6); ctx.setLineDash([]); }
   } else if (c.kind === 'sel') {
     const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 40;
     c.opts.forEach((o, i) => {
@@ -506,13 +505,19 @@ function paintLower(ctx) {
       text(ctx, e.textContent.toUpperCase(), left ? r.x : r.x + r.w / 2, r.y + r.h / 2, `600 ${fs(e)}px ${MONO}`, INK, left ? 'left' : 'center', .5); ctx.restore();
     } else text(ctx, e.textContent.replace(/ /g, ' ').trim(), r.x, r.y + r.h / 2, `600 ${fs(e)}px ${MONO}`, INK, 'left', .7);
   }
+  for (const m of low.querySelectorAll('.mknob')) {   // depth knobs: the groove of their value ring and a centre tick
+    const r = rel(m, low), cx = r.x + r.w / 2, cy = r.y + r.h / 2, R = (KR + 5.2) * 0.62;
+    ctx.globalAlpha = fade(m); ctx.strokeStyle = 'rgba(11,11,11,.55)'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2 + ang(0), -Math.PI / 2 + ang(1)); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(cx, cy - R - 3); ctx.lineTo(cx, cy - R - 6); ctx.stroke();
+  }
   ctx.globalAlpha = 1;
   for (const e of lowEls.ranges) { const r = rel(e, low); ctx.globalAlpha = fade(e); ctx.fillStyle = INK; ctx.fillRect(r.x, r.y + r.h / 2 - 2, r.w, 4); }
   ctx.globalAlpha = 1;
 }
 const lowSlab = slab(UW, LH, paintLower); lowSlab.userData.repaint(); lower.add(lowSlab);
 {
-  const sig = () => lowEls.texts.map((e) => e.textContent + (e.classList.contains('kept') ? '*' : '')).join('|') + lowEls.ranges.map(fade).join();
+  const sig = () => lowEls.texts.map((e) => e.textContent + (e.classList.contains('kept') ? '*' : '')).join('|') + lowEls.ranges.map(fade).join() + [...low.querySelectorAll('.mknob')].map(fade).join();
   let last = sig(), n = 0;
   ticks.push(() => { if (++n % 5) return; const s = sig(); if (s !== last) { last = s; lowSlab.userData.repaint(); } });
 }
@@ -531,6 +536,26 @@ for (const el of low.querySelectorAll('button')) {
   ticks.push(() => {
     const s = el.textContent + el.className; if (s !== last) { last = s; p.userData.redraw(draw); }
     if (++n % 5 === 0) { const f = fade(el); if (f !== lastF) { lastF = f; p.material = p.material.map((m) => m.clone()); fadeMat(p.material, f); p.castShadow = f > 0.5; renderer.shadowMap.needsUpdate = true; } }
+  });
+}
+// ENV DEPTH and LFO DEPTH: two small knobs in the sequencer (A.seqMods), bipolar, with a white
+// value ring from the centre like the panel's own knobs; they act on the knob being edited
+for (const c of A.seqMods || []) {
+  const r = rel(c.el, low), cx = r.x + r.w / 2, cy = r.y + r.h / 2, K = 0.62;
+  const g = new THREE.Group(); g.position.copy(pos(cx, cy, 0)); g.scale.setScalar(K);
+  const body = new THREE.Mesh(knobGeo, mat.knobMatt); body.castShadow = true; g.add(body, new THREE.Mesh(rimGeo, mat.knobRim), new THREE.Mesh(pointerGeo, mat.lit));
+  lower.add(g); body.userData.ctl = c; hits.push(body);
+  const arc = new THREE.Mesh(new THREE.BufferGeometry(), ringMat); arc.position.copy(pos(cx, cy, 0.4)); arc.scale.setScalar(K); lower.add(arc);
+  let last = null, lastF = 1, n = 0, mats = null;
+  ticks.push(() => {
+    const v = c.v; if (v !== last) {
+      last = v; g.rotation.z = -ang(toU(c, v));
+      const a0 = 0, a1 = ang(toU(c, v)), lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+      arc.geometry.dispose(); arc.geometry = new THREE.RingGeometry(KR + 3.4, KR + 7, 48, 1, Math.PI / 2 - hi, Math.max(0.0001, hi - lo)); arc.visible = hi - lo > 0.01;
+    }
+    if (++n % 5 === 0) {   // greyed while its source is off
+      const f = fade(c.el); if (f !== lastF) { lastF = f; if (!mats) { mats = []; for (const o of [...g.children, arc]) { o.material = o.material.clone(); mats.push(o.material); } } fadeMat(mats, f); body.castShadow = f > 0.5; renderer.shadowMap.needsUpdate = true; }
+    }
   });
 }
 // lists (which knob to sequence, saved presets)
