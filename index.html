@@ -117,7 +117,7 @@
   .f.nolab > span { display: none; }
   /* OPTIONS: a box that opens when FILTH is tapped */
   .ttl { cursor: pointer; }
-  #opts { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
+  #opts { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: none; }   /* no dimming: the colours show in place */
   #opts.open { display: flex; }
   #opts .win { position: relative; width: min(520px, 92vw); background: var(--pink); color: var(--ink); box-shadow: inset 0 0 0 3px var(--ink); padding: 30px 22px 10px; font-family: var(--mono); }
   #opts h2 { position: absolute; top: -12px; left: 14px; margin: 0; font: 400 18px/1 var(--display); letter-spacing: .03em; color: var(--paper); background: var(--ink); padding: 5px 10px 4px; }
@@ -1580,7 +1580,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.44.0';
+const VERSION = '1.44.1';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
