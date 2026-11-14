@@ -365,7 +365,19 @@ for (const c of CTL) {
 let title = null, titleU = null;
 {
   const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0;   // flat, raised plate
-  const p = plate(w, h, 8, () => {});   // a thin plate, so tipping the top panel up never lets it cover the AMPLIFIER name
+  const p = plate(w, h, 8, () => {});
+  // the CRT housing: like a tube's case, its four sides bow outward (the same barrel curve as
+  // the screen inside) and its edges are rounded; kept shallow, so tipping the top panel up
+  // never lets it cover the AMPLIFIER name
+  const BX = w * 0.035, BY = h * 0.07, BS = 3, BEZ = h * 0.06;          // side bow, top/bottom bow, edge round, bezel
+  const HX = w / 2 - BX - BS, HY = h / 2 - BY - BS;                        // half-size of the case before its bow
+  {
+    const sh = new THREE.Shape();
+    sh.moveTo(-HX, -HY); sh.quadraticCurveTo(0, -HY - 2 * BY, HX, -HY); sh.quadraticCurveTo(HX + 2 * BX, 0, HX, HY);
+    sh.quadraticCurveTo(0, HY + 2 * BY, -HX, HY); sh.quadraticCurveTo(-HX - 2 * BX, 0, -HX, -HY);
+    const hg = new THREE.ExtrudeGeometry(sh, { depth: 6, bevelEnabled: true, bevelThickness: 3, bevelSize: BS, bevelSegments: 4, curveSegments: 24 });
+    hg.translate(w / 2, -h / 2, 3); p.geometry.dispose(); p.geometry = hg;     // front face at z 12
+  }
   const layer = (blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
     // FILTH stretched to fill its box: sized by the letters' own outline, a margin all round
@@ -376,12 +388,14 @@ let title = null, titleU = null;
     ctx.fillStyle = PAPER; ctx.fillText('FILTH', -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
-  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) } };
+  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
+    // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
+    scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
   const sm = new THREE.ShaderMaterial({
     uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; varying vec2 vUv;
+      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -390,7 +404,12 @@ let title = null, titleU = null;
       // lettering with a constant soft bloom that brightens with the sound, scanlines and
       // a dark vignette; the wobble still bends the letters
       void main() {
-        vec2 cuv = vUv * 2. - 1.;
+        vec2 q = vUv * 2. - 1.;
+        // the screen is the bowed shape inside the bezel; its edge falls softly to black
+        float ex = (scr.x + scr.z * (1. - q.y * q.y) - abs(q.x)) * size.x * .5, ey = (scr.y + scr.w * (1. - q.x * q.x) - abs(q.y)) * size.y * .5;
+        float edge = smoothstep(0., 10., min(ex, ey));
+        if (edge <= 0.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
+        vec2 cuv = q / vec2(scr.x + scr.z, scr.y + scr.w);     // the picture fills the screen
         cuv *= 1. + 0.07 * dot(cuv, cuv);                     // barrel: the glass bulges
         vec2 uv0 = cuv * .5 + .5;
         if (uv0.x < 0. || uv0.x > 1. || uv0.y < 0. || uv0.y > 1.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
@@ -402,10 +421,10 @@ let title = null, titleU = null;
         float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
         float vig = smoothstep(1.35, .35, length(cuv));
         vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
-        gl_FragColor = vec4(c, 1.);
+        gl_FragColor = vec4(c * edge, 1.);
       }`,
   });
-  const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 8.15);
+  const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 12.15);
   p.add(new THREE.Mesh(fg, sm));
   // a glass cover over the plate: a clear, glossy pane that catches the side lights and the
   // room, plus a faint diagonal glare; the lettering shows straight through (GLASS in OPTIONS)
@@ -414,17 +433,22 @@ let title = null, titleU = null;
     // the glass bulges gently like a CRT face: highest in the middle, falling to the rim,
     // so its reflections and highlights slide round the curve
     const bulged = (lift) => {
-      const g = new THREE.PlaneGeometry(w - 6, h - 6, 40, 24), a = g.attributes.position;
-      for (let i = 0; i < a.count; i++) { const nx = a.getX(i) / ((w - 6) / 2), ny = a.getY(i) / ((h - 6) / 2); a.setZ(i, lift + 9 * (1 - nx * nx) * (1 - ny * ny)); }
+      // the pane covers the screen and follows its bow: each row and column pushed out like the case
+      const gw = 2 * (HX - BEZ / 2), gh = 2 * (HY - BEZ / 2), g = new THREE.PlaneGeometry(gw, gh, 40, 24), a = g.attributes.position;
+      for (let i = 0; i < a.count; i++) {
+        const nx = a.getX(i) / (gw / 2), ny = a.getY(i) / (gh / 2);
+        a.setX(i, a.getX(i) * (1 + (BX / (gw / 2)) * (1 - ny * ny))); a.setY(i, a.getY(i) * (1 + (BY / (gh / 2)) * (1 - nx * nx)));
+        a.setZ(i, lift + 9 * (1 - nx * nx) * (1 - ny * ny));
+      }
       g.computeVertexNormals(); return g;
     };
-    const pane = new THREE.Mesh(bulged(0), gm); pane.position.set(w / 2, -h / 2, 8 + 2); p.add(pane);
+    const pane = new THREE.Mesh(bulged(0), gm); pane.position.set(w / 2, -h / 2, 12 + 1); p.add(pane);
     const [gc, gx] = canvas(w, h), gr = gx.createLinearGradient(0, 0, w, h);
     gr.addColorStop(0.18, 'rgba(255,255,255,0)'); gr.addColorStop(0.3, 'rgba(255,255,255,.16)'); gr.addColorStop(0.36, 'rgba(255,255,255,.05)');
     gr.addColorStop(0.42, 'rgba(255,255,255,.12)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)');
     gx.fillStyle = gr; gx.fillRect(0, 0, w, h);
     const glare = new THREE.Mesh(bulged(0.4), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-    glare.position.set(w / 2, -h / 2, 8 + 2); p.add(glare);
+    glare.position.set(w / 2, -h / 2, 12 + 1); p.add(glare);
     ticks.push(() => { pane.visible = glare.visible = A.look.glass !== false; });
   }
   const hinge = new THREE.Group(); hinge.position.copy(pos(r.x, r.y + h, 0)); hinge.rotation.x = TILT;
