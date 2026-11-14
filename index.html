@@ -6,11 +6,11 @@
 <title>FILTH — Polivoks circuit model</title>
 <meta name="theme-color" content="#fc0fc0">
 <script>
-// two views of the same synth: the flat 2D panel or the 3D panel (view3d.js).
-// ?view=3d / ?view=2d picks one and is remembered.
+// two views of the same synth: the 3D panel (view3d.js, the main view) or
+// the flat 2D panel.  ?view=2d / ?view=3d picks one and is remembered.
 (() => { let v = new URLSearchParams(location.search).get('view');
   try { if (v) localStorage.setItem('polivoks-view', v); else v = localStorage.getItem('polivoks-view'); } catch (e) {}
-  if (v === '3d') document.documentElement.classList.add('v3d'); })();
+  if (v !== '2d') document.documentElement.classList.add('v3d'); })();
 </script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
@@ -1531,7 +1531,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.35.1';
+const VERSION = '1.36.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
