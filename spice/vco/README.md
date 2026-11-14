@@ -161,3 +161,11 @@ ramp crosses its threshold (33 µs at 450 Hz in SPICE). At the top, the narrowes
 pulses get too short for A10 to reach full swing and fade out. In the JS they
 fade out about an octave earlier than in SPICE, because the 4× oversampled step
 (5.2 µs) blurs the bottom of the ramp.
+
+With the switch on the narrow pulse, A10 (+) already sits at ≈ −2.85 V, and
+the full pot on top of that put the threshold below the ramp, so the output
+went silent past about 40 % on the knob (v1.20.0). From v1.22.0 a second wafer on
+the switch swaps the 56k for 560k in that position (chosen, **EST** as wiring):
+the knob narrows 13 → 7 % at 450 Hz and ends on the same −3.3 V floor.
+`node test.js` renders the whole knob range and fails if the RMS drops below
+0.2 of its knob-0 level.

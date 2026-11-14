@@ -236,6 +236,12 @@ class ExpoPair {
 //  not from the Polivoks.  Checked in ngspice (spice/vco/pw.cir): 50 → 8 %
 //  duty at 450 Hz, 47 → 5 % at 3.6 kHz, pitch unchanged; this model is
 //  within 1 % of those (spice/vco/pw_compare.txt).
+//  The narrow-pulse switch position already holds A10 (+) at ≈ −2.85 V, and
+//  adding the full pot on top of that put the threshold below the bottom of
+//  the ramp: the pulse stopped (silence from about 40 % on the knob).  So a
+//  second wafer on the switch swaps the 56k for 560k in that position: the
+//  knob still narrows the pulse (13 → 7 % at 450 Hz) and its far end lands
+//  on the same −3.3 V floor as in the square position.
 // ============================================================================
 class VCO {
   constructor(h, seed) {
@@ -734,7 +740,7 @@ function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; 
 // ±12.5 V into each VCO's summing node through 833k, i.e. ±15 µA = ±1 octave.
 function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
 // "Pulse width" (an addition): A10 (+) volts for the pot at a (see VCO above)
-function vpwOf(a) { return -12.5 * a * 20e3 / (76e3 + 100e3 * a * (1 - a)); }
+function vpwOf(a, narrow) { return -12.5 * a * 20e3 / ((narrow ? 580e3 : 76e3) + 100e3 * a * (1 - a)); }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
 
 // ============================================================================
@@ -837,7 +843,7 @@ class PolivoksEngine {
       const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.narrow = p.o1wave === 3; vco2.narrow = p.o2wave === 3;
-      vco1.vpw = vpwOf(ps.o1pw); vco2.vpw = vpwOf(ps.o2pw);
+      vco1.vpw = vpwOf(ps.o1pw, vco1.narrow); vco2.vpw = vpwOf(ps.o2pw, vco2.narrow);
       const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
       const fmk = fmOctPerVolt(ps.o1fm) * LN2;      // nepers per volt of VCO II triangle
 
@@ -1510,7 +1516,7 @@ document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 new ResizeObserver(() => { if (WOB.on) wobSheets(); }).observe(document.getElementById('low'));   // the lower sheet grows as its controls are built
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.21.0';
+const VERSION = '1.22.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
