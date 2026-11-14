@@ -717,6 +717,7 @@ class PolivoksEngine {
 
       // envelopes
       const ef = this.egF.step(this.gate, potA(p.fA, 200, 1e6), potA(p.fD, 1e3, 2e6), ps.fS, potA(p.fR, 1e3, 2e6), p.fEgMode >= 0.5);
+      this.envN = ef;                             // filter envelope 0…1, read by the knob ENV lanes (seq.js)
       const ea = this.egA.step(this.gate, potA(p.aA, 200, 1e6), potA(p.aD, 1e3, 2e6), ps.aS, potA(p.aR, 1e3, 2e6), p.aEgMode >= 0.5);
 
       // slow thermal drift of each expo pair (±0.3 K random walk)

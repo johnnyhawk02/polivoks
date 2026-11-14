@@ -12,7 +12,8 @@ class KnobSeq {
     this.sr = sr; this.e = engine; this.report = report || null;
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
-    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16] }; drift = % faster (+) or slower (−) than the clock
+    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth }; drift = % faster (+) or slower (−) than the clock
+                         // ENV / LFO lanes: eDepth × the filter envelope (0…1) and lDepth × the modulator (±1), each ± of the knob's travel
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;
@@ -24,12 +25,13 @@ class KnobSeq {
     this.repT = 0;
   }
   extActive() { return this.extT >= 0 && this.time - this.extT < 0.5; }
-  param(id, v) { this.base[id] = v; const s = this.seq[id]; if (!(s && s.on)) this.e.setParam(id, v); }
+  param(id, v) { this.base[id] = v; const s = this.seq[id]; if (!KnobSeq.act(s)) this.e.setParam(id, v); }
+  static act(s) { return !!(s && (s.on || s.eOn || s.lOn)); }   // the knob is moved by any of its three lanes
   setSeq(id, s, range) {
-    const was = this.seq[id] && this.seq[id].on;
+    const was = KnobSeq.act(this.seq[id]), wasOn = this.seq[id] && this.seq[id].on;
     this.seq[id] = s; if (range) this.range[id] = range;
-    if (s.on && !was) { this.cur[id] = 0; delete this.ph[id]; }
-    if (!s.on && was && id in this.base) { this.e.setParam(id, this.base[id]); delete this.val[id]; }
+    if (s.on && !wasOn) { this.cur[id] = 0; delete this.ph[id]; }
+    if (!KnobSeq.act(s) && was && id in this.base) { this.e.setParam(id, this.base[id]); delete this.val[id]; }
   }
   setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
   // MIDI clock: each pulse is 1/6 of a 16th; Start goes back to step 1
@@ -54,7 +56,9 @@ class KnobSeq {
     const dpos = this.pos - this.prevPos; this.prevPos = this.pos;
     const ph = {};
     for (const id in this.seq) {
-      const s = this.seq[id]; if (!s.on) continue; any = true;
+      const s = this.seq[id]; if (!KnobSeq.act(s)) continue; any = true;
+      let c = 0;
+      if (s.on) {
       // DRIFT: 0 plays exactly to the clock; otherwise the sequence keeps its own phase that
       // runs (1 + drift / 100) times as fast as the clock, so it slides against the grid
       const dr = s.drift || 0;
@@ -63,9 +67,12 @@ class KnobSeq {
       if (dr) ph[id] = Math.floor(this.ph[id]);
       const step = Math.floor(this.ph[id] / s.div) % s.len;
       const k = s.slew > 0 ? 1 - Math.exp(-dt / s.slew) : 1;
-      const c = this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k;
+      c = (this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k) * s.depth;
+      }
+      if (s.eOn) c += (s.eDepth || 0) * (this.e.envN || 0);
+      if (s.lOn) c += (s.lDepth || 0) * Math.max(-1, Math.min(1, (this.e.lfoV || 0) / 1.43));   // triangle swings ±1.43 V
       const r = this.range[id] || [0, 1], b = id in this.base ? this.base[id] : r[0];
-      const v = Math.max(r[0], Math.min(r[1], b + s.depth * c * (r[1] - r[0])));
+      const v = Math.max(r[0], Math.min(r[1], b + c * (r[1] - r[0])));
       if (v !== this.val[id]) { this.val[id] = v; this.e.setParam(id, v); }
     }
     this.repT += dt;
