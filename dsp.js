@@ -670,7 +670,7 @@ class PolivoksEngine {
       this.lfo.C = slow ? 160e-6 : 10e-6;
       const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3);
       const lfo = this.lfo.step(lfoR, p.lfoMode | 0, this.nzAvg);
-      this.lfoV = lfo;                            // last modulator output (V), read by the page for the edge wobble
+      this.lfoV = lfo;                            // last modulator output (V), read by the page for the title wobble
 
       // keyboard board: gate, track-and-hold, voice 2, glide (sheet 3)
       const kb = this.kb;
