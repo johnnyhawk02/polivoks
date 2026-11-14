@@ -1589,7 +1589,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.49.0';
+const VERSION = '1.49.1';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1928,7 +1928,7 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addE
 // sequencer), the panel colour, and the 3D view's three lights (left, right,
 // ambient), each a colour and a brightness.
 const LOOK_STORE = 'polivoks-look';
-const look = { hue: 316 / 360, sat: 0.97, lit: 0.52, finish: 'matt', text: 1, angle: 10, angleLow: 0, parallax: 0, lights: { left: { c: '#3d8bff', i: 1 }, right: { c: '#ffa020', i: 1 }, amb: { c: '#ffffff', i: 1 } } };
+const look = { hue: 252 / 360, sat: 0.07, lit: 0.8, finish: 'matt', text: 0.42, angle: 5, angleLow: 0, parallax: 0.25, lights: { left: { c: '#c2e34a', i: 1.42 }, right: { c: '#d3f5d6', i: 1.75 }, amb: { c: '#ffffff', i: 1.64 } } };   // Johnny's look, 14 Nov
 try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'angle', 'angleLow', 'parallax']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
 const lookCss = () => `hsl(${Math.round(look.hue * 360)} ${Math.round(look.sat * 100)}% ${Math.round(look.lit * 100)}%)`;
 function applyLook() {
@@ -1959,7 +1959,7 @@ function drawOpts() {
   optAngle.value = look.angle; optsEl.querySelector('#opt-anglev').textContent = look.angle + '°';
   // 0 = lettering lit by the lights like the rest of the panel, 100 % = lit up on its own
   optText.value = Math.round(look.text * 100); optsEl.querySelector('#opt-textv').textContent = look.text < 0.01 ? 'LIGHTS' : look.text > 0.99 ? 'LIT UP' : Math.round(look.text * 100) + '%';
-  optHue.value = Math.round(look.hue * 360) % 360; optsEl.querySelector('#opt-huev').textContent = Math.abs(look.hue * 360 - 316) < 3 ? 'PINK' : Math.round(look.hue * 360) + '°';
+  optHue.value = Math.round(look.hue * 360) % 360; optsEl.querySelector('#opt-huev').textContent =  Math.round(look.hue * 360) + '°';
   for (const k in look.lights) {
     const l = look.lights[k];
     optsEl.querySelector(`[data-l="${k}"]`).value = l.c; optsEl.querySelector(`[data-li="${k}"]`).value = Math.round(l.i * 100);
