@@ -112,11 +112,12 @@ function driveAmbient() {
   document.body.style.background = `radial-gradient(120% 90% at 50% 40%, #${c.getHexString()} 0%, #0b0b0b 75%)`;
 }
 const side = (color, x) => {
-  const l = new THREE.SpotLight(color, 0.6, 0, 0.62, 1, 0);
-  l.position.set(x, 160, 700); l.castShadow = true;
+  // a wide, soft beam from further out, so each lamp washes across most of the panel
+  const l = new THREE.SpotLight(color, 0.6, 0, 1.05, 1, 0);
+  l.position.set(x * 1.25, 160, 900); l.castShadow = true;
   l.shadow.mapSize.set(2048, 2048); l.shadow.bias = -0.0004; l.shadow.normalBias = 0.6; l.shadow.radius = 6;
   l.shadow.camera.near = 200; l.shadow.camera.far = 5000;
-  l.target.position.set(Math.sign(x) * 380, -40, 0); scene.add(l, l.target); return l;
+  l.target.position.set(Math.sign(x) * 180, -40, 0); scene.add(l, l.target); return l;
 };
 const lamps = [side(0x3d8bff, -1300), side(0xffa020, 1300)];
 const LAMP = [{ base: new THREE.Color(0x2f7dff), hi: new THREE.Color(0xbfe4ff), b: 0.6, t: 0 },
