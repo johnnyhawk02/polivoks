@@ -468,7 +468,7 @@ let title = null, titleU = null;
 // CRT COLOUR: the phosphor of the FILTH screen
 const PHOSPHOR = { orange: [1, .5, .1], amber: [1, .72, .15], green: [.3, 1, .35], white: [.88, .93, 1], blue: [.3, .6, 1] };
 function driveTitle() {
-  const P = PHOSPHOR[A.look.crt] || PHOSPHOR.orange; titleU.ph.value.setRGB(P[0], P[1], P[2]);
+  const P = PHOSPHOR[A.look.crt] || PHOSPHOR.white; titleU.ph.value.setRGB(P[0], P[1], P[2]);
   const W = A.WOB, v = Math.max(-1, Math.min(1, A.lfoV / W.vmax)) * Math.min(1, A.outRms / W.ref), a = W.on ? W.A * v : 0;
   // the plate is much taller than the 2D title (110 px), so the depth scales with it, and a little more
   titleU.amt.value = Math.abs(a) < 0.05 ? 0 : a * 1.6 * titleU.size.value.y / 110;

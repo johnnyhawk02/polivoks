@@ -1701,7 +1701,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.78.0';
+const VERSION = '1.79.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2076,7 +2076,7 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addE
 // sequencer), the panel colour, and the 3D view's three lights (left, right,
 // ambient), each a colour and a brightness.
 const LOOK_STORE = 'polivoks-look';
-const look = { hue: 87 / 360, sat: 1, lit: 0.9, finish: 'plastic', text: 0.81, glass: true, crt: 'orange', angle: 0, angleLow: 0, lens: 0, lights: { left: { c: '#ffffff', i: 2 }, right: { c: '#d6d6d6', i: 1.91 }, amb: { c: '#ffffff', i: 2 } } };   // Johnny's defaults, 14 Nov (evening); saved settings still win
+const look = { hue: 87 / 360, sat: 1, lit: 0.9, finish: 'plastic', text: 0.81, glass: true, crt: 'white', angle: 0, angleLow: 0, lens: 0, lights: { left: { c: '#ffffff', i: 2 }, right: { c: '#d6d6d6', i: 1.91 }, amb: { c: '#ffffff', i: 2 } } };   // Johnny's defaults, 14 Nov (late); saved settings still win
 try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'glass', 'crt', 'angle', 'angleLow', 'lens']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
 const lookCss = () => `hsl(${Math.round(look.hue * 360)} ${Math.round(look.sat * 100)}% ${Math.round(look.lit * 100)}%)`;
 function applyLook() {
@@ -2086,7 +2086,7 @@ function applyLook() {
 // KEY PRIORITY: LOW is the original keyboard (lowest key on VCO I, highest on
 // VCO II in DUO); LAST plays the newest key, or the two newest in DUO
 const PRIO_STORE = 'polivoks-prio';
-let keyPrio = 'low'; try { if (localStorage.getItem(PRIO_STORE) === 'last') keyPrio = 'last'; } catch (e) {}
+let keyPrio = 'last'; try { if (localStorage.getItem(PRIO_STORE) === 'low') keyPrio = 'low'; } catch (e) {}
 // FM MOD: ORIGINAL is the circuit as drawn (gentle FM, ±4.5 semitones at
 // full); MOD is a hardware mod (R64 jumpered, R63* 47k), about ±2.5 octaves
 const FMMOD_STORE = 'polivoks-fmmod';
@@ -2119,7 +2119,7 @@ function drawOpts() {
   optSat.value = Math.round(look.sat * 100); optsEl.querySelector('#opt-satv').textContent = Math.round(look.sat * 100) + '%';
   optLit.value = Math.round(look.lit * 100); optsEl.querySelector('#opt-litv').textContent = Math.round(look.lit * 100) + '%';
   optsEl.querySelectorAll('[data-f]').forEach((b) => b.classList.toggle('lit', b.dataset.f === look.finish));
-  optsEl.querySelectorAll('[data-crt]').forEach((b) => b.classList.toggle('lit', b.dataset.crt === (look.crt || 'orange')));
+  optsEl.querySelectorAll('[data-crt]').forEach((b) => b.classList.toggle('lit', b.dataset.crt === (look.crt || 'white')));
   optsEl.querySelectorAll('[data-g]').forEach((b) => b.classList.toggle('lit', (b.dataset.g === '1') === (look.glass !== false)));
   optsEl.querySelectorAll('[data-k]').forEach((b) => b.classList.toggle('lit', b.dataset.k === keyPrio));
   optsEl.querySelectorAll('[data-m]').forEach((b) => b.classList.toggle('lit', (b.dataset.m === 'mod') === fmMod));
