@@ -71,6 +71,7 @@ console.log('--- keyboard board (sheet 3) ---');
 console.log('--- VCO summer (sheet 5), octaves; SPICE in spice/vco/summer.txt ---');
 console.log('mod bus +1.43 V, pot 0.1/0.25/0.5/0.75/1:', [0.1, 0.25, 0.5, 0.75, 1].map(a => modOct(a, 1.43).toFixed(4)).join(' '));
 console.log('FM per volt, pot 0.25/0.5/1:', [0.25, 0.5, 1].map(a => fmOctPerVolt(a).toFixed(4)).join(' '), ' detune -1/0/+1:', [-1, 0, 1].map(d => detuneOct(d).toFixed(4)).join(' '));
+console.log('FM MOD per volt, pot 0.25/0.5/1:', [0.25, 0.5, 1].map(a => fmOctPerVolt(a, true).toFixed(4)).join(' '), '(R64 jumpered, R63* 47k; same network as the LFO pot)');
 console.log('--- pitch knobs (±1 octave, an addition) ---');
 console.log('pitchOct -1/-0.5/0/0.5/1:', [-1, -0.5, 0, 0.5, 1].map(d => pitchOct(d).toFixed(4)).join(' '));
 for (const [id, mix] of [['o1pitch', { mix1: 0.6, mix2: 0 }], ['o2pitch', { mix1: 0, mix2: 0.6, o2wave: 1 }]])
