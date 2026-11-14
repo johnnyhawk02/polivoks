@@ -68,12 +68,13 @@ const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
 const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 1.0); scene.add(amb);
 const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
-// The colour of the whole view comes from the two VCOs' wave shapes, mixed by
-// their MIXER levels: triangle hot magenta, sawtooth electric blue, pulse
-// orange through gold to yellow as its PULSE W. knob turns up.  It lights
-// the panel, recolours its pink, and fills the room behind it.
-const COL = { tri: new THREE.Color(0xff1fa8), saw: new THREE.Color(0x1f6bff),
-  pulse: [new THREE.Color(0xff6200), new THREE.Color(0xffa000), new THREE.Color(0xffd000), new THREE.Color(0xfff23a)] };
+// The colour of the whole view is a hue on the colour wheel, always fully
+// saturated.  Each VCO has one: its wave shape picks the base (triangle
+// magenta, sawtooth blue, pulse orange), PULSE W. pushes a pulse on through
+// gold to yellow, and RANGE nudges it a little.  The two hues are blended
+// around the wheel by the MIXER levels (blue and orange meet in green, not
+// grey), and the filter CUTOFF swings the result as you play.
+const HUE = [0.88, 0.57, 0.10];
 const ambCol = new THREE.Color(0xffffff), ambWant = new THREE.Color(); let bgHex = '';
 // the pink of every face is swapped for this colour in the shader (black ink and white stay as they are)
 const tintMats = [], TINT = { uTint: { value: new THREE.Color(0xff1fa8) }, uAmt: { value: 0.9 } };
@@ -88,19 +89,20 @@ function tintable(m) {
 }
 const byId = (id) => A.S.find((c) => c.id === id);
 const AMB = { w1: byId('o1wave'), w2: byId('o2wave'), m1: byId('mix1'), m2: byId('mix2'), p1: byId('o1pw'), p2: byId('o2pw') };
-const c1 = new THREE.Color(), c2 = new THREE.Color();
-function waveCol(out, w, pw) {
+const cut = byId('cutoff'), rg1 = byId('o1range'), rg2 = byId('o2range');
+function hueOf(w, pw, rg) {
   w = Math.min(2, w | 0);
-  if (w === 0) return out.copy(COL.tri);
-  if (w === 1) return out.copy(COL.saw);
-  const P = COL.pulse, x = Math.max(0, Math.min(1, pw || 0)) * (P.length - 1), i = Math.min(P.length - 2, Math.floor(x));
-  return out.copy(P[i]).lerp(P[i + 1], x - i);
+  return HUE[w] + (w === 2 ? 0.12 * Math.max(0, Math.min(1, pw || 0)) : 0) + 0.025 * ((rg == null ? 2 : rg) - 2);
 }
 function driveAmbient() {
   let a = AMB.m1 ? AMB.m1.v : 0.5, b = AMB.m2 ? AMB.m2.v : 0.5;
   if (a + b < 0.02) a = b = 0.5;                 // both off: an even blend
-  waveCol(c1, AMB.w1 ? AMB.w1.v : 1, AMB.p1 && AMB.p1.v); waveCol(c2, AMB.w2 ? AMB.w2.v : 2, AMB.p2 && AMB.p2.v);
-  ambWant.copy(c1).multiplyScalar(a / (a + b)).add(c2.clone().multiplyScalar(b / (a + b)));
+  const h1 = hueOf(AMB.w1 ? AMB.w1.v : 1, AMB.p1 && AMB.p1.v, rg1 && rg1.v), h2 = hueOf(AMB.w2 ? AMB.w2.v : 2, AMB.p2 && AMB.p2.v, rg2 && rg2.v);
+  // weighted mean of the two angles on the wheel
+  const x = a * Math.cos(2 * Math.PI * h1) + b * Math.cos(2 * Math.PI * h2), y = a * Math.sin(2 * Math.PI * h1) + b * Math.sin(2 * Math.PI * h2);
+  let h = Math.atan2(y, x) / (2 * Math.PI) + 0.3 * ((cut ? cut.v : 0.5) - 0.5);
+  h = ((h % 1) + 1) % 1;
+  ambWant.setHSL(h, 1, 0.5);
   ambCol.lerp(ambWant, 0.2);                    // a short fade when a wave changes
   amb.color.copy(ambCol); amb.groundColor.copy(ambCol).multiplyScalar(0.25); front.color.copy(ambCol);
   TINT.uTint.value.copy(ambCol);
