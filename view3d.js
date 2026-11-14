@@ -70,13 +70,19 @@ const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 1.0); scene.add(amb);
 const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
 let bgHex = '';
 // the pink of every face is swapped for this colour in the shader (black ink and white stay as they are)
-const tintMats = [], TINT = { uTint: { value: new THREE.Color(0xff1fa8) }, uAmt: { value: 0.9 } };
+const tintMats = [], TINT = { uTint: { value: new THREE.Color(0xff1fa8) }, uAmt: { value: 0.9 }, uInk: { value: new THREE.Color(0, 0, 0) }, uDark: { value: 0 } };
 function tintable(m) {
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTint = TINT.uTint; sh.uniforms.uAmt = TINT.uAmt;
-    sh.fragmentShader = 'uniform vec3 uTint; uniform float uAmt;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+    sh.uniforms.uTint = TINT.uTint; sh.uniforms.uAmt = TINT.uAmt; sh.uniforms.uInk = TINT.uInk; sh.uniforms.uDark = TINT.uDark;
+    // lettering and rules (the dark parts of the painted face) are drawn last in pure black, or
+    // white on a dark panel, so neither the panel colour nor the coloured lights ever tint them
+    sh.fragmentShader = 'uniform vec3 uTint; uniform float uAmt; uniform vec3 uInk; uniform float uDark;\n' + sh.fragmentShader
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      float inkK = clamp(1.0 - diffuseColor.r * 1.1, 0., 1.);
+      float paperK = clamp((min(diffuseColor.r, diffuseColor.g) - 0.6) * 2.5, 0., 1.) * uDark;   // white parts turn black on a dark panel
       { float pinkness = clamp((diffuseColor.r - diffuseColor.g) * 1.05, 0., 1.);
-        diffuseColor.rgb = mix(diffuseColor.rgb, uTint * (0.2 + 0.4 * diffuseColor.r), uAmt * pinkness); }`);
+        diffuseColor.rgb = mix(diffuseColor.rgb, uTint * (0.2 + 0.4 * diffuseColor.r), uAmt * pinkness); }`)
+      .replace('#include <dithering_fragment>', 'gl_FragColor.rgb = mix(mix(gl_FragColor.rgb, uInk, inkK), vec3(0.), paperK);\n#include <dithering_fragment>');
   };
   tintMats.push(m); return m;
 }
@@ -98,6 +104,7 @@ function driveAmbient() {
   amb.color.set(L.amb.c); amb.groundColor.copy(amb.color).multiplyScalar(0.25); amb.intensity = 0.45 * L.amb.i;
   front.color.set(L.amb.c); front.intensity = 0.35 * L.amb.i;
   panelCol.setHSL(A.look.hue, A.look.sat, A.look.lit); TINT.uTint.value.copy(panelCol);
+  const dark = A.look.lit < 0.22; TINT.uInk.value.setScalar(dark ? 1 : 0); TINT.uDark.value = dark ? 1 : 0;   // white lettering on a dark panel, and its black labels turn white
   // FINISH: how the panel faces take the light
   const F = FINISH[A.look.finish] || FINISH.matt;
   for (const m of tintMats) { m.roughness = F.r; m.metalness = F.m; m.envMapIntensity = F.e; const rm = F.brushed ? brushed : null; if (m.roughnessMap !== rm) { m.roughnessMap = rm; m.needsUpdate = true; } }
