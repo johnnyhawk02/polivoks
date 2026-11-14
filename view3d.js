@@ -437,7 +437,7 @@ for (const el of low.querySelectorAll('button')) {
   if (el.closest('[hidden]')) continue;
   const r = rel(el, low); if (!r.w) continue;
   const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, el.classList.contains('lit') ? PINK : PAPER);
-  const p = plate(r.w, r.h, 6, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);
+  const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
   p.userData.btn = el; hits.push(p);
   let last = el.textContent + el.className, lastF = 1, n = 0;
   ticks.push(() => {
@@ -450,7 +450,7 @@ for (const el of low.querySelectorAll('select')) {
   const r = rel(el, low);
   const label = () => { const o = el.selectedOptions[0]; return (o ? o.textContent : '').toUpperCase() + ' ▾'; };
   const draw = (ctx, w, h) => { ctx.save(); ctx.beginPath(); ctx.rect(4, 0, w - 8, h); ctx.clip(); text(ctx, label(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, PAPER); ctx.restore(); };
-  const p = plate(r.w, r.h, 6, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);
+  const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
   p.userData.sel = el; hits.push(p);
   let last = label();
   ticks.push(() => { const s = label(); if (s !== last) { last = s; p.userData.redraw(draw); } });
@@ -563,7 +563,17 @@ function onLower(e) {
   const p = ray.ray.intersectPlane(plane, new THREE.Vector3()); return p ? lower.worldToLocal(p) : null;
 }
 let grab = null;
-const pressed = (o) => { o.position.z = -3; setTimeout(() => { o.position.z = 0; }, 120); };
+// a key goes down flush with the panel and darkens while it is held, and springs back on release
+let held = null;
+const pressed = (o) => {
+  release3d(); held = o; o.position.z = -8; o.material[4].color.setScalar(0.6); renderer.shadowMap.needsUpdate = true;
+  held.userData.t0 = performance.now();
+};
+function release3d() {
+  if (!held) return; const o = held; held = null;
+  // stay down at least a moment, so a quick tap is still seen
+  setTimeout(() => { o.position.z = 0; o.material[4].color.setScalar(1); renderer.shadowMap.needsUpdate = true; }, Math.max(0, 90 - (performance.now() - o.userData.t0)));
+}
 cv.addEventListener('pointerdown', (e) => {
   const o = pick(e); grab = null;
   if (!o) return;
@@ -599,9 +609,9 @@ function release() {
     if (c.kind === 'sw') c.set(c.v ? 0 : 1);
     else if (c.kind === 'sel') c.set((c.v + 1) % c.opts.length);
   }
-  grab = null; paint = null;
+  release3d(); grab = null; paint = null;
 }
-cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release); addEventListener('pointerup', release3d);
 cv.addEventListener('contextmenu', (e) => e.preventDefault());
 cv.addEventListener('dblclick', (e) => { const o = pick(e); if (o && o.userData.ctl && o.userData.ctl.kind === 'knob') o.userData.ctl.set(o.userData.ctl.def); });
 
