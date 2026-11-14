@@ -611,6 +611,19 @@ function fmOctPerVolt(a, mod) {
 function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
 // "Pulse width" (an addition): A10 (+) volts for the pot at a (see VCO above)
 function vpwOf(a) { return -12.5 * a * 20e3 / (76e3 + 100e3 * a * (1 - a)); }
+// Pitch bend and mod wheel (MIDI, additions: the Polivoks has neither).
+//  Bend: a 10k bend pot across ±5 V (−5 V = full up), wiper through Rb into
+//  each VCO's summing node, beside the key CV.  Rb sets the range:
+//  Rb = 5 V / (st/12 · 15 µA), 2.0 MΩ for ±2 semitones (a switched set of
+//  resistors, picked in OPTIONS).  Chosen values, not from any Polivoks.
+//  Mod wheel: a second "Модуляция" pot (100k) on the modulation bus, wiper
+//  through 470k (chosen, EST) into both VCOs' summing nodes, so it adds to
+//  the panel's VCO MODULATION knobs: full wheel ≈ ±2.4 semitones on the
+//  triangle (bus ±1.43 V).  Each CV goes through a 5 ms RC (EST) that
+//  also smooths MIDI's steps.
+const bendR = (st) => 5 / (st / 12 * I_OCT);
+function bendOct(b, st) { const ad = (1 - b) / 2, v = -5 + 10 * ad, rth = 10e3 * ad * (1 - ad); return -(v / (bendR(st) + rth)) / I_OCT; }
+function wheelOct(a, v) { return -(a * v) / (470e3 + 100e3 * a * (1 - a)) / I_OCT; }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
 
 // ============================================================================
@@ -650,6 +663,7 @@ class PolivoksEngine {
     this.hpX = 0; this.hpY = 0; this.vcaHpX = 0; this.vcaHpY = 0;
     this.lastVal = 0;
     this.powerLevel = 0;
+    this.bend = 0; this.bendS = 0; this.modw = 0; this.modwS = 0; this.bendSt = 2;
     // decimation FIR (Blackman windowed sinc)
     const N = 48, fc = 0.5 / this.OS * 0.92; this.firN = N;
     this.fir = new Float64Array(N); let sum = 0;
@@ -672,12 +686,15 @@ class PolivoksEngine {
   allOff() { this.kb.held.length = 0; }
   setPrio(last) { this.kb.last = !!last; }
   setFmMod(on) { this.fmMod = !!on; }        // FM MOD (OPTIONS), off = as drawn
+  setBend(v) { this.bend = Math.max(-1, Math.min(1, +v || 0)); }        // MIDI pitch bend, −1 … +1
+  setModWheel(v) { this.modw = Math.max(0, Math.min(1, +v || 0)); }     // MIDI CC1, 0 … 1
+  setBendRange(st) { this.bendSt = Math.max(1, Math.min(24, +st || 2)); } // semitones (OPTIONS)
   get held() { return this.kb.held; }
 
   render(out, n) {
     const p = this.p, ps = this.ps, OS = this.OS, ho = this.ho, hb = this.hb;
     const vco1 = this.vco1, vco2 = this.vco2, vcf = this.vcf, rng = this.rng, fir = this.fir, N = this.firN;
-    const sm = 1 - Math.exp(-hb / 0.012);
+    const sm = 1 - Math.exp(-hb / 0.012), smW = 1 - Math.exp(-hb / 0.005);
     const rangeOct = [-2, -1, 0, 1, 2];
     for (let s = 0; s < n; s++) {
       for (let j = 0; j < SMOOTHED.length; j++) { const k = SMOOTHED[j]; ps[k] += (p[k] - ps[k]) * sm; }
@@ -708,9 +725,12 @@ class PolivoksEngine {
 
       // pitch CVs (octaves relative to A4 at 8')
       const tune = ps.tune * 2 / 12;
+      //   pitch bend and mod wheel (MIDI, additions, see bendOct above)
+      this.bendS += (this.bend - this.bendS) * smW; this.modwS += (this.modw - this.modwS) * smW;
+      const wheel = bendOct(this.bendS, this.bendSt) + wheelOct(this.modwS, lfo);
       //   key CV −1.5 V/oct (key 53 − 69 = −16 semitones at 0 V), summer inputs
-      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch) + vco1.mismatch;
-      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
+      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + wheel + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch) + vco1.mismatch;
+      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + wheel + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.vpw = vpwOf(ps.o1pw); vco2.vpw = vpwOf(ps.o2pw);
       const w1 = Math.min(2, p.o1wave | 0), w2 = Math.min(2, p.o2wave | 0);   // 0 tri, 1 saw, 2 pulse
@@ -773,4 +793,4 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, driveGain, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, bendOct, wheelOct, driveGain, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
