@@ -58,6 +58,8 @@ const corner = document.createElement('div');
 corner.textContent = `FILTH v${A.VERSION}`;
 Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: PINK });
 document.body.appendChild(corner);
+// HILITE COLOUR (OPTIONS): the magenta of lit buttons, the step glow and this corner note
+const HI = () => `hsl(${A.look.hi ?? 315} 97% 52%)`;
 
 const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
@@ -68,7 +70,7 @@ const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
 const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 1.0); scene.add(amb);
 const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
-let bgHex = '';
+let bgHex = ''; const hiMats = [];   // materials that glow in the HILITE COLOUR
 // the pink of every face is swapped for this colour in the shader (black ink and white stay as they are)
 const tintMats = [], TINT = { uTint: { value: new THREE.Color(0xff1fa8) }, uAmt: { value: 0.9 }, uInk: { value: new THREE.Color(0, 0, 0) }, uDark: { value: 0 }, uInkAmt: { value: 1 } };
 function tintable(m) {
@@ -100,6 +102,7 @@ const brushed = (() => {
 })();
 function driveAmbient() {
   const L = A.look.lights, sig = [A.look.hue, A.look.sat, A.look.lit, A.look.finish, A.look.text].join() + JSON.stringify(L);
+  corner.style.color = HI(); for (const m of hiMats) m.emissive.setHSL((A.look.hi ?? 315) / 360, 1, .62);
   if (sig === bgHex) return; bgHex = sig;
   amb.color.set(L.amb.c); amb.groundColor.copy(amb.color).multiplyScalar(0.25); amb.intensity = 0.45 * L.amb.i;
   front.color.set(L.amb.c); front.intensity = 0.35 * L.amb.i;
@@ -521,12 +524,12 @@ sectionNames(low, lower);
 for (const el of low.querySelectorAll('button')) {
   if (el.closest('[hidden]')) continue;
   const r = rel(el, low); if (!r.w) continue;
-  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, el.classList.contains('lit') ? PINK : PAPER);
+  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, el.classList.contains('lit') ? HI() : PAPER);
   const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
   p.userData.btn = el; hits.push(p);
   let last = el.textContent + el.className, lastF = 1, n = 0;
   ticks.push(() => {
-    const s = el.textContent + el.className; if (s !== last) { last = s; p.userData.redraw(draw); }
+    const s = el.textContent + el.className + A.look.hi; if (s !== last) { last = s; p.userData.redraw(draw); }
     if (++n % 5 === 0) { const f = fade(el); if (f !== lastF) { lastF = f; p.material = p.material.map((m) => m.clone()); fadeMat(p.material, f); p.castShadow = f > 0.5; renderer.shadowMap.needsUpdate = true; } }
   });
 }
@@ -585,7 +588,7 @@ if (gridEl) {
     // the running light: a soft white glow over the step playing now, fading behind it
     const gm = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(b.w + 28, b.h + 28), gm); glow.position.copy(pos(b.x + b.w / 2, b.y + b.h / 2, 11)); lower.add(glow);
-    bm.emissive = new THREE.Color(0xff3fd0); bm.emissiveIntensity = 0;
+    bm.emissive = new THREE.Color(0xff3fd0); bm.emissiveIntensity = 0; hiMats.push(bm);   // HILITE COLOUR, set in driveAmbient
     return { b, fm, bm, blk, gm, g: 0, sig: '' };
   });
   const hit = hitBox(R.w, R.h, 14, R.x + R.w / 2, R.y + R.h / 2, 6, lower); hit.userData.grid = R;
