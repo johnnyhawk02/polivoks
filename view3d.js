@@ -611,8 +611,21 @@ function driveAngle() {
   const a = A.look.angle || 0; if (a === angleNow) return; angleNow = a;
   hinge.rotation.x = a * Math.PI / 180; renderer.shadowMap.needsUpdate = true; fit();
 }
+// PARALLAX (OPTIONS): the camera swings a little with the pointer; 0 keeps it fixed
+let pxT = 0, pyT = 0, pxC = 0, pyC = 0;
+addEventListener('pointermove', (e) => { pxT = e.clientX / innerWidth * 2 - 1; pyT = e.clientY / innerHeight * 2 - 1; });
+document.addEventListener('pointerleave', () => { pxT = pyT = 0; });
+function driveParallax() {
+  const P = A.look.parallax || 0;
+  const tx = pxT * P, ty = pyT * P;
+  if (Math.abs(tx - pxC) + Math.abs(ty - pyC) < 1e-4) return;
+  pxC += (tx - pxC) * 0.08; pyC += (ty - pyC) * 0.08;
+  const yaw = 0.16 * pxC, pitch = -0.1 * pyC;
+  camera.position.set(target.x + dist * Math.sin(yaw) * Math.cos(pitch), target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(yaw) * Math.cos(pitch));
+  camera.lookAt(target);
+}
 function frame() {
-  driveAngle();
+  driveAngle(); driveParallax();
   for (const t of ticks) t();
   for (const lev of levers) {
     const d = lev.userData.target - lev.userData.y; lev.userData.y += d * 0.35;
