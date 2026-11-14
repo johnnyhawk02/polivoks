@@ -127,6 +127,7 @@ class FxRack {
   noteOn(n) { this.e.noteOn(n); }
   noteOff(n) { this.e.noteOff(n); }
   allOff() { this.e.allOff(); }
+  setPrio(last) { this.e.setPrio(last); }
   render(out, n) { this.e.render(out, n); }
 }
 

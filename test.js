@@ -49,6 +49,11 @@ console.log('--- keyboard board (sheet 3) ---');
   console.log('2-voice, keys 45+60 held:  VCO I / II notes', f1({ voice: 1 }, (e, o) => { e.noteOn(60); e.noteOn(45); blocks(e, o, 0, o.length); }).join(' / '));
   console.log('1-voice, keys 45+60 held:  VCO I / II notes', f1({ voice: 0 }, (e, o) => { e.noteOn(60); e.noteOn(45); blocks(e, o, 0, o.length); }).join(' / '));
   console.log('2-voice, 45+60 released:   VCO I / II notes', f1({ voice: 1 }, (e, o) => { e.noteOn(60); e.noteOn(45); blocks(e, o, 0, 4800); e.allOff(); blocks(e, o, 4800, o.length); }).join(' / '));
+  { // key priority LAST (OPTIONS): newest key / two newest keys
+    const pr = (two, keys) => { const k = new Keyboard(1 / SR); k.last = true; for (const n of keys) { k.press(n); for (let i = 0; i < SR / 10; i++) k.step(0, two); } return [k.cv1, k.cv2].map((v) => +(53 - v / 0.125).toFixed(2)).join(' / '); };
+    console.log('LAST, 1-voice, 48 60 55:   VCO I / II keys', pr(false, [48, 60, 55]), '(want 55 / 55)');
+    console.log('LAST, 2-voice, 48 60 55:   VCO I / II keys', pr(true, [48, 60, 55]), '(want 55 / 60)');
+  }
   const kb = new Keyboard(1 / SR); kb.press(53); for (let i = 0; i < SR; i++) kb.step(0, true);
   kb.release(53); kb.press(65); let t50 = -1, t1 = -1;
   for (let i = 0; i < SR; i++) { kb.step(0, true); const k = 53 - kb.v12 / 0.125; if (t50 < 0 && k > 59) t50 = i; if (t1 < 0 && k > 64.88) t1 = i; }
