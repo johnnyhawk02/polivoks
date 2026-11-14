@@ -1492,7 +1492,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.24.0';
+const VERSION = '1.25.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1538,19 +1538,21 @@ function makeKnob(c) {
     md.setAttribute('cx', cx + Math.sin(a) * (R + 5)); md.setAttribute('cy', cy - Math.cos(a) * (R + 5)); md.removeAttribute('display');
   };
   c.seqMark = (on) => lab.classList.toggle('seq', on);
-  // press and hold without moving (or right click) opens the knob's sequence
-  let x0 = 0, y0 = 0, u0 = 0, drag = false, hold = null;
-  const unhold = () => { clearTimeout(hold); hold = null; };
+  // touching a knob picks it in the sequencer (dragging still just turns it);
+  // a tap without moving, or a right click, also brings the sequencer into view
+  let x0 = 0, y0 = 0, u0 = 0, drag = false, moved = false;
   svg.addEventListener('pointerdown', (e) => {
-    drag = true; x0 = e.clientX; y0 = e.clientY; u0 = toU(c.v); svg.setPointerCapture(e.pointerId); e.preventDefault();
-    unhold(); if (e.button === 0) hold = setTimeout(() => { hold = null; drag = false; if (toU(c.v) !== u0) c.set(fromU(u0)); openSeq(c); }, 450);
+    drag = true; moved = false; x0 = e.clientX; y0 = e.clientY; u0 = toU(c.v); svg.setPointerCapture(e.pointerId); e.preventDefault();
+    if (e.button === 0) pickSeq(c);
   });
   svg.addEventListener('pointermove', (e) => {
-    if (hold && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) > 4) unhold();
-    if (!drag || !e.buttons) { drag = false; return; } const k = e.shiftKey ? 1200 : 220; c.set(fromU(Math.max(0, Math.min(1, u0 + (y0 - e.clientY) / k))));
+    if (!drag || !e.buttons) { drag = false; return; }
+    if (Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) > 4) moved = true;
+    const k = e.shiftKey ? 1200 : 220; c.set(fromU(Math.max(0, Math.min(1, u0 + (y0 - e.clientY) / k))));
   });
-  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) svg.addEventListener(ev, () => { drag = false; unhold(); });
-  svg.addEventListener('contextmenu', (e) => { e.preventDefault(); unhold(); drag = false; openSeq(c); });
+  svg.addEventListener('pointerup', (e) => { if (drag && !moved && e.button === 0) openSeq(c); drag = false; });
+  for (const ev of ['pointercancel', 'lostpointercapture']) svg.addEventListener(ev, () => { drag = false; });
+  svg.addEventListener('contextmenu', (e) => { e.preventDefault(); drag = false; openSeq(c); });
   svg.addEventListener('dblclick', () => c.set(c.def));
   return wrap;
 }
@@ -1734,7 +1736,7 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>`);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
 // which knob is being edited: a list grouped by panel section (● = its sequence runs);
-// holding a knob on the panel picks it too
+// touching a knob on the panel picks it too
 const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', o1pw: 'VCO I PULSE W.', o2pw: 'VCO II PULSE W.', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE', mixE: 'MIX EXT.',
   fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD',
   eTime: 'ECHO TIME', eFb: 'ECHO FEEDBACK', eTone: 'ECHO TONE', eSpread: 'ECHO SPREAD', eMix: 'ECHO MIX' };
@@ -1754,8 +1756,9 @@ const bars = [];
 for (let i = 0; i < 16; i++) { const b = document.createElement('div'); b.className = 'bar'; const f = document.createElement('i'); b.appendChild(f); grid.appendChild(b); bars.push(b); }
 let edC = null, nowStep = -1;
 function selSeq(c) { edC = c; nowStep = -1; bars.forEach((b) => b.classList.remove('now')); try { localStorage.setItem('polivoks-seq-sel', c.id); } catch (e) {} drawSeq(); if (lastPos) onSeqPos(lastPos); }
-// holding a knob picks it here and brings the sequencer into view
-function openSeq(c) { selSeq(c); ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+// touching a knob picks it here; a tap also brings the sequencer into view
+function pickSeq(c) { if (edC !== c && pickO[c.id]) selSeq(c); }
+function openSeq(c) { pickSeq(c); ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
 function drawSeq() {
   const s = seqOf(edC.id);
   bars.forEach((b, i) => {
