@@ -228,9 +228,15 @@ function paintCtl(ctx, c) {
       else { ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); IC[o.i].forEach(([u, v], k) => ctx[k ? 'lineTo' : 'moveTo'](px - 8 + u, py - 6 + v)); ctx.stroke(); }
     });
   } else if (c.kind === 'sw') {
-    for (const t of c.el.querySelectorAll('.t')) { const q = rel(t, panel); text(ctx, t.textContent, q.x + q.w / 2, q.y + q.h / 2, `600 ${fs(t)}px ${MONO}`, INK, 'center', .6); }
+    // the side the switch is set to: its word on a black slab in white; the other side faded
+    const down = c.id === 'fMode' ? !c.v : !!c.v;
+    [...c.el.querySelectorAll('.t')].forEach((t, i) => {
+      const q = rel(t, panel), on = (i === 1) === down, font = `600 ${fs(t)}px ${MONO}`;
+      if (on) { ctx.font = font; const w = ctx.measureText(t.textContent).width + 10; ctx.fillStyle = INK; ctx.fillRect(q.x + q.w / 2 - w / 2, q.y - 1, w, q.h + 2); }
+      ctx.globalAlpha = on ? 1 : 0.4; text(ctx, t.textContent, q.x + q.w / 2, q.y + q.h / 2, font, on ? PAPER : INK, 'center', .6); ctx.globalAlpha = 1;
+    });
     const q = rel(c.el.querySelector('.slot'), panel);
-    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(q.x - 1, q.y - 1, q.w + 2, q.h + 2);
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(q.x - 1, q.y - 1, q.w + 2, q.h + 2);
     ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(q.x + 1, q.y + 1, q.w - 2, q.h - 2);
   }
 }
@@ -251,7 +257,7 @@ function paintUpper(ctx) {
 const respEl = panel.querySelector('.resp'), fmCtl = A.S.find((c) => c.id === 'fMode');
 const upSlab = slab(UW, UH, paintUpper); upSlab.userData.repaint(); upper.add(upSlab);
 // a sequence starting or stopping changes a label: repaint the face then
-const seqSig = () => CTL.map((c) => { const l = c.el.querySelector('.lab'); return l && l.classList.contains('seq') ? 1 : 0; }).join('');
+const seqSig = () => CTL.map((c) => { const l = c.el.querySelector('.lab'); return (l && l.classList.contains('seq') ? 1 : 0) + (c.kind === 'sw' ? 's' + c.v : ''); }).join('');
 { let last = seqSig(); ticks.push(() => { const s = seqSig(); if (s !== last) { last = s; upSlab.userData.repaint(); } }); }
 // section names: raised black slabs over the top edge of each box
 function sectionNames(root, group) {
@@ -305,7 +311,7 @@ for (const c of CTL) {
     }
   } else if (c.kind === 'sw') {
     const q = rel(c.el.querySelector('.slot'), panel), cx = q.x + q.w / 2;
-    const lev = new THREE.Mesh(leverGeo, mat.ink); lev.castShadow = true; upper.add(lev);
+    const lev = new THREE.Mesh(leverGeo, mat.lit); lev.castShadow = true; upper.add(lev);   // white, so its position reads at a glance
     const hit = hitBox(c.el.offsetWidth - 10, 62, 10, cx, q.y + q.h / 2, 5, upper); hit.userData.ctl = c; c.obj3 = hit;
     const at = (v) => { const down = c.id === 'fMode' ? !v : !!v; return down ? q.y + q.h - 2 - 6 : q.y + 2 + 6; };
     let last = c.v; lev.userData = { y: at(c.v), target: at(c.v), place: () => lev.position.copy(pos(cx, lev.userData.y, 0)) }; lev.userData.place();
