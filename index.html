@@ -196,7 +196,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="ttl" style="grid-area:1/16/2/20"><span id="ttlw">FILTH</span></div>
     <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
-    <div class="box" id="g-a" style="grid-area:2/16/4/20;--n:4;--m:2"><h2>AMPLIFIER</h2></div>
+    <div class="box" id="g-a" style="grid-area:3/13/4/20;--n:7;--m:1"><h2>AMPLIFIER</h2></div>
   </div>
   <div class="panel low" id="low">
     <div class="torn"></div>
@@ -1589,7 +1589,7 @@ const L = {
     knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0),
   ],
   'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
-  'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
+  'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'),
     knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
   // six controls in six cells, the same width as VCO I and II above
@@ -1662,7 +1662,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.68.0';
+const VERSION = '1.69.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1817,7 +1817,7 @@ for (const gid in L) {
 // FILTER, MIXER and AMPLIFIER sit on their own grid: equal columns across
 // the box and their own, shorter row height, rows from the top, so the knobs
 // are closer together vertically.  Any spare height falls at the bottom.
-for (const gid of ['g-f', 'g-fe', 'g-a']) document.getElementById(gid).classList.add('own');
+for (const gid of ['g-f', 'g-fe']) document.getElementById(gid).classList.add('own');
 applyLang();
 pwActive();
 document.getElementById('resetbtn').onclick = () => {
