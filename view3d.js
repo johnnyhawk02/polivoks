@@ -400,12 +400,13 @@ let title = null, titleU = null;
   };
   titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
+    ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
     scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
   const sm = new THREE.ShaderMaterial({
     uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; varying vec2 vUv;
+      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -427,7 +428,6 @@ let title = null, titleU = null;
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
         vec2 uv = uv0 + d * amt / size;
         float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
-        vec3 ph = vec3(1., .5, .1);                           // orange phosphor
         float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
         float vig = smoothstep(1.35, .35, length(cuv));
         vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
@@ -465,7 +465,10 @@ let title = null, titleU = null;
   p.position.set(0, h, 0); hinge.add(p); upper.add(hinge);
   title = p; p.userData.title = true; hits.push(p);
 }
+// CRT COLOUR: the phosphor of the FILTH screen
+const PHOSPHOR = { orange: [1, .5, .1], amber: [1, .72, .15], green: [.3, 1, .35], white: [.88, .93, 1], blue: [.3, .6, 1] };
 function driveTitle() {
+  const P = PHOSPHOR[A.look.crt] || PHOSPHOR.orange; titleU.ph.value.setRGB(P[0], P[1], P[2]);
   const W = A.WOB, v = Math.max(-1, Math.min(1, A.lfoV / W.vmax)) * Math.min(1, A.outRms / W.ref), a = W.on ? W.A * v : 0;
   // the plate is much taller than the 2D title (110 px), so the depth scales with it, and a little more
   titleU.amt.value = Math.abs(a) < 0.05 ? 0 : a * 1.6 * titleU.size.value.y / 110;
