@@ -87,6 +87,27 @@ console.log('--- pulse width knobs (an addition; SPICE in spice/vco/pw.txt) ---'
   const f = (pw) => { const { out } = run(Object.assign({}, open, { o1wave: 2, o1pw: pw }), 1, [57]); return freqOf(out, SR); };
   console.log('pitch PW 0 vs 1:', (1200 * Math.log2(f(1) / f(0))).toFixed(2), 'cents');
 }
+console.log('--- pulse width never silences the output (regression: v1.20.0 went quiet past ~40 % on the narrow-pulse position) ---');
+{
+  // whole engine at normal mixer/filter/VCA settings; RMS over the knob's range
+  // against the RMS at knob 0, square and narrow-pulse positions, both VCOs
+  const rms = (set, note) => {
+    const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
+    for (const x in set) { e.setParam(x, set[x]); e.ps[x] = set[x]; }
+    e.noteOn(note); const o = new Float32Array(128); let a = 0, n = 0;
+    for (let i = 0; i < SR * 0.5; i += 128) { e.render(o, 128); if (i > SR * 0.25) for (const v of o) { a += v * v; n++; } }
+    return Math.sqrt(a / n);
+  };
+  let worst = 1, where = '';
+  for (const [v, mix] of [[1, { mix1: 0.65, mix2: 0 }], [2, { mix1: 0, mix2: 0.65 }]]) for (const w of [2, 3]) for (const note of [33, 57, 81, 105]) {
+    const base = { vcaHold: 1, ['o' + v + 'wave']: w }; Object.assign(base, mix);
+    const r0 = rms(Object.assign({}, base, { ['o' + v + 'pw']: 0 }), note);
+    for (let k = 1; k <= 8; k++) { const r = rms(Object.assign({}, base, { ['o' + v + 'pw']: k / 8 }), note) / r0; if (r < worst) { worst = r; where = `VCO ${v} ${w === 2 ? 'square' : 'narrow'} note ${note} knob ${k / 8}`; } }
+  }
+  const ok = worst > 0.2;
+  console.log(`lowest RMS vs knob 0: ${worst.toFixed(2)} (${where}) ${ok ? 'PASS' : 'FAIL: below 0.2'}`);
+  if (!ok) process.exitCode = 1;
+}
 console.log('--- modulator rate (sheet 10; SLOW range is an addition) ---');
 {
   // the engine's own wiring: one 48 kHz sample steps the modulator once
