@@ -546,7 +546,8 @@ function fit() {
   const box = new THREE.Box3().setFromObject(upSlab).union(new THREE.Box3().setFromObject(lowSlab)), pts = [];
   for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) pts.push(new THREE.Vector3(x, y, z));
   box.getCenter(target); target.z = 0;
-  for (dist = 2000; dist < 200000; dist *= 1.01) {
+  camera.near = 20; camera.far = 400000; camera.updateProjectionMatrix();
+  for (dist = 300; dist < 200000; dist *= 1.01) {
     camera.position.set(target.x, target.y, target.z + dist); camera.lookAt(target); camera.updateMatrixWorld();
     if (pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.985 && Math.abs(q.y) < 0.975; })) break;
   }
@@ -619,22 +620,13 @@ cv.addEventListener('dblclick', (e) => { const o = pick(e); if (o && o.userData.
 renderer.shadowMap.needsUpdate = true;
 let angleNow = null;
 function driveAngle() {
-  const a = A.look.angle || 0, b = A.look.angleLow || 0, key = a + ',' + b; if (key === angleNow) return; angleNow = key;
+  const a = A.look.angle || 0, b = A.look.angleLow || 0, key = a + ',' + b + ',' + A.look.lens; if (key === angleNow) return; angleNow = key;
+  camera.fov = lensFov(A.look.lens);
   hinge.rotation.x = a * Math.PI / 180; hingeLow.rotation.x = -b * Math.PI / 180; renderer.shadowMap.needsUpdate = true; fit();
 }
-// PARALLAX (OPTIONS): the camera swings a little with the pointer; 0 keeps it fixed
-let pxT = 0, pyT = 0, pxC = 0, pyC = 0;
-addEventListener('pointermove', (e) => { pxT = e.clientX / innerWidth * 2 - 1; pyT = e.clientY / innerHeight * 2 - 1; });
-document.addEventListener('pointerleave', () => { pxT = pyT = 0; });
-function driveParallax() {
-  const P = A.look.parallax || 0;
-  const tx = pxT * P, ty = pyT * P;
-  if (Math.abs(tx - pxC) + Math.abs(ty - pyC) < 1e-4) return;
-  pxC += (tx - pxC) * 0.08; pyC += (ty - pyC) * 0.08;
-  const yaw = 0.45 * pxC, pitch = -0.3 * pyC;   // up to ~26° and ~17° at 100 %: with the long lens only big angles read as depth
-  camera.position.set(target.x + dist * Math.sin(yaw) * Math.cos(pitch), target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(yaw) * Math.cos(pitch));
-  camera.lookAt(target);
-}
+// LENS (OPTIONS): from a long lens far away (5°: flat, only shadows show
+// depth) to a wide angle up close (60°: strong perspective)
+const lensFov = (u) => 5 * Math.pow(12, Math.max(0, Math.min(1, u || 0)));
 // ---------------------------------------------------------------- the projector
 // When the sound is really distorting (the soft clipper is being pushed hard),
 // an old projector from the front throws a flickering FILTH across the whole
@@ -671,7 +663,7 @@ function driveProjector() {
   projector.l.position.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 1600);
 }
 function frame() {
-  driveAngle(); driveParallax();
+  driveAngle();
   for (const t of ticks) t();
   for (const lev of levers) {
     const d = lev.userData.target - lev.userData.y; lev.userData.y += d * 0.35;
