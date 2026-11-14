@@ -116,20 +116,27 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.25;
 const camera = new THREE.PerspectiveCamera(26, 1, 50, 20000);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x220011, 0.95));
-const sun = new THREE.DirectionalLight(0xffffff, 2.1);
-sun.position.set(-700, 900, 1300); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.6; sun.shadow.radius = 4;
-Object.assign(sun.shadow.camera, { left: -950, right: 950, top: 520, bottom: -520, near: 100, far: 4000 });
-scene.add(sun);
+// even white light from the front (no shadows), then two coloured lamps low
+// at the sides: each throws its own soft shadow across the panel
+scene.add(new THREE.HemisphereLight(0xffffff, 0x220011, 0.45));
+const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
+const side = (color, x) => {
+  // a spot aimed at its own half of the panel, so its colour fades out toward the far side
+  const l = new THREE.SpotLight(color, 2.6, 0, 0.62, 1, 0);
+  l.position.set(x, 160, 700); l.castShadow = true;
+  l.shadow.mapSize.set(2048, 2048); l.shadow.bias = -0.0004; l.shadow.normalBias = 0.6; l.shadow.radius = 6;
+  l.shadow.camera.near = 200; l.shadow.camera.far = 5000;
+  l.target.position.set(Math.sign(x) * 380, -40, 0); scene.add(l, l.target); return l;
+};
+const lamps = [side(0x3d8bff, -1300), side(0xffa020, 1300)];   // cool blue from the left, amber from the right
 
 // the panels lie back like a desk synth; everything is placed in panel pixels
-const rig = new THREE.Group(); rig.rotation.x = -0.42; scene.add(rig);
+const rig = new THREE.Group(); rig.rotation.x = 0; scene.add(rig);
 const TOTALH = UH + GAPY + LH;
 const upper = new THREE.Group(), lower = new THREE.Group();
 upper.position.set(-UW / 2, TOTALH / 2, 0); lower.position.set(-UW / 2, TOTALH / 2 - UH - GAPY, 0);
 rig.add(upper, lower);
-sun.target = rig;
+front.target = rig;
 // a floor under the panels catches their shadow
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(6000, 4000), new THREE.ShadowMaterial({ opacity: 0.45 }));
 floor.position.z = -DEPTH - 30; floor.receiveShadow = true; rig.add(floor);
@@ -378,7 +385,7 @@ function buildLower() {
   }
 }
 
-// ============================================================ camera: tilt, gentle sway, parallax
+// ============================================================ camera: face on, a little parallax
 let yaw = 0, pitch = 0, uyaw = 0, upitch = 0, px = 0, py = 0, dist = 2000;
 function fit() {
   const w = innerWidth, h = innerHeight;
@@ -395,8 +402,8 @@ function fit() {
 const target = new THREE.Vector3(0, -10, 0);
 function placeCamera(time, still) {
   if (!still) {
-  const sway = Math.sin(time * 0.00021) * 0.035, bob = Math.sin(time * 0.00017 + 1) * 0.015;
-  yaw += (sway + px * 0.07 + uyaw - yaw) * 0.06; pitch += (bob - py * 0.04 + upitch - pitch) * 0.06; }
+  const sway = 0, bob = 0;
+  yaw += (sway + px * 0.025 + uyaw - yaw) * 0.06; pitch += (bob - py * 0.015 + upitch - pitch) * 0.06; }
   camera.position.set(target.x + dist * Math.sin(yaw) * Math.cos(pitch), target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(yaw) * Math.cos(pitch));
   camera.lookAt(target);
 }
