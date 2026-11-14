@@ -631,7 +631,7 @@ function driveParallax() {
   const tx = pxT * P, ty = pyT * P;
   if (Math.abs(tx - pxC) + Math.abs(ty - pyC) < 1e-4) return;
   pxC += (tx - pxC) * 0.08; pyC += (ty - pyC) * 0.08;
-  const yaw = 0.16 * pxC, pitch = -0.1 * pyC;
+  const yaw = 0.45 * pxC, pitch = -0.3 * pyC;   // up to ~26° and ~17° at 100 %: with the long lens only big angles read as depth
   camera.position.set(target.x + dist * Math.sin(yaw) * Math.cos(pitch), target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(yaw) * Math.cos(pitch));
   camera.lookAt(target);
 }
