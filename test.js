@@ -1,4 +1,4 @@
-const { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct } = require('./dsp.js');
+const { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, Modulator } = require('./dsp.js');
 const fs = require('fs');
 const SR = 48000;
 
@@ -70,6 +70,23 @@ console.log('--- pitch knobs (±1 octave, an addition) ---');
 console.log('pitchOct -1/-0.5/0/0.5/1:', [-1, -0.5, 0, 0.5, 1].map(d => pitchOct(d).toFixed(4)).join(' '));
 for (const [id, mix] of [['o1pitch', { mix1: 0.6, mix2: 0 }], ['o2pitch', { mix1: 0, mix2: 0.6, o2wave: 1 }]])
   for (const v of [-1, 1]) { const { out } = run(Object.assign({}, open, mix, { [id]: v }), 1, [57]); console.log(id, v, 'note', (69 + 12 * Math.log2(freqOf(out, SR) / 440)).toFixed(2)); }
+console.log('--- modulator rate (sheet 10; SLOW range is an addition) ---');
+{
+  // the engine's own wiring: one 48 kHz sample steps the modulator once
+  const rate = (knob, slow) => {
+    const e = new PolivoksEngine(SR); e.setParam('lfoRate', knob); e.ps.lfoRate = knob; if (slow !== undefined) e.setParam('lfoRange', slow);
+    const m = e.lfo, out = new Float32Array(128); e.render(out, 1);   // sets C and R for this range
+    const pot = (p, r) => r * (Math.exp(5 * p) - 1) / (Math.exp(5) - 1);
+    const R = 4.3e3 + pot(1 - knob, e.p.lfoRange ? 1e6 : 100e3);
+    let prev = m.vo, first = -1, last = -1, n = 0;
+    for (let i = 0; i < SR * 400 && n < 2; i++) { m.step(R, 0, 0); if (prev < 0 && m.vo > 0) { if (first < 0) first = i; else { n++; last = i; } } prev = m.vo; }
+    return SR * n / (last - first);
+  };
+  const row = (slow) => [0, 0.1, 0.25, 0.5, 0.75, 1].map((k) => rate(k, slow).toPrecision(3)).join(' ');
+  console.log('FAST knob 0/0.1/0.25/0.5/0.75/1 Hz:', row(0));
+  console.log('SLOW knob 0/0.1/0.25/0.5/0.75/1 Hz:', row(1));
+  console.log('old preset (no range saved), knob 0:', rate(0).toPrecision(3), 'Hz');
+}
 console.log('--- stability sweep ---');
 {
   const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
