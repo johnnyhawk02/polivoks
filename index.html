@@ -128,7 +128,7 @@
   #opts input[type=range] { flex: 1; min-width: 0; accent-color: var(--ink); }
   #opts .row.cells { gap: 8px; }
   /* a phone on its side: tighter rows so the whole box fits */
-  @media (max-height: 520px) { #opts .win { padding: 20px 18px 4px; } #opts .f { margin-bottom: 0; } #opts .row { height: 32px; } #opts .f > span, #opts .val { font-size: 12px; } #opts .row.cells .sb { height: 26px; font-size: 13px; } #opts input[type=color] { height: 24px; } }
+  @media (max-height: 520px) { #opts .val { width: 58px !important; } #opts .sq-bpmv { width: 84px !important; } #opts .win { padding: 22px 18px 4px; width: min(1100px, 96vw) !important; display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; } #opts .f > span { width: 118px; } #opts .f { margin-bottom: 0; } #opts .row { height: 32px; } #opts .f > span, #opts .val { font-size: 12px; } #opts .row.cells .sb { height: 26px; font-size: 13px; } #opts input[type=color] { height: 24px; } }
   #opts .row.cells .sb { flex: 1; height: 30px; }
   #opts .val { flex: none; width: 82px; text-align: right; font-size: 14px; }
   #opts input[type=color] { flex: none; width: 46px; height: 30px; padding: 0; border: 2px solid var(--ink); background: none; cursor: pointer; }
@@ -1582,7 +1582,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.47.0';
+const VERSION = '1.48.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1921,8 +1921,8 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addE
 // sequencer), the panel colour, and the 3D view's three lights (left, right,
 // ambient), each a colour and a brightness.
 const LOOK_STORE = 'polivoks-look';
-const look = { hue: 316 / 360, sat: 0.97, lit: 0.52, finish: 'matt', text: 1, angle: 10, parallax: 0, lights: { left: { c: '#3d8bff', i: 1 }, right: { c: '#ffa020', i: 1 }, amb: { c: '#ffffff', i: 1 } } };
-try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'angle', 'parallax']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
+const look = { hue: 316 / 360, sat: 0.97, lit: 0.52, finish: 'matt', text: 1, angle: 10, angleLow: 0, parallax: 0, lights: { left: { c: '#3d8bff', i: 1 }, right: { c: '#ffa020', i: 1 }, amb: { c: '#ffffff', i: 1 } } };
+try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'angle', 'angleLow', 'parallax']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
 const lookCss = () => `hsl(${Math.round(look.hue * 360)} ${Math.round(look.sat * 100)}% ${Math.round(look.lit * 100)}%)`;
 function applyLook() {
   document.documentElement.style.setProperty('--pink', lookCss());
@@ -1934,19 +1934,21 @@ optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTI
   <div class="f"><span>PANEL COLOUR</span><div class="row"><input type="range" class="hue" min="0" max="359" id="opt-hue" aria-label="Panel colour"><b class="val" id="opt-huev"></b></div></div>
   <div class="f"><span>SATURATION</span><div class="row"><input type="range" min="0" max="100" id="opt-sat" aria-label="Panel saturation"><b class="val" id="opt-satv"></b></div></div>
   <div class="f"><span>BRIGHTNESS</span><div class="row"><input type="range" min="10" max="90" id="opt-lit" aria-label="Panel brightness"><b class="val" id="opt-litv"></b></div></div>
-  <div class="f"><span>ANGLE (3D)</span><div class="row"><input type="range" min="0" max="35" id="opt-angle" aria-label="Top panel angle"><b class="val" id="opt-anglev"></b></div></div>
+  <div class="f"><span>TOP ANGLE</span><div class="row"><input type="range" min="0" max="35" id="opt-angle" aria-label="Top panel angle"><b class="val" id="opt-anglev"></b></div></div>
+  <div class="f"><span>BOTTOM ANGLE</span><div class="row"><input type="range" min="0" max="35" id="opt-angle2" aria-label="Bottom panel angle"><b class="val" id="opt-angle2v"></b></div></div>
   <div class="f"><span>PARALLAX (3D)</span><div class="row"><input type="range" min="0" max="100" id="opt-par" aria-label="Parallax"><b class="val" id="opt-parv"></b></div></div>
   <div class="f"><span>TEXT (3D)</span><div class="row"><input type="range" min="0" max="100" id="opt-text" aria-label="Text: lit by the lights or lit up"><b class="val" id="opt-textv"></b></div></div>
   <div class="f"><span>FINISH (3D)</span><div class="row cells" id="opt-finish"><button class="sb" data-f="matt">MATT</button><button class="sb" data-f="plastic">PLASTIC</button><button class="sb" data-f="metal">METALLIC</button></div></div>
   ${[['left', 'LEFT LIGHT'], ['right', 'RIGHT LIGHT'], ['amb', 'AMBIENT LIGHT']].map(([k, t]) => `<div class="f"><span>${t}</span><div class="row"><input type="color" data-l="${k}" aria-label="${t} colour"><input type="range" min="0" max="200" data-li="${k}" aria-label="${t} brightness"><b class="val" data-lv="${k}"></b></div></div>`).join('')}</div>`;
 document.body.appendChild(optsEl);
 { const tf = q('.sq-bpm').closest('.f'); optsEl.querySelector('#opt-tempo').append(...tf.querySelector('.row').childNodes); tf.remove(); }
-const optPar = optsEl.querySelector('#opt-par'), optAngle = optsEl.querySelector('#opt-angle'), optText = optsEl.querySelector('#opt-text'), optHue = optsEl.querySelector('#opt-hue'), optSat = optsEl.querySelector('#opt-sat'), optLit = optsEl.querySelector('#opt-lit');
+const optAngle2 = optsEl.querySelector('#opt-angle2'), optPar = optsEl.querySelector('#opt-par'), optAngle = optsEl.querySelector('#opt-angle'), optText = optsEl.querySelector('#opt-text'), optHue = optsEl.querySelector('#opt-hue'), optSat = optsEl.querySelector('#opt-sat'), optLit = optsEl.querySelector('#opt-lit');
 function drawOpts() {
   optSat.value = Math.round(look.sat * 100); optsEl.querySelector('#opt-satv').textContent = Math.round(look.sat * 100) + '%';
   optLit.value = Math.round(look.lit * 100); optsEl.querySelector('#opt-litv').textContent = Math.round(look.lit * 100) + '%';
   optsEl.querySelectorAll('[data-f]').forEach((b) => b.classList.toggle('lit', b.dataset.f === look.finish));
   optPar.value = Math.round(look.parallax * 100); optsEl.querySelector('#opt-parv').textContent = look.parallax < 0.005 ? 'OFF' : Math.round(look.parallax * 100) + '%';
+  optAngle2.value = look.angleLow; optsEl.querySelector('#opt-angle2v').textContent = look.angleLow + '°';
   optAngle.value = look.angle; optsEl.querySelector('#opt-anglev').textContent = look.angle + '°';
   // 0 = lettering lit by the lights like the rest of the panel, 100 % = lit up on its own
   optText.value = Math.round(look.text * 100); optsEl.querySelector('#opt-textv').textContent = look.text < 0.01 ? 'LIGHTS' : look.text > 0.99 ? 'LIT UP' : Math.round(look.text * 100) + '%';
@@ -1959,6 +1961,7 @@ function drawOpts() {
 }
 optHue.oninput = () => { look.hue = optHue.value / 360; applyLook(); drawOpts(); };
 optPar.oninput = () => { look.parallax = optPar.value / 100; applyLook(); drawOpts(); };
+optAngle2.oninput = () => { look.angleLow = +optAngle2.value; applyLook(); drawOpts(); };
 optAngle.oninput = () => { look.angle = +optAngle.value; applyLook(); drawOpts(); };
 optText.oninput = () => { look.text = optText.value / 100; applyLook(); drawOpts(); };
 optSat.oninput = () => { look.sat = optSat.value / 100; applyLook(); drawOpts(); };

@@ -133,8 +133,9 @@ const upper = new THREE.Group(), lower = new THREE.Group();
 // the top panel sits on a hinge along the join, so ANGLE (OPTIONS) tips it up toward you
 const hinge = new THREE.Group(); hinge.position.set(-UW / 2, TOTALH / 2 - UH, 0);
 upper.position.set(0, UH, 0); hinge.add(upper);
-lower.position.set(-UW / 2, TOTALH / 2 - UH, 0);
-rig.add(hinge, lower); front.target = rig;
+// and the bottom panel on its own hinge at the same join: BOTTOM ANGLE brings its front edge toward you
+const hingeLow = new THREE.Group(); hingeLow.position.set(-UW / 2, TOTALH / 2 - UH, 0); hingeLow.add(lower);
+rig.add(hinge, hingeLow); front.target = rig;
 { // the join: a dark rounded spine along the seam, seen as the top panel tips up
   const spine = new THREE.Mesh(new THREE.CylinderGeometry(DEPTH / 2, DEPTH / 2, UW, 32), new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.6 }));
   spine.rotation.z = Math.PI / 2; spine.position.set(0, TOTALH / 2 - UH, -DEPTH / 2); spine.castShadow = true; rig.add(spine);
@@ -608,8 +609,8 @@ cv.addEventListener('dblclick', (e) => { const o = pick(e); if (o && o.userData.
 renderer.shadowMap.needsUpdate = true;
 let angleNow = null;
 function driveAngle() {
-  const a = A.look.angle || 0; if (a === angleNow) return; angleNow = a;
-  hinge.rotation.x = a * Math.PI / 180; renderer.shadowMap.needsUpdate = true; fit();
+  const a = A.look.angle || 0, b = A.look.angleLow || 0, key = a + ',' + b; if (key === angleNow) return; angleNow = key;
+  hinge.rotation.x = a * Math.PI / 180; hingeLow.rotation.x = -b * Math.PI / 180; renderer.shadowMap.needsUpdate = true; fit();
 }
 // PARALLAX (OPTIONS): the camera swings a little with the pointer; 0 keeps it fixed
 let pxT = 0, pyT = 0, pxC = 0, pyC = 0;
