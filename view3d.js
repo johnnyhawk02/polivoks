@@ -58,7 +58,8 @@ document.body.appendChild(corner);
 const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.25;
-const camera = new THREE.PerspectiveCamera(26, 1, 50, 20000);
+// a long lens from far away: every knob is seen almost straight on, only the shadows show depth
+const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // soft white light from the front, then two coloured lamps low at the sides,
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
 scene.add(new THREE.HemisphereLight(0xffffff, 0x220011, 0.36));
@@ -411,7 +412,7 @@ function fit() {
   rig.updateMatrixWorld(true);
   const pts = [];
   for (const x of [-UW / 2, UW / 2]) for (const y of [TOTALH / 2, -TOTALH / 2]) for (const z of [0, -DEPTH]) pts.push(new THREE.Vector3(x, y, z).applyMatrix4(rig.matrixWorld));
-  for (dist = 800; dist < 20000; dist *= 1.03) {
+  for (dist = 2000; dist < 200000; dist *= 1.02) {
     camera.position.set(target.x, target.y, target.z + dist); camera.lookAt(target); camera.updateMatrixWorld();
     if (pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.96 && Math.abs(q.y) < 0.93; })) break;
   }
