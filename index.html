@@ -191,7 +191,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
     <div class="box" id="g-mix" style="grid-area:3/10/4/13;--n:3;--m:1"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/10;--n:6;--m:1"><h2>ECHO</h2></div>
-    <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTER</h2></div>
+    <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTHER</h2></div>
     <div class="box" id="g-fe" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>FILTER ENVELOPE</h2></div>
     <div class="ttl" style="grid-area:1/15/3/20"><span id="ttlw">FILTH</span></div>
     <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
@@ -1675,7 +1675,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.73.0';
+const VERSION = '1.74.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];

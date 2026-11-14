@@ -386,12 +386,23 @@ let title = null, titleU = null;
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
       float fbm(vec2 p) { return .65 * vn(p) + .35 * vn(p * 2.); }
+      // the FILTH plate is an orange CRT: a slightly bulging screen, orange phosphor
+      // lettering with a constant soft bloom that brightens with the sound, scanlines and
+      // a dark vignette; the wobble still bends the letters
       void main() {
-        vec2 px = vUv * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
+        vec2 cuv = vUv * 2. - 1.;
+        cuv *= 1. + 0.07 * dot(cuv, cuv);                     // barrel: the glass bulges
+        vec2 uv0 = cuv * .5 + .5;
+        if (uv0.x < 0. || uv0.x > 1. || uv0.y < 0. || uv0.y > 1.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
+        vec2 px = uv0 * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
-        vec2 uv = vUv + d * amt / size;
+        vec2 uv = uv0 + d * amt / size;
         float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
-        gl_FragColor = vec4(vec3(.74 + .26 * lvl) * t + vec3(1., .62, .95) * g * lvl * 1.2, 1.);
+        vec3 ph = vec3(1., .5, .1);                           // orange phosphor
+        float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
+        float vig = smoothstep(1.35, .35, length(cuv));
+        vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
+        gl_FragColor = vec4(c, 1.);
       }`,
   });
   const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 8.15);
