@@ -176,7 +176,7 @@ console.log('--- stability sweep ---');
 }
 // stereo echo (an added effect after the synth, fx.js)
 {
-  const { TapeEcho, FxRack } = require('./fx.js');
+  const { TapeEcho, FxRack, SoftClip } = require('./fx.js');
   const { KnobSeq } = require('./seq.js');
   console.log('--- stereo echo (added effect, not circuit) ---');
   const runFx = (set, len, feed) => {
@@ -200,18 +200,24 @@ console.log('--- stability sweep ---');
   console.log(`feedback at max: peak ${pk.toFixed(3)}, rms 1-2 s ${r1.toFixed(3)}, 5-6 s ${r5.toFixed(3)}, 11-12 s ${r11.toFixed(4)}`);
   if (pk > 1 || !(r5 < r1 && r11 < r5 * 0.5)) { console.log('ECHO RUNAWAY'); process.exitCode = 1; }
   // whole chain with random echo settings: finite, ≤ full scale, CPU
-  const e = new PolivoksEngine(SR), fx = new TapeEcho(SR), q = new KnobSeq(SR, new FxRack(e, fx));
+  const e = new PolivoksEngine(SR), fx = new TapeEcho(SR), q = new KnobSeq(SR, new FxRack(e, fx)), clip = new SoftClip();
   q.msg({ t: 'p', id: 'power', v: 1 }); e.powerLevel = 1;
   for (const [k, v] of Object.entries({ volume: 1, cutoff: 0.8, res: 0.7, mix1: 1, mix2: 1 })) q.msg({ t: 'p', id: k, v });
   const oL = new Float32Array(128), oR = new Float32Array(128); let bad = 0, pk2 = 0; const t0 = Date.now(), nb = 3000;
   for (let b = 0; b < nb; b++) {
     if (b % 60 === 0) { for (const k of ['eTime', 'eFb', 'eTone', 'eMix', 'eSpread']) q.msg({ t: 'p', id: k, v: Math.random() }); q.msg({ t: 'p', id: 'eSync', v: Math.random() < .5 ? 0 : 1 }); q.msg({ t: 'on', n: 36 + Math.floor(Math.random() * 36) }); }
     if (b % 60 === 30) q.msg({ t: 'all' });
-    q.render(oL, 128); fx.bpm = q.tempo(); fx.process(oL, oR, 128);
+    q.render(oL, 128); fx.bpm = q.tempo(); fx.process(oL, oR, 128); clip.process(oL, oR, 128);
     for (let i = 0; i < 128; i++) { if (!isFinite(oL[i]) || !isFinite(oR[i])) bad++; pk2 = Math.max(pk2, Math.abs(oL[i]), Math.abs(oR[i])); }
   }
   console.log(`synth + echo, random settings: NaN/inf ${bad}, peak ${pk2.toFixed(3)}, CPU ${((Date.now() - t0) / 1000 / (nb * 128 / SR) * 100).toFixed(1)}% of realtime`);
   if (bad || pk2 > 1) { console.log('ECHO CHAIN FAILED'); process.exitCode = 1; }
+  // soft clipper (added output stage): leaves quiet signals alone, tops out below 1, reports how hard it is hit (CLIP LED)
+  { const c = new SoftClip(), a = new Float32Array([0.5, -0.6]), b = new Float32Array([0.3, 0]);
+    c.process(a, b, 2); const quiet = c.read(), same = a[0] === Math.fround(0.5) && a[1] === Math.fround(-0.6);
+    const x = new Float32Array([2.5, -4]), y = new Float32Array([0, 0]); c.process(x, y, 2); const loud = c.read();
+    console.log(`soft clipper: quiet untouched ${same}, LED quiet ${quiet}, loud ${loud.toFixed(2)}, 4.0 -> ${(-x[1]).toFixed(3)}`);
+    if (!same || quiet !== 0 || !(loud > 0.9) || !(-x[1] <= 1 && x[0] < 1) || c.read() !== 0) { console.log('SOFT CLIP FAILED'); process.exitCode = 1; } }
   // MIDI clock at 100 BPM sets the echo: 1/4 = 600 ms
   const q2 = new KnobSeq(SR, new FxRack(new PolivoksEngine(SR), fx)); const o = new Float32Array(128);
   let next = 0; const per = 60 / 100 / 24;
