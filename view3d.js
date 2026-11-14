@@ -101,7 +101,9 @@ function driveAmbient() {
   // weighted mean of the two angles on the wheel
   const x = a * Math.cos(2 * Math.PI * h1) + b * Math.cos(2 * Math.PI * h2), y = a * Math.sin(2 * Math.PI * h1) + b * Math.sin(2 * Math.PI * h2);
   let h = Math.atan2(y, x) / (2 * Math.PI) + 0.3 * ((cut ? cut.v : 0.5) - 0.5);
-  h = ((h % 1) + 1) % 1;
+  // COLOUR CHANGE (OPTIONS): 0 keeps the panel colour, 1 goes all the way to the sound's hue
+  const base = A.look.hue, dh = ((h - base) % 1 + 1.5) % 1 - 0.5;
+  h = (((base + dh * A.look.depth) % 1) + 1) % 1;
   ambWant.setHSL(h, 1, 0.5);
   ambCol.lerp(ambWant, 0.2);                    // a short fade when a wave changes
   amb.color.copy(ambCol); amb.groundColor.copy(ambCol).multiplyScalar(0.25); front.color.copy(ambCol);
@@ -561,7 +563,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (!o) return;
   cv.setPointerCapture(e.pointerId); e.preventDefault();
   const u = o.userData;
-  if (u.title) { grab = { note: true }; A.on(48, 'ui'); }
+  if (u.title) { A.openOptions(); }   // tapping FILTH opens OPTIONS
   else if (u.ctl) {
     const c = u.ctl; grab = { c, y0: e.clientY, v0: c.v, moved: false, scale: 220 * Math.min(1, innerWidth / 1400) + 80 };
     if (c.kind === 'knob' && e.button === 0) A.pickSeq(c);
@@ -591,7 +593,6 @@ function release() {
     if (c.kind === 'sw') c.set(c.v ? 0 : 1);
     else if (c.kind === 'sel') c.set((c.v + 1) % c.opts.length);
   }
-  if (grab && grab.note) A.off(48, 'ui');
   grab = null; paint = null;
 }
 cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
