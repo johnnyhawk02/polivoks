@@ -11,7 +11,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 const A = window.filthApp;
 const PINK = '#fc0fc0', INK = '#0b0b0b', PAPER = '#ffffff';
 const DISPLAY = '"Archivo Black", "Rubik", "Arial Black", sans-serif', MONO = '"Geist Mono", ui-monospace, Menlo, monospace';
-const KR = 17, DEPTH = 26, S2 = 2;      // knob radius, slab thickness, texture pixels per panel pixel
+const KR = 22, DEPTH = 26, S2 = 2;      // knob radius (the 2D panel's is 17), slab thickness, texture pixels per panel pixel
 const panel = document.getElementById('panel'), low = document.getElementById('low');
 
 await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 3000))]);
@@ -213,7 +213,7 @@ function paintCtl(ctx, c) {
   }
   const r = rel(c.el, panel);
   if (c.kind === 'knob') {
-    const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 34, n = c.scale === 'bip' ? 5 : 7;
+    const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 40, n = c.scale === 'bip' ? 5 : 7;
     // the value ring's track: a dark groove from min to max, ticks just outside it
     ctx.strokeStyle = 'rgba(11,11,11,.55)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(cx, cy, KR + 5.2, -Math.PI / 2 + ang(0), -Math.PI / 2 + ang(1)); ctx.stroke(); ctx.lineCap = 'butt';
@@ -223,7 +223,7 @@ function paintCtl(ctx, c) {
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, KR + 5, 0, 7); ctx.fill();
     if (c.added) { ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6); ctx.setLineDash([]); }
   } else if (c.kind === 'sel') {
-    const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 34;
+    const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 40;
     c.opts.forEach((o, i) => {
       const a = selA(c, i), px = cx + Math.sin(a) * (KR + 11), py = cy - Math.cos(a) * (KR + 12);
       if (o.t) text(ctx, o.t, px, py, `600 12px ${MONO}`);
@@ -283,7 +283,7 @@ sectionNames(panel, upper);
 const levers = new Set();
 for (const c of CTL) {
   if (c.kind === 'knob' || c.kind === 'sel') {
-    const s = rel(c.el.querySelector('svg'), panel), cx = s.x + s.w / 2, cy = s.y + 34;
+    const s = rel(c.el.querySelector('svg'), panel), cx = s.x + s.w / 2, cy = s.y + 40;
     const g = new THREE.Group(); g.position.copy(pos(cx, cy, 0));
     const body = new THREE.Mesh(knobGeo, mat.knobMatt); body.castShadow = true; g.add(body, new THREE.Mesh(rimGeo, mat.knobRim));
     if (c.kind === 'knob') g.add(new THREE.Mesh(pointerGeo, mat.lit));
