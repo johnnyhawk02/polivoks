@@ -387,7 +387,7 @@ let title = null, titleU = null;
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
       float fbm(vec2 p) { return .65 * vn(p) + .35 * vn(p * 2.); }
       void main() {
-        vec2 px = vUv * size * .045;
+        vec2 px = vUv * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
         vec2 uv = vUv + d * amt / size;
         float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
@@ -402,7 +402,8 @@ let title = null, titleU = null;
 }
 function driveTitle() {
   const W = A.WOB, v = Math.max(-1, Math.min(1, A.lfoV / W.vmax)) * Math.min(1, A.outRms / W.ref), a = W.on ? W.A * v : 0;
-  titleU.amt.value = Math.abs(a) < 0.05 ? 0 : a;
+  // the plate is much taller than the 2D title (110 px), so the depth scales with it, and a little more
+  titleU.amt.value = Math.abs(a) < 0.05 ? 0 : a * 1.6 * titleU.size.value.y / 110;
   const want = Math.max(0, Math.min(1, (20 * Math.log10(A.outRms + 1e-9) + 36) / 30)), l = titleU.lvl.value;
   titleU.lvl.value = l + (want - l) * (want > l ? 0.45 : 0.07);   // quick to light, slow to fade
 }
