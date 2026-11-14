@@ -8,8 +8,8 @@
   "display": "standalone",
   "display_override": ["fullscreen", "standalone"],
   "orientation": "landscape",
-  "theme_color": "#fc0fc0",
-  "background_color": "#fc0fc0",
+  "theme_color": "#0b0b0b",
+  "background_color": "#0b0b0b",
   "categories": ["music", "entertainment"],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
