@@ -571,6 +571,11 @@ class VCA {
 //  is the control noise (X7 pin 2), a band around 160 Hz.  A3's output is
 //  sampled onto C6 0.22 µF by the КП303В switch V3 for 0.2 ms after each
 //  falling edge of A5 (V4 pulse shaper), A4 buffers it (X7 pin 3).
+//  SLOW range (an addition, not on the original panel): a panel switch puts
+//  C7a 150 µF in parallel with C7 (160 µF in all) and swaps R107 for a 1 MΩ
+//  log gang of the same knob, so R21 4.3k … 1.0043 MΩ gives ≈2.8 Hz down to
+//  ≈0.012 Hz (84 s a cycle).  The switch keeps C7's voltage (C7a's charge
+//  sharing is ignored, EST).
 //  Checked against ngspice in spice/lfo/.  Pot taper (log) EST, noise level
 //  EST (0.25 V rms at A2: the sheet draws ±1.5 V at both A2 and A3, which the ×20 band gain between them cannot both meet), V3 on-resistance 300 Ω EST, the sampling edge EST.
 // ============================================================================
@@ -703,7 +708,7 @@ function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); ret
 const OUT_SCALE = 1 / 6;
 const PARAM_DEFAULTS = {
   power: 0,
-  lfoRate: 0.45, lfoMode: 0,
+  lfoRate: 0.45, lfoMode: 0, lfoRange: 0,
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
   o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0,
   o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0,
@@ -770,7 +775,10 @@ class PolivoksEngine {
 
       // modulator
       //   R21 4.3k + "Частота" R107 100k rheostat; lfo = modulation bus volts
-      const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, 100e3);
+      //   SLOW range (added): R107's 1 MΩ gang and C7 ∥ C7a = 160 µF
+      const slow = p.lfoRange >= 0.5;
+      this.lfo.C = slow ? 160e-6 : 10e-6;
+      const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3);
       const lfo = this.lfo.step(lfoR, p.lfoMode | 0, this.nzAvg);
 
       // keyboard board: gate, track-and-hold, voice 2, glide (sheet 3)
@@ -1251,7 +1259,7 @@ const knob = (id, label, scale, def, extra) => Object.assign({ id, label, kind: 
 const sel = (id, label, opts, def) => ({ id, label, kind: 'sel', opts, def });
 const sw = (id, top, bot, def, label) => ({ id, kind: 'sw', top, bot, def, label });
 const L = {
-  'g-mod': [knob('lfoRate', 'ЧАСТОТА', 'mm', .45), sel('lfoMode', 'РЕЖИМ', [{i:'tri'},{i:'sq'},{i:'sh'},{i:'nz'}], 0)],
+  'g-mod': [knob('lfoRate', 'ЧАСТОТА', 'mm', .45), sw('lfoRange', 'БЫСТР.', 'МЕДЛ.', 0, 'ДИАПАЗОН'), sel('lfoMode', 'РЕЖИМ', [{i:'tri'},{i:'sq'},{i:'sh'},{i:'nz'}], 0)],
   'g-l1': [knob('phones', 'ТЛФ.', '06', .6), knob('tune', 'НАСТРОЙКА', 'bip', 0)],
   'g-l2': [knob('glide', 'ГЛИССАНДО', 'mm', 0), sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1)],
   'g-l3': [knob('volume', 'ГРОМКОСТЬ', '06', .7), sw('outSel', 'ЛИН.', 'ТЛФ.', 0, 'ВЫХОД')],
@@ -1281,7 +1289,7 @@ const EN = {
   'РАССТРОЙКА':'DETUNE','ВЫСОТА':'PITCH','МИКШЕР':'MIXER','ШУМ':'NOISE','ВНЕШ.':'EXT.','ФИЛЬТР':'FILTER','УСИЛИТЕЛЬ':'AMPLIFIER',
   'АТАКА':'ATTACK','ЗАТУХАНИЕ':'DECAY','ПЬЕДЕСТАЛ':'SUSTAIN','ПОСЛЕЗВУЧ.':'RELEASE','ЧАСТОТА СРЕЗА':'CUTOFF',
   'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
-  'ОГИБ.':'ENV','ВКЛ.':'HOLD','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
+  'ОГИБ.':'ENV','БЫСТР.':'FAST','МЕДЛ.':'SLOW','ВКЛ.':'HOLD','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
 };
 // labels are written in Russian as on the original panel and shown in English
 const lang = 'en';
@@ -1301,7 +1309,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.16.0';
+const VERSION = '1.17.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];

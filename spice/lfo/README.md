@@ -64,3 +64,12 @@ modulation input takes that through its R91 / R86 100k path, so filter
 modulation is shallower than the old ±5 / ±11 V guess. The VCO's modulation
 depth is unchanged (the bus is rescaled to the old ±1 there) until the sheet 5
 summer is worked through.
+
+## SLOW range (an addition, not on the original Polivoks)
+
+A RANGE switch beside the rate knob puts C7a 150 µF in parallel with C7
+(160 µF) and swaps R107 for a 1 MΩ log gang of the same knob. Same circuit,
+so the same formula: R21 4.3k … 1.0043 MΩ gives 2.77 Hz down to 0.0119 Hz
+(84 s a cycle). FAST is the original 1.83 … 44 Hz. Presets saved before the
+switch existed load in FAST. C7a's charge sharing at the moment of switching
+is ignored (**EST**).

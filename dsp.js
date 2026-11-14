@@ -417,6 +417,11 @@ class VCA {
 //  is the control noise (X7 pin 2), a band around 160 Hz.  A3's output is
 //  sampled onto C6 0.22 µF by the КП303В switch V3 for 0.2 ms after each
 //  falling edge of A5 (V4 pulse shaper), A4 buffers it (X7 pin 3).
+//  SLOW range (an addition, not on the original panel): a panel switch puts
+//  C7a 150 µF in parallel with C7 (160 µF in all) and swaps R107 for a 1 MΩ
+//  log gang of the same knob, so R21 4.3k … 1.0043 MΩ gives ≈2.8 Hz down to
+//  ≈0.012 Hz (84 s a cycle).  The switch keeps C7's voltage (C7a's charge
+//  sharing is ignored, EST).
 //  Checked against ngspice in spice/lfo/.  Pot taper (log) EST, noise level
 //  EST (0.25 V rms at A2: the sheet draws ±1.5 V at both A2 and A3, which the ×20 band gain between them cannot both meet), V3 on-resistance 300 Ω EST, the sampling edge EST.
 // ============================================================================
@@ -549,7 +554,7 @@ function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); ret
 const OUT_SCALE = 1 / 6;
 const PARAM_DEFAULTS = {
   power: 0,
-  lfoRate: 0.45, lfoMode: 0,
+  lfoRate: 0.45, lfoMode: 0, lfoRange: 0,
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
   o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0,
   o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0,
@@ -616,7 +621,10 @@ class PolivoksEngine {
 
       // modulator
       //   R21 4.3k + "Частота" R107 100k rheostat; lfo = modulation bus volts
-      const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, 100e3);
+      //   SLOW range (added): R107's 1 MΩ gang and C7 ∥ C7a = 160 µF
+      const slow = p.lfoRange >= 0.5;
+      this.lfo.C = slow ? 160e-6 : 10e-6;
+      const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3);
       const lfo = this.lfo.step(lfoR, p.lfoMode | 0, this.nzAvg);
 
       // keyboard board: gate, track-and-hold, voice 2, glide (sheet 3)
