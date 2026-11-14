@@ -114,6 +114,9 @@
   /* 3D view: the 2D panel keeps working underneath, unseen; view3d.js draws it in 3D and drives its controls */
   .v3d body { height: 100vh !important; overflow: hidden; }
   .v3d #stage { visibility: hidden; position: fixed; left: 0; top: 0; pointer-events: none; z-index: -1; }
+  /* the 3D view lays the same panel out with more room around every control */
+  .v3d #stage { --cw: 86px; --rh: 122px; --g: 12px; }
+  .v3d .panel { padding: 24px; }
 </style>
 </head>
 <body>
@@ -1526,7 +1529,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.30.0';
+const VERSION = '1.31.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];

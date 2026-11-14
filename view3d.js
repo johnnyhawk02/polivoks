@@ -7,6 +7,7 @@
 // presets, RANDOMISE, the sequencer, MIDI and saving are the app's, not a copy.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const A = window.filthApp;
 const PINK = '#fc0fc0', INK = '#0b0b0b', PAPER = '#ffffff';
@@ -50,6 +51,9 @@ Object.assign(cv.style, { position: 'fixed', inset: '0', width: '100vw', height:
 document.body.appendChild(cv);
 document.body.style.background = 'radial-gradient(120% 90% at 50% 40%, #2a2a2a 0%, #0b0b0b 70%)';
 // a corner note: the version, and the way back to the flat panel
+const vignette = document.createElement('div');
+Object.assign(vignette.style, { position: 'fixed', inset: '0', pointerEvents: 'none', background: 'radial-gradient(130% 110% at 50% 45%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%)' });
+document.body.appendChild(vignette);
 const corner = document.createElement('div');
 corner.innerHTML = `FILTH v${A.VERSION} · <a href="?view=2d" style="color:inherit">2D VIEW</a>`;
 Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: PINK });
@@ -127,7 +131,7 @@ function slab(w, h, paint) {
   const [c, ctx] = canvas(w, h);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }); tintMats.push(face);
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, DEPTH), [mat.edge, mat.edge, mat.edge, mat.edge, face, mat.edge]);
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, DEPTH, 3, 7), [mat.edge, mat.edge, mat.edge, mat.edge, face, mat.edge]);
   m.position.set(w / 2, -h / 2, -DEPTH / 2); m.receiveShadow = true; m.castShadow = true;
   m.userData.repaint = () => { ctx.fillStyle = PINK; ctx.fillRect(0, 0, w, h); paint(ctx); tex.needsUpdate = true; };
   return m;
@@ -138,7 +142,7 @@ function plate(w, h, d, draw, opts = {}) {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const top = opts.bg === PINK ? new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }) : new THREE.MeshLambertMaterial({ map: tex });
   if (opts.bg === PINK) tintMats.push(top);
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
+  const m = new THREE.Mesh(d >= 3 && !opts.square ? new RoundedBoxGeometry(w, h, d, 2, Math.min(2.5, d / 2.2)) : new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
   m.geometry.translate(w / 2, -h / 2, d / 2); m.castShadow = true; m.receiveShadow = true;
   m.userData.redraw = (f) => { ctx.fillStyle = opts.bg || INK; ctx.fillRect(0, 0, w, h); f(ctx, w, h); tex.needsUpdate = true; };
   m.userData.redraw(draw);
@@ -157,6 +161,8 @@ const selBarGeo = new THREE.BoxGeometry(6, KR + 2, 1.4); selBarGeo.translate(0, 
 const selInGeo = new THREE.BoxGeometry(2, KR - 6, 1.6); selInGeo.translate(0, 2 + (KR - 6) / 2, 17.2);
 const leverGeo = new THREE.BoxGeometry(14, 12, 9); leverGeo.translate(0, 0, 4.5);
 const dotGeo = new THREE.SphereGeometry(3.4, 16, 12);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });   // knob value rings: lit, like the pointers
+const haloMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
 const hits = [];                      // things the pointer can grab
 const ticks = [];                     // per-frame checks: each returns nothing, redraws what changed
 const hitBox = (w, h, d, x, y, z, parent) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ visible: false })); m.position.copy(pos(x, y, z)); parent.add(m); hits.push(m); return m; };
@@ -176,8 +182,11 @@ function paintCtl(ctx, c) {
   const r = rel(c.el, panel);
   if (c.kind === 'knob') {
     const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 34, n = c.scale === 'bip' ? 5 : 7;
-    ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
-    for (let i = 0; i < n; i++) { const a = ang(i / (n - 1)); ctx.beginPath(); ctx.moveTo(cx + Math.sin(a) * (KR + 5), cy - Math.cos(a) * (KR + 5)); ctx.lineTo(cx + Math.sin(a) * (KR + 9), cy - Math.cos(a) * (KR + 9)); ctx.stroke(); }
+    // the value ring's track: a dark groove from min to max, ticks just outside it
+    ctx.strokeStyle = 'rgba(11,11,11,.55)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx, cy, KR + 5.2, -Math.PI / 2 + ang(0), -Math.PI / 2 + ang(1)); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.1;
+    for (let i = 0; i < n; i++) { const a = ang(i / (n - 1)); ctx.beginPath(); ctx.moveTo(cx + Math.sin(a) * (KR + 8.5), cy - Math.cos(a) * (KR + 8.5)); ctx.lineTo(cx + Math.sin(a) * (KR + 11), cy - Math.cos(a) * (KR + 11)); ctx.stroke(); }
     const g = ctx.createRadialGradient(cx, cy, KR, cx, cy, KR + 5); g.addColorStop(0, 'rgba(0,0,0,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, KR + 5, 0, 7); ctx.fill();
     if (c.added) { ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5; ctx.strokeRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6); ctx.setLineDash([]); }
@@ -202,10 +211,23 @@ function paintResp(ctx, bp) {
   P2([[6, 24], [44, 24], [52, 62]], bp ? 1 : 2.4, bp); P2([[40, 62], [52, 8], [62, 62]], bp ? 2.4 : 1, !bp); ctx.setLineDash([]);
   text(ctx, 'LP', 14 * k, 17 * k, `500 8.5px ${MONO}`, INK, 'left'); text(ctx, 'BP', 64 * k, 51 * k, `500 8.5px ${MONO}`, INK, 'left');
 }
-function paintUpper(ctx) {
-  for (const b of panel.querySelectorAll('.box')) { const r = rel(b, panel); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2); }
-  for (const c of CTL) paintCtl(ctx, c);
+// a section: a shallow recess in the panel, darker inside, shaded along its top and left edges, a fine black rule
+function recess(ctx, r) {
+  ctx.fillStyle = 'rgba(40,0,30,.10)'; ctx.fillRect(r.x, r.y, r.w, r.h);
+  let g = ctx.createLinearGradient(0, r.y, 0, r.y + 14); g.addColorStop(0, 'rgba(0,0,0,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, 14);
+  g = ctx.createLinearGradient(r.x, 0, r.x + 10, 0); g.addColorStop(0, 'rgba(0,0,0,.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(r.x, r.y, 10, r.h);
+  g = ctx.createLinearGradient(0, r.y + r.h - 3, 0, r.y + r.h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.35)');
+  ctx.fillStyle = g; ctx.fillRect(r.x, r.y + r.h - 3, r.w, 3);
+  ctx.strokeStyle = 'rgba(11,11,11,.85)'; ctx.lineWidth = 1.5; ctx.strokeRect(r.x + .75, r.y + .75, r.w - 1.5, r.h - 1.5);
 }
+function paintUpper(ctx) {
+  for (const b of panel.querySelectorAll('.box')) recess(ctx, rel(b, panel));
+  for (const c of CTL) paintCtl(ctx, c);
+  if (respEl) { const r = rel(respEl.querySelector('svg') || respEl, panel); ctx.save(); ctx.translate(r.x, r.y); paintResp(ctx, fmCtl && fmCtl.v >= 0.5); ctx.restore(); }
+}
+const respEl = panel.querySelector('.resp'), fmCtl = A.S.find((c) => c.id === 'fMode');
 const upSlab = slab(UW, UH, paintUpper); upSlab.userData.repaint(); upper.add(upSlab);
 // a sequence starting or stopping changes a label: repaint the face then
 const seqSig = () => CTL.map((c) => { const l = c.el.querySelector('.lab'); return l && l.classList.contains('seq') ? 1 : 0; }).join('');
@@ -219,14 +241,8 @@ function sectionNames(root, group) {
   }
 }
 sectionNames(panel, upper);
-// filter response sketch
-const respEl = panel.querySelector('.resp');
-if (respEl) {
-  const r = rel(respEl.querySelector('svg') || respEl, panel), fm = A.S.find((c) => c.id === 'fMode');
-  const rp = plate(r.w, r.h, 0.4, () => {}, { bg: PINK }); rp.castShadow = false; rp.position.copy(pos(r.x, r.y, 0.05)); upper.add(rp);
-  let last = null;
-  ticks.push(() => { const bp = fm && fm.v >= 0.5; if (bp !== last) { last = bp; rp.userData.redraw((ctx) => paintResp(ctx, bp)); } });
-}
+// filter response sketch: painted into the panel face, which is repainted when the filter type changes
+{ let last = fmCtl && fmCtl.v; ticks.push(() => { if (fmCtl && fmCtl.v !== last) { last = fmCtl.v; upSlab.userData.repaint(); } }); }
 
 // knobs, selectors, switches
 const levers = new Set();
@@ -239,7 +255,22 @@ for (const c of CTL) {
     else { g.add(new THREE.Mesh(selBarGeo, mat.lit)); g.add(new THREE.Mesh(selInGeo, mat.ink)); }
     upper.add(g); body.userData.ctl = c; hits.push(body); c.obj3 = body;
     let last = null;
-    ticks.push(() => { if (c.v !== last) { last = c.v; g.rotation.z = -(c.kind === 'knob' ? ang(toU(c, c.v)) : selA(c, c.v)); } });
+    let arc = null, halo = null;
+    if (c.kind === 'knob') {
+      arc = new THREE.Mesh(new THREE.BufferGeometry(), ringMat); arc.position.copy(pos(cx, cy, 0.4)); upper.add(arc);
+      halo = new THREE.Mesh(new THREE.BufferGeometry(), haloMat); halo.position.copy(pos(cx, cy, 0.3)); upper.add(halo);
+    }
+    ticks.push(() => {
+      if (c.v === last) return; last = c.v;
+      g.rotation.z = -(c.kind === 'knob' ? ang(toU(c, c.v)) : selA(c, c.v));
+      if (arc) {
+        const a0 = c.scale === 'bip' ? 0 : ang(0), a1 = ang(toU(c, c.v)), lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+        arc.geometry.dispose();
+        arc.geometry = new THREE.RingGeometry(KR + 3.4, KR + 7, 48, 1, Math.PI / 2 - hi, Math.max(0.0001, hi - lo));
+        halo.geometry.dispose(); halo.geometry = new THREE.RingGeometry(KR + 1.5, KR + 10, 48, 1, Math.PI / 2 - hi, Math.max(0.0001, hi - lo));
+        arc.visible = halo.visible = hi - lo > 0.01;
+      }
+    });
     if (c.kind === 'knob') {
       // white dot on the scale: where the knob's step sequence has it right now
       const dot = new THREE.Mesh(dotGeo, mat.lit); dot.visible = false; upper.add(dot);
@@ -320,7 +351,7 @@ const lowEls = {
   ranges: [...low.querySelectorAll('input[type=range]')],
 };
 function paintLower(ctx) {
-  for (const b of lowEls.boxes) { const r = rel(b, low); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2); }
+  for (const b of lowEls.boxes) recess(ctx, rel(b, low));
   for (const e of lowEls.texts) {
     if (!e.offsetParent && getComputedStyle(e).display === 'none') continue;
     const r = rel(e, low); ctx.globalAlpha = fade(e);
