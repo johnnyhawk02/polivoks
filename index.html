@@ -96,6 +96,13 @@
   .sq-f b, .sq-src { font: 600 12px var(--mono); min-width: 3.4em; text-align: center; }
   .sq-src { font-size: 10.5px; letter-spacing: .1em; }
   .sq-f input[type=range] { width: 110px; accent-color: var(--ink); }
+  /* preset bar: names are made up by names.js, never typed */
+  .pre { display: flex; align-items: center; gap: 4px; }
+  .pre-name { display: inline-block; width: 300px; padding: 4px 8px 3px; border: 2px solid var(--ink); font: 400 13px var(--display); letter-spacing: .02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+  .pre-name.kept { background: var(--pink); }
+  .pre-n { min-width: 3.6em; text-align: center; }
+  .pre select { border: 0; background: var(--ink); color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 6px 6px 5px; width: 64px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -132,6 +139,8 @@
   </div>
   <div class="foot">
   <div class="info">
+    <span class="pre">PRESET: <button class="btn" id="pre-prev" aria-label="Previous preset">◀</button><span class="pre-name" id="pre-name"></span><button class="btn" id="pre-next" aria-label="Next preset">▶</button>
+      <b class="pre-n" id="pre-n"></b><select id="pre-list" aria-label="Saved presets"></select><button class="btn" id="pre-roll">NEW NAME</button><button class="btn" id="pre-save">SAVE</button><button class="btn" id="pre-del">DELETE</button></span>
     <span>Keys <b>A–P</b> · octave <b>Z/X</b> (<span id="octv">4</span>)</span>
     <span>MIDI: <b id="midi">—</b></span>
     <span>v<b id="ver"></b></span>
@@ -1051,6 +1060,179 @@ class FxRack {
 
 if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
 </script>
+<script type="text/plain" id="names-src">// ============================================================================
+//  Preset names.  Never typed: each one is built from the word lists below and
+//  then about half the time jumbled by splicing syllables (spoonerisms, half
+//  swaps, portmanteaus, alien endings), keeping only results a mouth can say.
+//  makeName(rnd) with rnd a () => [0,1) function, Math.random by default.
+// ============================================================================
+
+const NAME_WORDS = {
+  scifi: ['Nebula', 'Quasar', 'Photon', 'Plasma', 'Vortex', 'Ion Drive', 'Cyborg', 'Android', 'Warp Core', 'Hyperdrive',
+    'Tachyon', 'Graviton', 'Nova', 'Pulsar', 'Orbit', 'Zenith', 'Nexus', 'Chronoton', 'Laser', 'Droid', 'Rocket', 'Cosmonaut',
+    'Hologram', 'Neutron', 'Meteor', 'Galaxy', 'Robot', 'Starship', 'Teleporter', 'Quantum', 'Vector', 'Dynamo', 'Proton',
+    'Comet', 'Eclipse', 'Turbine', 'Omega', 'Flux Capacitor', 'Beacon', 'Cryopod', 'Asteroid', 'Wormhole', 'Mothership',
+    'Tractor Beam', 'Deflector', 'Reactor', 'Satellite', 'Supernova', 'Exoplanet', 'Antimatter', 'Raygun', 'Spacesuit',
+    'Moonbase', 'Stargate', 'Ion Storm', 'Positron', 'Lunar Module', 'Nanobot', 'Forcefield', 'Gamma Ray'],
+  food: ['Chorizo', 'Paella', 'Gazpacho', 'Tortilla', 'Churro', 'Sobrasada', 'Pimentón', 'Jamón', 'Manchego', 'Croqueta',
+    'Albóndiga', 'Empanada', 'Salmorejo', 'Fabada', 'Pulpo', 'Calamares', 'Patatas Bravas', 'Alioli', 'Sofrito', 'Membrillo',
+    'Turrón', 'Horchata', 'Sangría', 'Morcilla', 'Pisto', 'Migas', 'Cocido', 'Boquerones', 'Pimiento', 'Gambas', 'Tapas',
+    'Pintxo', 'Romesco', 'Escabeche', 'Torrija', 'Flan', 'Ensaimada', 'Polvorón', 'Zarzuela', 'Fideuà', 'Txistorra',
+    'Lentejas', 'Pan Tumaca', 'Bocadillo', 'Garbanzo', 'Chistorra', 'Picada', 'Rabo de Toro', 'Torreznos', 'Mojo Picón',
+    'Papas Arrugadas', 'Queso', 'Aceituna', 'Almendra', 'Azafrán', 'Merluza', 'Bacalao', 'Callos', 'Caldereta', 'Huevos Rotos'],
+  welsh: ['Cardiff', 'Swansea', 'Aberystwyth', 'Llandudno', 'Machynlleth', 'Penarth', 'Bangor', 'Caerphilly', 'Pontypridd',
+    'Llanelli', 'Tenby', 'Wrexham', 'Conwy', 'Harlech', 'Rhyl', 'Merthyr', 'Abergavenny', 'Porthcawl', 'Dolgellau',
+    'Betws-y-Coed', 'Llangollen', 'Aberdare', 'Ebbw Vale', 'Tregaron', 'Cwmbran', 'Bala', 'Beddgelert', 'Criccieth',
+    'Pwllheli', 'Llanberis', 'Brecon', 'Crickhowell', 'Fishguard', 'Neath', 'Barry', 'Rhayader', 'Pembroke', 'Caernarfon',
+    'Portmeirion', 'Ammanford', 'Bridgend', 'Mumbles', 'Llantwit', 'Tonypandy', 'Treorchy', 'Ystradgynlais', 'Aberaeron',
+    'Cardigan', 'Llandrindod', 'Prestatyn', 'Holyhead', 'Rhosneigr', 'Llanidloes', 'Talgarth', 'Maesteg', 'Blaenavon',
+    'Llandeilo', 'Mold', 'Ruthin', 'Penrhyndeudraeth'],
+  // the memorable bits of Friends episode titles ("The One With the ...")
+  friends: ['Holiday Armadillo', 'Unagi', 'Dozen Lasagnas', 'Apothecary Table', 'Hypnosis Tape', 'Jellyfish', 'Embryos',
+    'Blackout', 'Thumb', 'Monkey', 'Prom Video', 'Chicken Pox', 'Ick Factor', 'Fake Monica', 'Kips', 'Yeti', 'Male Nanny',
+    'Stoned Guy', 'Candy Hearts', 'Tea Leaves', 'Ride-Along', 'Cuffs', 'Sharks', 'Football', 'Routine', 'Jam', 'Rumor',
+    'Bullies', 'Proposal', 'Old Yeller', 'Underdog', 'Ross\'s Teeth', 'Mugging', 'Couch', 'Flashback', 'Poking Device',
+    'Metaphorical Tunnel', 'Baby on the Bus', 'Evil Orthodontist', 'Fake Party', 'Morning After', 'Joey\'s Fridge',
+    'Halloween Party', 'Videotape', 'Soap Opera Party', 'Wedding Dress', 'Cat', 'Chick and the Duck', 'Ballroom Dancing',
+    'Inappropriate Sister', 'Screamer', 'Invitation', 'Mrs. Bing', 'Dirty Girl', 'Ball', 'Cop', 'Bed', 'Vows', 'Truth About London'],
+  tools: ['Drill', 'Angle Grinder', 'Jigsaw', 'Router', 'Belt Sander', 'Nail Gun', 'Circular Saw', 'Planer', 'Impact Driver',
+    'Rotary Hammer', 'Heat Gun', 'Chainsaw', 'Leaf Blower', 'Hedge Trimmer', 'Band Saw', 'Mitre Saw', 'Biscuit Joiner',
+    'Multitool', 'Reciprocating Saw', 'Glue Gun', 'Jackhammer', 'Wet Vac', 'Orbital Sander', 'Bench Grinder', 'Lathe',
+    'Table Saw', 'Scroll Saw', 'Strimmer', 'Rivet Gun', 'Staple Gun', 'Torque Wrench', 'Plunge Router', 'SDS Drill',
+    'Tile Cutter', 'Polisher', 'Soldering Iron', 'Grout Gun', 'Breaker', 'Nibbler', 'Floor Sander', 'Die Grinder',
+    'Pillar Drill', 'Wallpaper Steamer', 'Paint Sprayer', 'Air Compressor', 'Pressure Washer', 'Chop Saw', 'Hammer Drill',
+    'Detail Sander', 'Laser Level', 'Stud Finder', 'Rebar Cutter', 'Log Splitter', 'Concrete Mixer', 'Wood Chipper'],
+  alien: ['Zorblax', 'Quexil', 'Vrennok', 'Thulgar', 'Xyphor', 'Glarnik', 'Oomvat', 'Krelloth', 'Zyzzog', 'Blorvu',
+    'Yxtrel', 'Mmaluk', 'Querrith', 'Skavvo', 'Drezzik', 'Ulgoth', 'Fnorp', 'Zantheq', 'Oxlu', 'Vexxarine', 'Glimbo',
+    'Throok', 'Kazzoo', 'Plimth', 'Zoggle', 'Quorbin', 'Yuzzith', 'Bleeb', 'Groznak', 'Vuul', 'Sklorch', 'Neebo',
+    'Trazzik', 'Ommuk', 'Xalvor', 'Phlenge', 'Ruzzbo', 'Klaatoo', 'Zibbit', 'Wexnor', 'Ghuun', 'Splontra', 'Ixxa',
+    'Morbulon', 'Treeble', 'Gorvex', 'Quazzle', 'Flubbix', 'Zhurn', 'Obblonk'],
+};
+// an alien word made up on the spot, for even more variety
+const AL = { on: ['z', 'x', 'kr', 'vr', 'gl', 'th', 'q', 'bl', 'sk', 'dr', 'gr', 'zh', 'fl', 'k', 'v', 'pl', 'sn', 'y', ''],
+  nu: ['a', 'o', 'u', 'e', 'i', 'oo', 'y', 'ee', 'au'], co: ['x', 'th', 'rk', 'zz', 'n', 'l', 'b', 'q', 'rg', 'sh', 'nk', 'mph', 'rb', ''] };
+const ALIEN_END = ['zor', 'ulon', 'ix', 'orb', 'azz', 'onk', 'uux', 'ethra', 'oid', 'atron', 'eeble', 'ox', 'ungo', 'ak'];
+
+const DIG = ['sch', 'll', 'dd', 'ff', 'ch', 'th', 'rh', 'ph', 'sh', 'ng', 'qu', 'zh', 'tx', 'ck'];
+const ONSETS = new Set(['bl', 'br', 'ch', 'cl', 'cr', 'dr', 'fl', 'fr', 'gl', 'gr', 'kl', 'kr', 'll', 'pl', 'pr', 'qu', 'sc', 'sk',
+  'sl', 'sm', 'sn', 'sp', 'st', 'sw', 'th', 'tr', 'tw', 'vr', 'zl', 'zr', 'gw', 'dw', 'rh', 'ph', 'sh', 'str', 'spr', 'scr', 'thr',
+  'chr', 'cw', 'zh', 'shr', 'squ', 'spl', 'tx', 'phl', 'skl', 'fn', 'thl', 'gh']);
+const plain = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const isV = (u, i, us) => /^[aeiou]/.test(u) || (u === 'y' && i > 0) || (u === 'y' && i === 0 && us.length > 1 && !/^[aeiou]/.test(us[1])) ||
+  (u === 'w' && i > 0 && !/^[aeiouy]/.test(us[i - 1]) && (i === us.length - 1 || !/^[aeiouy]/.test(us[i + 1])));
+// letters -> units (Welsh/Spanish digraphs kept whole) -> syllables
+function units(w) {
+  const s = plain(w), us = []; let i = 0;
+  while (i < s.length) { const d = DIG.find((g) => s.startsWith(g, i)); us.push(d || s[i]); i += d ? d.length : 1; }
+  return us;
+}
+function syllables(w) {
+  const us = units(w), v = us.map((u, i) => isV(u, i, us)), sy = []; let cur = '', i = 0;
+  // leading consonants + first vowel run
+  while (i < us.length) {
+    while (i < us.length && !v[i]) cur += us[i++];
+    while (i < us.length && v[i]) cur += us[i++];
+    let j = i; while (j < us.length && !v[j]) j++;
+    if (j === us.length) { cur += us.slice(i).join(''); sy.push(cur); break; }
+    const gap = us.slice(i, j);
+    // one consonant starts the next syllable; of several, a good onset pair goes on too
+    let keep = gap.length <= 1 ? 0 : gap.length - 1;
+    if (gap.length >= 2 && ONSETS.has(gap.slice(-2).join(''))) keep = gap.length - 2;
+    cur += gap.slice(0, keep).join(''); sy.push(cur); cur = gap.slice(keep).join(''); i = j;
+  }
+  return sy.filter(Boolean);
+}
+const onsetOf = (w) => { const m = plain(w).match(/^(sch|squ|str|spr|scr|thr|chr|shr|spl|[^aeiouy]*)/); return m[1]; };
+// can a mouth say it?  no long consonant pile-ups, no triple letters, a vowel somewhere, a sayable start
+function sayable(w) {
+  const s = plain(w).replace(/[^a-z]/g, '');
+  if (s.length < 3 || s.length > 14 || !/[aeiouy]/.test(s) || /(.)\1\1/.test(s)) return false;
+  if (/[aeiou]{4}/.test(s) || /[^aeiouyw]{4}/.test(s.replace(/ll|dd|ff|ch|th|sh|ph|rh|ng|ck/g, 'L'))) return false;
+  const on = onsetOf(s); if (on.length >= 2 && !ONSETS.has(on)) return false;
+  return true;
+}
+const cap = (s) => s.replace(/(^|[\s-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+
+// ---- splices: each takes words and returns new words, or null when it can't
+const SPLICE = {
+  // swap the opening consonants: Cardiff Drill -> Dardiff Crill
+  spoon(a, b) {
+    const oa = onsetOf(a), ob = onsetOf(b); if (oa === ob || !oa || !ob) return null;
+    return [ob + plain(a).slice(oa.length), oa + plain(b).slice(ob.length)];
+  },
+  // swap back halves at syllable joints: Chorizo Laser -> Choser Larizo
+  halves(a, b) {
+    const sa = syllables(a), sb = syllables(b); if (sa.length < 2 || sb.length < 2) return null;
+    const i = 1 + Math.floor(R() * (sa.length - 1)), j = 1 + Math.floor(R() * (sb.length - 1));
+    return [sa.slice(0, i).join('') + sb.slice(j).join(''), sb.slice(0, j).join('') + sa.slice(i).join('')];
+  },
+  // one word into the next where they share a letter: Paella Laser -> Paelaser
+  blend(a, b) {
+    const A = plain(a), B = plain(b), opts = [];
+    for (let i = 2; i < A.length - 1; i++) for (let j = 1; j < B.length - 2; j++) if (A[i] === B[j]) opts.push(A.slice(0, i) + B.slice(j));
+    if (!opts.length) return null;
+    const ok = opts.filter((w) => w.length >= 5 && w.length <= 11); const w = (ok.length ? ok : opts)[Math.floor(R() * (ok.length || opts.length))];
+    return [w];
+  },
+  // its syllables back to front: Chorizo -> Zoricho
+  flip(a) { const s = syllables(a); if (s.length < 2) return null; const t = s.slice(1).concat(s[0]); return [t.join('')]; },
+  // an alien ending in place of the last syllable: Gazpacho -> Gazpachulon
+  alien(a) {
+    const s = syllables(a); if (s.length < 2) return null; const e = ALIEN_END[Math.floor(R() * ALIEN_END.length)];
+    let st = s.slice(0, -1).join(''); if (/[aeiouy]$/.test(st) && /^[aeiou]/.test(e)) st = st.slice(0, -1);
+    return [st + e];
+  },
+};
+let R = Math.random;
+const pick = (a) => a[Math.floor(R() * a.length)];
+const words = (p) => p.split(' ');
+function alienWord() {
+  // one or two syllables; the middle one stays open so it reads easily (Zoobrak, Glyth)
+  const w = pick(AL.on) + pick(AL.nu) + (R() < .6 ? pick(AL.on.filter((o) => o.length === 1)) + pick(AL.nu) : '') + pick(AL.co);
+  return sayable(w) && !/(zh|y).*(zh|y)/.test(w) ? cap(w) : pick(NAME_WORDS.alien);
+}
+const fromCat = (c) => c === 'alien' && R() < .35 ? alienWord() : pick(NAME_WORDS[c]);
+const CATS = Object.keys(NAME_WORDS);
+
+// raw name before any jumbling
+function rawName() {
+  const r = R(), c1 = pick(CATS); let c2 = pick(CATS); while (c2 === c1) c2 = pick(CATS);
+  if (r < .1) return ['The', 'One', 'With', 'the'].concat(words(pick(NAME_WORDS[pick(['food', 'tools', 'scifi', 'welsh'])]))).join(' ');
+  if (r < .2) return fromCat(pick(['food', 'tools', 'scifi', 'alien'])) + ' of ' + pick(NAME_WORDS.welsh);
+  return fromCat(c1) + ' ' + fromCat(c2);
+}
+// jumble: two-word splices on a neighbouring pair, one-word ones on a single word
+function jumble(ws) {
+  const free = ws.map((w, i) => (/^(the|one|with|of|on|and|de)$/i.test(w) || w.length < 3 ? -1 : i)).filter((i) => i >= 0);
+  if (!free.length) return null;
+  for (let t = 0; t < 12; t++) {
+    const k = pick(['spoon', 'spoon', 'spoon', 'halves', 'halves', 'blend', 'blend', 'flip', 'alien']), out = ws.slice();
+    if (SPLICE[k].length === 2) {
+      const pairs = free.filter((i, n) => free[n + 1] !== undefined).map((i, n) => [i, free[n + 1]]); if (!pairs.length) continue;
+      const [i, j] = pick(pairs), r = SPLICE[k](ws[i], ws[j]); if (!r || !r.every(sayable)) continue;
+      if (r.length === 1) { out.splice(j, 1); out[i] = r[0]; } else { out[i] = r[0]; out[j] = r[1]; }
+    } else {
+      const i = pick(free), r = SPLICE[k](ws[i]); if (!r || !sayable(r[0])) continue; out[i] = r[0];
+    }
+    if (out.join(' ').toLowerCase() === ws.join(' ').toLowerCase()) continue;
+    return out;
+  }
+  return null;
+}
+function makeName(rnd) {
+  R = rnd || Math.random;
+  for (let t = 0; t < 20; t++) {
+    let ws = words(rawName());
+    if (R() < .75) { const j = jumble(ws); if (j) ws = j; }
+    const s = cap(ws.join(' ')).replace(/ (Of|The|On|And|De) /g, (m) => m.toLowerCase()).replace(/-Y-/g, '-y-');
+    // short and snappy: three words at most, except the Friends-style titles
+    if (s.length <= 28 && (ws.length <= 3 || /^The One/.test(s))) return s;
+  }
+  return pick(NAME_WORDS.alien) + ' ' + pick(NAME_WORDS.tools);
+}
+
+if (typeof module !== 'undefined') module.exports = { makeName, syllables, sayable, SPLICE, NAME_WORDS };
+</script>
 <script>
 (() => {
 'use strict';
@@ -1119,7 +1301,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.15.0';
+const VERSION = '1.16.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1423,6 +1605,64 @@ grid.addEventListener('pointerdown', (e) => { paint = stepAt(e); grid.setPointer
 grid.addEventListener('pointermove', (e) => { if (paint && e.buttons) paintTo(e); });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addEventListener(ev, () => { paint = null; });
 { let id = 'cutoff'; try { id = localStorage.getItem('polivoks-seq-sel') || id; } catch (e) {} selSeq(knobById(id) || knobById('cutoff')); }
+
+// ---------------------------------------------------------------- presets
+// A preset is the whole panel: every knob and switch (echo included), every
+// knob sequence and the clock.  Names come from names.js, never typed.
+const makeName = new Function(document.getElementById('names-src').textContent + '\nreturn makeName;')();
+const PRE_STORE = 'polivoks-presets-v1', PRE_CUR = 'polivoks-preset-cur';
+let presets = []; try { presets = JSON.parse(localStorage.getItem(PRE_STORE) || '[]'); } catch (e) {}
+if (!Array.isArray(presets)) presets = [];
+let preI = -1, preName = '';
+try { const c = JSON.parse(localStorage.getItem(PRE_CUR) || 'null'); if (c) { preI = c.i; preName = c.name; } } catch (e) {}
+if (!(presets[preI] && presets[preI].name === preName)) preI = -1;
+const freshName = () => { let n = makeName(); for (let t = 0; t < 20 && presets.some((p) => p.name === n); t++) n = makeName(); return n; };
+if (!preName) preName = freshName();
+const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, steps: new Array(16).fill(0) });
+const savePre = () => { try { localStorage.setItem(PRE_STORE, JSON.stringify(presets)); localStorage.setItem(PRE_CUR, JSON.stringify({ i: preI, name: preName })); } catch (e) {} };
+const preEl = { name: document.getElementById('pre-name'), n: document.getElementById('pre-n'), list: document.getElementById('pre-list'), del: document.getElementById('pre-del') };
+function drawPre() {
+  preEl.name.textContent = preName; preEl.name.title = ''; preEl.name.classList.toggle('kept', preI >= 0);
+  preEl.n.textContent = preI >= 0 ? (preI + 1) + '/' + presets.length : 'NEW';
+  preEl.list.innerHTML = '<option value="" selected disabled>LIST</option>' + presets.map((p, i) => `<option value="${i}">${p.name.replace(/[<&]/g, '')}</option>`).join('');
+}
+function snapshot() {
+  const s = {}; for (const id in seqs) { const q = seqs[id]; if (q.on || q.steps.some((v) => v)) s[id] = Object.assign({}, q, { steps: q.steps.slice() }); }
+  return { name: preName, k: Object.assign({}, state), s, bpm };
+}
+function loadPre(i) {
+  const p = presets[i]; if (!p) return;
+  preI = i; preName = p.name;
+  for (const c of S) c.set(c.id in p.k ? p.k[c.id] : c.def);
+  for (const c of KNOBS) {
+    const was = seqs[c.id], now = p.s && p.s[c.id];
+    if (!was && !now) continue;
+    seqs[c.id] = Object.assign(SEQ_DEF(), now || {}, { steps: ((now && now.steps) || new Array(16).fill(0)).slice() });
+    pushSeq(c); c.seqMark(seqs[c.id].on);
+  }
+  if (p.bpm) { bpm = p.bpm; send({ t: 'bpm', v: bpm }); saveSeq(); }
+  if (edC) drawSeq(); savePre(); drawPre();
+}
+const step = (d) => { const n = presets.length; if (!n) return; loadPre(preI < 0 ? (d > 0 ? 0 : n - 1) : (preI + d + n) % n); };
+document.getElementById('pre-prev').onclick = () => step(-1);
+document.getElementById('pre-next').onclick = () => step(1);
+preEl.list.onchange = () => { const i = +preEl.list.value; loadPre(i); preEl.list.value = ''; };
+document.getElementById('pre-roll').onclick = () => { preName = freshName(); preI = -1; savePre(); drawPre(); };
+// SAVE writes over the preset that is loaded; after NEW NAME it adds a new one
+document.getElementById('pre-save').onclick = () => {
+  const p = snapshot();
+  if (preI >= 0 && presets[preI] && presets[preI].name === preName) presets[preI] = p; else { presets.push(p); preI = presets.length - 1; }
+  savePre(); drawPre();
+};
+// DELETE asks twice: the first press turns it into SURE? for a few seconds
+let delT = null;
+preEl.del.onclick = () => {
+  if (preI < 0) return;
+  if (!delT) { preEl.del.textContent = 'SURE?'; delT = setTimeout(() => { delT = null; preEl.del.textContent = 'DELETE'; }, 2500); return; }
+  clearTimeout(delT); delT = null; preEl.del.textContent = 'DELETE';
+  presets.splice(preI, 1); preI = -1; preName = freshName(); savePre(); drawPre();
+};
+drawPre();
 
 // ---------------------------------------------------------------- audio
 // Always on.  Browsers only let audio start after the first click, tap or key
