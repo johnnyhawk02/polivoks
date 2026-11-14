@@ -122,13 +122,26 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x220011, 0.45));
 const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
 const side = (color, x) => {
   // a spot aimed at its own half of the panel, so its colour fades out toward the far side
-  const l = new THREE.SpotLight(color, 2.6, 0, 0.62, 1, 0);
+  const l = new THREE.SpotLight(color, 0.35, 0, 0.62, 1, 0);
   l.position.set(x, 160, 700); l.castShadow = true;
   l.shadow.mapSize.set(2048, 2048); l.shadow.bias = -0.0004; l.shadow.normalBias = 0.6; l.shadow.radius = 6;
   l.shadow.camera.near = 200; l.shadow.camera.far = 5000;
   l.target.position.set(Math.sign(x) * 380, -40, 0); scene.add(l, l.target); return l;
 };
 const lamps = [side(0x3d8bff, -1300), side(0xffa020, 1300)];   // cool blue from the left, amber from the right
+// Left lamp = VCO I, right lamp = VCO II.  Brightness follows how loud each
+// oscillator is in the output (mixer level × amplifier envelope × volume) and
+// rises a little with its pitch; the colour pales toward white as it goes up.
+const LAMP = [{ base: new THREE.Color(0x2f7dff), hi: new THREE.Color(0xbfe4ff), i: 0, oct: 0, b: 0.35, t: 0 },
+              { base: new THREE.Color(0xff9a10), hi: new THREE.Color(0xfff0b0), i: 0, oct: 0, b: 0.35, t: 0 }];
+function driveLamps() {
+  LAMP.forEach((L, k) => {
+    const t = Math.max(0, Math.min(1, (L.oct + 4) / 7));          // 32' low notes .. 2' high notes
+    const want = 0.3 + 5 * L.i * (0.55 + 0.45 * t);
+    L.b += (want - L.b) * (want > L.b ? 0.5 : 0.1); L.t += (t - L.t) * 0.2;
+    lamps[k].intensity = L.b; lamps[k].color.copy(L.base).lerp(L.hi, L.t * 0.6);
+  });
+}
 
 // the panels lie back like a desk synth; everything is placed in panel pixels
 const rig = new THREE.Group(); rig.rotation.x = 0; scene.add(rig);
@@ -421,8 +434,8 @@ function buildLower() {
   }
 }
 
-// ============================================================ camera: face on, a little parallax
-let yaw = 0, pitch = 0, uyaw = 0, upitch = 0, px = 0, py = 0, dist = 2000;
+// ============================================================ camera: face on, fixed
+let dist = 2000;
 function fit() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -431,22 +444,17 @@ function fit() {
   const pts = [];
   for (const x of [-UW / 2, UW / 2]) for (const y of [TOTALH / 2, -TOTALH / 2]) for (const z of [0, -DEPTH]) pts.push(new THREE.Vector3(x, y, z).applyMatrix4(rig.matrixWorld));
   for (dist = 800; dist < 20000; dist *= 1.03) {
-    yaw = pitch = 0; placeCamera(0, true); camera.updateMatrixWorld();
+    placeCamera(); camera.updateMatrixWorld();
     if (pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.96 && Math.abs(q.y) < 0.93; })) break;
   }
 }
 const target = new THREE.Vector3(0, -10, 0);
-function placeCamera(time, still) {
-  if (!still) {
-  const sway = 0, bob = 0;
-  yaw += (sway + uyaw - yaw) * 0.06; pitch += (bob + upitch - pitch) * 0.06; }
-  camera.position.set(target.x + dist * Math.sin(yaw) * Math.cos(pitch), target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(yaw) * Math.cos(pitch));
-  camera.lookAt(target);
-}
+// fixed in space: set once on load and on resize, never moves
+function placeCamera() { camera.position.set(target.x, target.y, target.z + dist); camera.lookAt(target); }
 
 addEventListener('resize', fit); fit();
 
-// ============================================================ pointer: turn knobs, flip switches, orbit
+// ============================================================ pointer: turn knobs, flip switches
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 let grab = null;
 const cv = renderer.domElement;
@@ -468,10 +476,9 @@ cv.addEventListener('pointerdown', (e) => {
   else if (o && o.userData.ctl) { const c = o.userData.ctl; grab = { c, y0: e.clientY, u0: P[c.id], moved: false, scale }; cv.classList.add('on'); }
   else if (o && o.userData.bar) { grab = { bar: o.userData.bar }; const v = barAt(grab.bar, e); if (v != null) { bars[grab.bar.i] = v; grab.bar.draw(); } }
   else if (o && o.userData.press) { grab = { press: o }; o.position.z = -3; }
-  else grab = { orbit: true, x0: e.clientX, y0: e.clientY, a: uyaw, b: upitch };
+  else grab = null;
 });
 cv.addEventListener('pointermove', (e) => {
-  px = e.clientX / innerWidth * 2 - 1; py = e.clientY / innerHeight * 2 - 1;
   if (!grab || !e.buttons) return;
   if (grab.c) {
     const c = grab.c, d = (grab.y0 - e.clientY) / (e.shiftKey ? 1200 : grab.scale);
@@ -479,10 +486,6 @@ cv.addEventListener('pointermove', (e) => {
     if (c.kind === 'knob') setP(c.id, grab.u0 + d);
     else if (c.kind === 'sel') { const n = c.opts.length - 1, i = Math.round(grab.u0 * n + (grab.y0 - e.clientY) / 22); setP(c.id, Math.max(0, Math.min(n, i)) / n); }
   } else if (grab.bar) { const v = barAt(grab.bar, e); if (v != null) { bars[grab.bar.i] = v; grab.bar.draw(); } }
-  else if (grab.orbit) {
-    uyaw = Math.max(-.45, Math.min(.45, grab.a - (e.clientX - grab.x0) / innerWidth * 1.2));
-    upitch = Math.max(-.25, Math.min(.3, grab.b + (e.clientY - grab.y0) / innerHeight * .8));
-  }
 });
 function release() {
   if (grab && grab.c && !grab.moved) {
@@ -495,40 +498,50 @@ function release() {
   grab = null; cv.classList.remove('on');
 }
 cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
-cv.addEventListener('dblclick', (e) => { const o = pick(e); if (o && o.userData.ctl && o.userData.ctl.kind === 'knob') { const c = o.userData.ctl; setP(c.id, toU(c, c.def)); } else if (!o) { uyaw = 0; upitch = 0; } });
-cv.addEventListener('pointerleave', () => { px = 0; py = 0; });
+cv.addEventListener('dblclick', (e) => { const o = pick(e); if (o && o.userData.ctl && o.userData.ctl.kind === 'knob') { const c = o.userData.ctl; setP(c.id, toU(c, c.def)); } });
 
 // ============================================================ the real engine (same code as index.html)
 // The circuit model lives inside index.html as text blocks; this page reads
 // them from there so it always runs the same engine as the 2D panel.
 let node = null, ctx = null, starting = null;
 const early = [];
+// worked out from the engine's own state once a block (same lib as index.html)
+const VCOINFO = `
+function vcoInfo(e) {
+  const p = e.p, ps = e.ps, R = [-2, -1, 0, 1, 2], lfo = e.lfoV || 0, kb = e.kb, tune = ps.tune * 2 / 12;
+  const o1 = (53 - 69) / 12 - kb.cv1 / 1.5 + R[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch);
+  const o2 = (53 - 69) / 12 - kb.cv2 / 1.5 + R[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch);
+  const env = p.vcaHold >= 0.5 ? 1 : Math.max(0, e.egA.v / e.egA.Vpk);
+  const vol = Math.min(1, (p.outSel >= 0.5 ? ps.phones : ps.volume) * 1.3) * (e.powerLevel || 0);
+  return [ps.mix1 * env * vol, ps.mix2 * env * vol, o1, o2];
+}
+`;
 function send(m) { if (node) node.port.postMessage(m); else if (m.t === 'on' || m.t === 'off') early.push(m); }
 async function powerOn() {
   const html = await (await fetch('./index.html', { cache: 'no-cache' })).text();
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const lib = ['dsp-src', 'seq-src', 'fx-src'].map((id) => doc.getElementById(id).textContent).join('\n');
   ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-  const src = lib + `
+  const src = lib + VCOINFO + `
 class PolivoksProc extends AudioWorkletProcessor {
   constructor() { super(); this.e = new PolivoksEngine(sampleRate); this.fx = new TapeEcho(sampleRate);
     this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx), () => {}); this.port.onmessage = (m) => this.q.msg(m.data); this.n = 0; this.ss = 0; }
   process(i, o) { const out = o[0], L = out[0], R = out[1] || new Float32Array(L.length);
     this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length);
     for (let k = 0; k < L.length; k++) this.ss += L[k] * L[k] + R[k] * R[k];
-    if ((this.n += L.length) >= sampleRate / 60) { this.port.postMessage({ t: 'lfo', v: this.e.lfoV, rms: Math.sqrt(this.ss / (2 * this.n)) }); this.n = 0; this.ss = 0; }
+    if ((this.n += L.length) >= sampleRate / 60) { this.port.postMessage({ t: 'lfo', v: this.e.lfoV, rms: Math.sqrt(this.ss / (2 * this.n)), vco: vcoInfo(this.e) }); this.n = 0; this.ss = 0; }
     return true; }
 }
 registerProcessor('polivoks3d', PolivoksProc);`;
   let ok = false;
   try { await Promise.race([ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'application/javascript' }))), new Promise((_, r) => setTimeout(r, 3000))]); ok = true; } catch (e) {}
-  if (ok) { node = new AudioWorkletNode(ctx, 'polivoks3d', { numberOfInputs: 0, outputChannelCount: [2] }); node.port.onmessage = (m) => { if (m.data.t === 'lfo') meter(m.data.v, m.data.rms); }; node.connect(ctx.destination); }
+  if (ok) { node = new AudioWorkletNode(ctx, 'polivoks3d', { numberOfInputs: 0, outputChannelCount: [2] }); node.port.onmessage = (m) => { if (m.data.t === 'lfo') meter(m.data.v, m.data.rms, m.data.vco); }; node.connect(ctx.destination); }
   else {
-    const [Eng, KS, Echo, Rack] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack];')();
+    const [Eng, KS, Echo, Rack, info] = new Function(lib + VCOINFO + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, vcoInfo];')();
     const fx = new Echo(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx), () => {});
     const sp = ctx.createScriptProcessor(1024, 0, 2);
     sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length);
-      let ss = 0; for (let k = 0; k < L0.length; k++) ss += L0[k] * L0[k] + R0[k] * R0[k]; meter(eng.lfoV, Math.sqrt(ss / (2 * L0.length))); };
+      let ss = 0; for (let k = 0; k < L0.length; k++) ss += L0[k] * L0[k] + R0[k] * R0[k]; meter(eng.lfoV, Math.sqrt(ss / (2 * L0.length)), info(eng)); };
     node = { port: { postMessage: (d) => qs.msg(d) } }; sp.connect(ctx.destination);
   }
   for (const id in P) send({ t: 'p', id, v: toEngine(id, P[id]) });
@@ -537,7 +550,9 @@ registerProcessor('polivoks3d', PolivoksProc);`;
   ctx.resume();
 }
 // −42 dB and below: no glow; −6 dB: full
-function meter(v, rms) { TITLE.lfo = v || 0; TITLE.level = Math.max(0, Math.min(1, (20 * Math.log10(rms + 1e-9) + 42) / 36)); }
+function meter(v, rms, vco) {
+  if (vco) { LAMP[0].i = vco[0]; LAMP[1].i = vco[1]; LAMP[0].oct = vco[2]; LAMP[1].oct = vco[3]; }
+  TITLE.lfo = v || 0; TITLE.level = Math.max(0, Math.min(1, (20 * Math.log10(rms + 1e-9) + 42) / 36)); }
 function start() { if (ctx) { ctx.resume(); return; } if (!starting) starting = powerOn().catch(() => {}); }
 addEventListener('keydown', start, true);
 // computer keys as on the 2D panel: A–P play, Z/X octave
@@ -562,16 +577,16 @@ fontsReady.then(() => {
   renderer.shadowMap.needsUpdate = true;
   // for headless checks: where a control is on screen
   const where = (id) => { const v = new THREE.Vector3().setFromMatrixPosition(OBJ[id].matrixWorld).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; };
-  window.filth3d = { P, setP, where, engine: () => !!node, title: TITLE, ready: true };
+  window.filth3d = { P, setP, where, engine: () => !!node, title: TITLE, lamps: () => lamps.map((l) => +l.intensity.toFixed(2)), ready: true };
   renderer.setAnimationLoop(frame);
 });
 function frame(time) {
-  placeCamera(time);
   for (const lev of moving) {
     const d = lev.userData.target - lev.userData.y; lev.userData.y += d * 0.35;
     if (Math.abs(d) < 0.2) { lev.userData.y = lev.userData.target; moving.delete(lev); }
     lev.userData.place(); renderer.shadowMap.needsUpdate = true;
   }
+  driveLamps();
   if (titleU) {
     const a = TITLE.wobble ? 9 * TITLE.lfo / 1.43 : 0;
     titleU.amt.value = Math.abs(a) < .05 ? 0 : a;
