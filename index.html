@@ -1589,8 +1589,8 @@ const L = {
     knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0),
   ],
   'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
-  'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'),
-    knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
+  'g-a': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35),
+    knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
   // six controls in six cells, the same width as VCO I and II above
   'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35),
@@ -1662,7 +1662,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.69.0';
+const VERSION = '1.70.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
