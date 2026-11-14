@@ -75,6 +75,16 @@ class ExpoPair {
 //    tri   A8 precision rectifier, V3/V4 КД521Б, R28 = R31 = 100k,
 //          R27 100k:  out = −(|S| − Vf), flat near S = 0;  C9 50 µF out
 //    pulse A10 comparator, S into (−) via R33 20k, (+) to R34 20k / panel
+//
+//  PULSE WIDTH (an addition, not on the original panel): a 100k linear pot
+//  from 0 V to −12.5 V, wiper through 56k onto A10 (+), the same line the
+//  panel's pulse switch drives (X2 pin 10).  With R34 20k to ground,
+//      V+ = −12.5·a · 20k / (20k + 56k + 100k·a(1−a))      (a = knob 0…1)
+//  so 0 gives V+ = 0 (the original square) and 1 gives −3.29 V, which trips
+//  A10 near the bottom of the ramp.  The pot and resistor values are chosen,
+//  not from the Polivoks.  Checked in ngspice (spice/vco/pw.cir): 50 → 8 %
+//  duty at 450 Hz, 47 → 5 % at 3.6 kHz, pitch unchanged; this model is
+//  within 1 % of those (spice/vco/pw_compare.txt).
 // ============================================================================
 class VCO {
   constructor(h, seed) {
@@ -86,6 +96,7 @@ class VCO {
     this.tauD = 0.08e-6;             // dump time constant (SPICE)
     this.SR7 = 2e6;                  // A7 КР140УД8Б slew 2 V/µs   EST
     this.SR10 = 3e6;                 // A10 slew                   EST
+    this.GBW2pi = 2 * Math.PI * 1e6; // A10 gain-bandwidth 1 MHz    EST
     this.Vsat = 11;                  // op-amp swing on ±12.5 V
     this.Vf = 0.6; this.wf = 0.04;   // КД521Б drop and knee in A8  EST
     this.tC8 = 30e-6 * 6.8e3;        // C8·R29
@@ -97,10 +108,11 @@ class VCO {
     // unreadable on the scan: EST.
     this.Rout = [0, 20e3, 12e3, 12e3];
     this.narrow = false;             // pulse switch: square or narrow pulse
-    this.narrowRef = 0.37;           // narrow pulse level, fraction of ΔV below the mean (13 % duty)  EST
-    this.vc = 0; this.dumping = false; this.rem = 0; this.dA = 0;
+    this.narrowRef = 0.355;          // narrow pulse level, fraction of ΔV below the mean (13 % duty at 450 Hz)  EST
+    this.vpw = 0;                    // A10 (+) volts from the added PULSE WIDTH pot (vpwOf)
+    this.vc = 0; this.ce = 0; this.dumping = false; this.rem = 0; this.dA = 0;
     this.o = this.Vref - 5; this.dc = this.Vref - 5; this.tdc = -1.4;
-    this.pulse = -this.Vsat;
+    this.pulse = -this.Vsat; this.n10 = -12; this.vplus = 0; this.S0 = 0;
     const rng = new Rng(seed);
     this.mismatch = (rng.u() - 0.5) * 0.004;    // pair ΔVbe mismatch in octaves
     // Factory trim: reference current that gives A4 = 440 Hz on this core.
@@ -117,36 +129,46 @@ class VCO {
   step(I) {
     const C = this.C, h = this.h, Vref = this.Vref, lo = this.vcLow, tau = this.tauD;
     const dv = this.dV(I), hi = lo + dv - I * this.tDump / C;
-    // comparator level on X: mean of the ramp, or near its bottom (narrow)
-    const xr = this.dc - (this.narrow ? this.narrowRef * dv : 0);
-    const vr = Vref - xr;                       // same level as cap voltage
-    let t = h, acc = 0, low = 0, vc = this.vc, guard = 0;
-    while (t > 1e-14 && guard++ < 16) {
+    // A10 (+): 0 V (square) or below the ramp's mean (narrow, switch line),
+    // plus the added PULSE WIDTH pot's volts
+    this.vplus = this.vpw - (this.narrow ? this.narrowRef * dv : 0);
+    // A7 can't follow the reset: it climbs back at SR7 until it meets X again
+    // (≈4 µs).  ce is that climb in cap-voltage terms; while it runs, A7's
+    // output (the saw, and what A10 sees through C8) is Vref − ce, not X.
+    // acc integrates A7's output.
+    const SR = this.SR7;
+    let t = h, acc = 0, vc = this.vc, ce = this.ce, guard = 0;
+    const climbSpan = (dt) => {             // A7 climbing for dt: ce − SR·t
+      acc += ce * dt - 0.5 * SR * dt * dt; ce -= SR * dt;
+    };
+    while (t > 1e-14 && guard++ < 24) {
       if (this.dumping) {
         // vc = lo + A·(e^(−τd/τ) − E): exponential that lands on lo exactly
-        // at the end of the dump
+        // at the end of the dump.  It falls at ~90 V/µs, so A7 is climbing
+        // throughout.
         const E = Math.exp(-this.tDump / tau), A = this.dA;
         const t1 = this.tDump - this.rem, dt = Math.min(t, this.rem), t2 = t1 + dt;
-        const e1 = Math.exp(-t1 / tau), e2 = Math.exp(-t2 / tau);
-        acc += lo * dt + A * (tau * (e1 - e2) - E * dt);
-        const v0 = vc; vc = lo + A * (e2 - E);
-        // pulse is high while X < xr, i.e. vc > vr
-        if (v0 > vr) low += vc >= vr ? dt : -tau * Math.log((vr - lo) / A + E) - t1;
+        vc = lo + A * (Math.exp(-t2 / tau) - E);
+        climbSpan(dt);
+        if (ce < vc) ce = vc;
         this.rem -= dt; t -= dt;
         if (this.rem <= 1e-14) { this.dumping = false; vc = lo; }
       } else {
         const s = I / C, tc = (hi - vc) / s;
-        const dt = tc >= t ? t : Math.max(tc, 0);
-        if (vc >= vr) low += dt; else { const tx = (vr - vc) / s; if (tx < dt) low += dt - tx; }
-        acc += vc * dt + 0.5 * s * dt * dt; vc += s * dt; t -= dt;
-        if (tc <= dt) { this.dumping = true; this.rem = this.tDump; this.dA = (vc - lo) / (1 - Math.exp(-this.tDump / tau)); }
+        let dt = tc >= t ? t : Math.max(tc, 0);
+        if (ce > vc) {                       // still climbing: meets X after tm
+          const tm = (ce - vc) / (s + SR);
+          if (tm < dt) dt = tm;
+          climbSpan(dt); vc += s * dt; t -= dt;
+          if (dt === tm) ce = vc;
+        } else {
+          acc += vc * dt + 0.5 * s * dt * dt; vc += s * dt; ce = vc; t -= dt;
+        }
+        if (tc <= dt && !this.dumping && vc >= hi - 1e-12) { this.dumping = true; this.rem = this.tDump; this.dA = (vc - lo) / (1 - Math.exp(-this.tDump / tau)); }
       }
     }
-    this.vc = vc;
-    const x = Vref - acc / h;                   // box-filtered X over the step
-    // A7: follower, slew-limited
-    const dm = this.SR7 * h;
-    this.o += clamp(x - this.o, -dm, dm);
+    this.vc = vc; this.ce = ce;
+    this.o = Vref - acc / h;                    // A7 output, box-filtered over the step
     // C8 / R29 coupling
     this.dc += (this.o - this.dc) * (h / this.tC8);
     const S = this.o - this.dc;
@@ -156,9 +178,23 @@ class VCO {
     const y = -this.wf * (u > 30 ? u : Math.log1p(Math.exp(u)));
     this.tdc += (y - this.tdc) * (h / this.tC9);
     this.tri = y - this.tdc;
-    // A10 comparator, slew-limited
-    const target = -this.Vsat + 2 * this.Vsat * (low / h), dp = this.SR10 * h;
-    this.pulse += clamp(target - this.pulse, -dp, dp);
+    // A10 comparator: КР140УД8Б open loop, S on (−) and V+ on (+).  Its
+    // integrator moves at 2π·GBW·Vd, at most SR10 (the ud8.lib model), and
+    // clamps at the rails; the output is that node limited to ±Vsat.  The
+    // finite gain-bandwidth delays the edge where the slow ramp crosses V+
+    // (the reset edge is fast), so the pulse narrows a little at high notes
+    // and very narrow ones lose height, as in ngspice.
+    // Four sub-steps with S interpolated across the step; the output is
+    // averaged over them (box filter) before the mixer sees it.
+    const k = this.SR10 / this.GBW2pi, hs = h / 4, S0 = this.S0;
+    let n = this.n10, pa = 0;
+    for (let i = 1; i <= 4; i++) {
+      const vd = this.vplus - (S0 + (S - S0) * (i - 0.5) / 4);
+      const n0 = n; n = clamp(n + hs * this.SR10 * Math.tanh(vd / k), -12, 12);
+      pa += clamp(0.5 * (n0 + n), -this.Vsat, this.Vsat);
+    }
+    this.n10 = n; this.S0 = S;
+    this.pulse = pa / 4;
     this.sq = this.pulse * 0.4;
   }
   out(wave) { return wave === 0 ? this.tri : wave === 1 ? this.saw : this.sq; }
@@ -546,6 +582,8 @@ function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; 
 // "Pitch" (an addition, not on the original panel): a 100k pot across
 // ±12.5 V into each VCO's summing node through 833k, i.e. ±15 µA = ±1 octave.
 function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
+// "Pulse width" (an addition): A10 (+) volts for the pot at a (see VCO above)
+function vpwOf(a) { return -12.5 * a * 20e3 / (76e3 + 100e3 * a * (1 - a)); }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
 
 // ============================================================================
@@ -556,13 +594,13 @@ const PARAM_DEFAULTS = {
   power: 0,
   lfoRate: 0.45, lfoMode: 0, lfoRange: 0,
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
-  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0,
-  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0,
+  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o1pw: 0,
+  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0, o2pw: 0,
   mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -647,6 +685,7 @@ class PolivoksEngine {
       const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.narrow = p.o1wave === 3; vco2.narrow = p.o2wave === 3;
+      vco1.vpw = vpwOf(ps.o1pw); vco2.vpw = vpwOf(ps.o2pw);
       const w1 = p.o1wave | 0, w2 = p.o2wave | 0;
       const fmk = fmOctPerVolt(ps.o1fm) * LN2;      // nepers per volt of VCO II triangle
 
@@ -708,4 +747,4 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
