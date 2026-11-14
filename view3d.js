@@ -196,6 +196,7 @@ const hitBox = (w, h, d, x, y, z, parent) => { const m = new THREE.Mesh(new THRE
 // ---------------------------------------------------------------- upper panel
 const CTL = A.S.filter((c) => c.el && panel.contains(c.el));
 function paintCtl(ctx, c) {
+  ctx.globalAlpha = c.el.classList.contains('inactive') ? 0.35 : 1;   // greyed out: label and scale fade too
   const svg = c.el.querySelector('svg'), lab = c.el.querySelector('.lab');
   if (lab) {
     const r = rel(lab, panel), seq = lab.classList.contains('seq'), size = fs(lab), lh = size + 2, font = `600 ${size}px ${MONO}`;
@@ -257,6 +258,7 @@ function recess(ctx, r) { ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRe
 function paintUpper(ctx) {
   for (const b of panel.querySelectorAll('.box')) recess(ctx, rel(b, panel));
   for (const c of CTL) paintCtl(ctx, c);
+  ctx.globalAlpha = 1;
   // CLIP LED: its label, and a black bezel the lamp sits in
   for (const el of panel.querySelectorAll('.ledc')) {
     const lab = el.querySelector('.lab'), l = rel(lab, panel), d = rel(el.querySelector('.led'), panel);
@@ -268,7 +270,7 @@ function paintUpper(ctx) {
 const respEl = panel.querySelector('.resp'), fmCtl = A.S.find((c) => c.id === 'fMode');
 const upSlab = slab(UW, UH, paintUpper); upSlab.userData.repaint(); upper.add(upSlab);
 // a sequence starting or stopping changes a label: repaint the face then
-const seqSig = () => CTL.map((c) => { const l = c.el.querySelector('.lab'); return (l && l.classList.contains('seq') ? 1 : 0) + (c.kind === 'sw' ? 's' + c.v : ''); }).join('');
+const seqSig = () => CTL.map((c) => { const l = c.el.querySelector('.lab'); return (l && l.classList.contains('seq') ? 1 : 0) + (c.kind === 'sw' ? 's' + c.v : '') + (c.el.classList.contains('inactive') ? 'i' : ''); }).join('');
 { let last = seqSig(); ticks.push(() => { const s = seqSig(); if (s !== last) { last = s; upSlab.userData.repaint(); } }); }
 // section names: raised black slabs over the top edge of each box
 function sectionNames(root, group) {
@@ -298,6 +300,14 @@ for (const c of CTL) {
       arc = new THREE.Mesh(new THREE.BufferGeometry(), ringMat); arc.position.copy(pos(cx, cy, 0.4)); upper.add(arc);
       halo = new THREE.Mesh(new THREE.BufferGeometry(), haloMat); halo.position.copy(pos(cx, cy, 0.3)); upper.add(halo);
     }
+    // greyed out (PULSE W. off the pulse wave): the knob and its ring fade, with their own see-through materials
+    let dimNow = false, dimMats = null;
+    ticks.push(() => {
+      const d = c.el.classList.contains('inactive'); if (d === dimNow) return; dimNow = d;
+      if (!dimMats) { dimMats = []; for (const o of [...g.children, arc, halo]) if (o) { o.material = o.material.clone(); dimMats.push(o.material); } }
+      for (const m of dimMats) { m.transparent = true; m.opacity = d ? 0.3 : (m === haloMat ? 0.22 : 1); m.needsUpdate = true; }
+      body.castShadow = !d; renderer.shadowMap.needsUpdate = true;
+    });
     ticks.push(() => {
       if (c.v === last) return; last = c.v;
       g.rotation.z = -(c.kind === 'knob' ? ang(toU(c, c.v)) : selA(c, c.v));

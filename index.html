@@ -70,6 +70,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .ctl, .sw, .resp { width: var(--cw); height: var(--rh); padding-top: var(--top); display: flex; flex-direction: column; align-items: center;
     user-select: none; -webkit-user-select: none; }
   .ctl { touch-action: none; }
+  .ctl.inactive { opacity: .35; }   /* a control that does nothing in the current setting */
   .led { --on: 0; width: 18px; height: 18px; margin: 24px 0 20px; border-radius: 50%; border: 2px solid var(--ink);
     background: color-mix(in srgb, #ff2a2a calc(var(--on) * 100%), #3a0008); box-shadow: 0 0 calc(var(--on) * 14px) calc(var(--on) * 4px) rgba(255, 40, 40, calc(var(--on) * .9)); }
   .ctl svg { display: block; cursor: ns-resize; overflow: visible; }
@@ -184,7 +185,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"><h2>MASTER</h2></div>
     <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:6;--m:1"><h2>VCO I</h2></div>
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
-    <div class="box" id="g-mix" style="grid-area:3/10/4/16;--n:3;--m:1"><h2>MIXER</h2></div>
+    <div class="box" id="g-mix" style="grid-area:3/10/4/16;--n:6;--m:1"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/10;--n:6;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/10/2/16;--n:6;--m:1"><h2>FILTER</h2></div>
     <div class="box" id="g-fe" style="grid-area:2/10/3/16;--n:6;--m:1"><h2>FILTER ENVELOPE</h2></div>
@@ -1561,9 +1562,9 @@ const L = {
   'g-perf': [at(knob('tune', 'НАСТРОЙКА', 'bip', 0), 1, 1), at(knob('glide', 'ГЛИССАНДО', 'mm', 0), 2, 1), at(sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1), 3, 1),
     at(knob('volume', 'ГРОМКОСТЬ', '06', .7), 1, 2), at(knob('drive', 'DRIVE', '06', 0, { added: true }), 2, 2), at({ kind: 'led', label: 'CLIP' }, 3, 2)],
   'g-o1': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 1),
-    knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0), knob('o1pw', 'PULSE W.', '06', 0, { added: true })],
+    knob('o1pw', 'PULSE W.', '06', 0, { added: true }), knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0)],
   'g-o2': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 2),
-    knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0), knob('o2pw', 'PULSE W.', '06', 0, { added: true })],
+    knob('o2pw', 'PULSE W.', '06', 0, { added: true }), knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0)],
   'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0)],
   // FILTER and AMPLIFIER share their bottom two rows: MOD, depth, envelope mode, then A D S R
   // FILTER: cutoff, resonance, type and its sketch, then the two modulation amounts;
@@ -1645,7 +1646,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.64.1';
+const VERSION = '1.65.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1656,6 +1657,14 @@ function setParam(id, v) {
   if (id === 'fMode') pv = v;          // 1 = ПФ (band-pass)
   send({ t: 'p', id, v: pv });
   if (id === 'fMode') drawResp();
+  if (id === 'o1wave' || id === 'o2wave') pwActive();
+}
+// PULSE W. only shapes the pulse wave: greyed out on triangle and sawtooth
+function pwActive() {
+  for (const v of [1, 2]) {
+    const w = S.find((c) => c.id === 'o' + v + 'wave'), pw = S.find((c) => c.id === 'o' + v + 'pw');
+    if (w && pw && pw.el) pw.el.classList.toggle('inactive', (w.v | 0) !== 2);
+  }
 }
 
 // ---------------------------------------------------------------- SVG knob
@@ -1792,8 +1801,9 @@ for (const gid in L) {
 // FILTER, MIXER and AMPLIFIER sit on their own grid: equal columns across
 // the box and their own, shorter row height, rows from the top, so the knobs
 // are closer together vertically.  Any spare height falls at the bottom.
-for (const gid of ['g-f', 'g-fe', 'g-mix', 'g-a']) document.getElementById(gid).classList.add('own');
+for (const gid of ['g-f', 'g-fe', 'g-a']) document.getElementById(gid).classList.add('own');
 applyLang();
+pwActive();
 document.getElementById('resetbtn').onclick = () => {
   for (const c of S) c.set(c.def);
   for (const id in seqs) if (seqs[id].on) { seqs[id].on = false; pushSeq(S.find((c) => c.id === id)); }
