@@ -68,27 +68,46 @@ const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
 const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 1.0); scene.add(amb);
 const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
-// The ambient light's colour is the two VCOs' wave shapes, mixed by their
-// MIXER levels: triangle hot magenta, sawtooth electric blue, pulse amber.
-// Strong, saturated colours: they wash the panel and the room behind it.
-const WAVE_COL = [new THREE.Color(0xff1fa8), new THREE.Color(0x1f6bff), new THREE.Color(0xffa000)];
+// The colour of the whole view comes from the two VCOs' wave shapes, mixed by
+// their MIXER levels: triangle hot magenta, sawtooth electric blue, pulse
+// orange through gold to yellow as its PULSE W. knob turns up.  It lights
+// the panel, recolours its pink, and fills the room behind it.
+const COL = { tri: new THREE.Color(0xff1fa8), saw: new THREE.Color(0x1f6bff),
+  pulse: [new THREE.Color(0xff6200), new THREE.Color(0xffa000), new THREE.Color(0xffd000), new THREE.Color(0xfff23a)] };
 const ambCol = new THREE.Color(0xffffff), ambWant = new THREE.Color(); let bgHex = '';
-// the pink faces are dyed by the same colour (light alone cannot shift a pink that is already at full brightness)
-const tintMats = [], WHITE = new THREE.Color(0xffffff), dye = new THREE.Color();
+// the pink of every face is swapped for this colour in the shader (black ink and white stay as they are)
+const tintMats = [], TINT = { uTint: { value: new THREE.Color(0xff1fa8) }, uAmt: { value: 0.9 } };
+function tintable(m) {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTint = TINT.uTint; sh.uniforms.uAmt = TINT.uAmt;
+    sh.fragmentShader = 'uniform vec3 uTint; uniform float uAmt;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      { float pinkness = clamp((diffuseColor.r - diffuseColor.g) * 1.05, 0., 1.);
+        diffuseColor.rgb = mix(diffuseColor.rgb, uTint * (0.2 + 0.4 * diffuseColor.r), uAmt * pinkness); }`);
+  };
+  tintMats.push(m); return m;
+}
 const byId = (id) => A.S.find((c) => c.id === id);
-const AMB = { w1: byId('o1wave'), w2: byId('o2wave'), m1: byId('mix1'), m2: byId('mix2') };
+const AMB = { w1: byId('o1wave'), w2: byId('o2wave'), m1: byId('mix1'), m2: byId('mix2'), p1: byId('o1pw'), p2: byId('o2pw') };
+const c1 = new THREE.Color(), c2 = new THREE.Color();
+function waveCol(out, w, pw) {
+  w = Math.min(2, w | 0);
+  if (w === 0) return out.copy(COL.tri);
+  if (w === 1) return out.copy(COL.saw);
+  const P = COL.pulse, x = Math.max(0, Math.min(1, pw || 0)) * (P.length - 1), i = Math.min(P.length - 2, Math.floor(x));
+  return out.copy(P[i]).lerp(P[i + 1], x - i);
+}
 function driveAmbient() {
   let a = AMB.m1 ? AMB.m1.v : 0.5, b = AMB.m2 ? AMB.m2.v : 0.5;
   if (a + b < 0.02) a = b = 0.5;                 // both off: an even blend
-  const c1 = WAVE_COL[Math.min(2, AMB.w1 ? AMB.w1.v | 0 : 1)], c2 = WAVE_COL[Math.min(2, AMB.w2 ? AMB.w2.v | 0 : 2)];
-  ambWant.setRGB((c1.r * a + c2.r * b) / (a + b), (c1.g * a + c2.g * b) / (a + b), (c1.b * a + c2.b * b) / (a + b));
+  waveCol(c1, AMB.w1 ? AMB.w1.v : 1, AMB.p1 && AMB.p1.v); waveCol(c2, AMB.w2 ? AMB.w2.v : 2, AMB.p2 && AMB.p2.v);
+  ambWant.copy(c1).multiplyScalar(a / (a + b)).add(c2.clone().multiplyScalar(b / (a + b)));
   ambCol.lerp(ambWant, 0.2);                    // a short fade when a wave changes
   amb.color.copy(ambCol); amb.groundColor.copy(ambCol).multiplyScalar(0.25); front.color.copy(ambCol);
+  TINT.uTint.value.copy(ambCol);
   // the room behind the panel takes the same colour
   const hex = ambCol.getHexString();
   if (hex !== bgHex) { bgHex = hex; const c = ambCol.clone().multiplyScalar(0.8);
-    document.body.style.background = `radial-gradient(120% 90% at 50% 40%, #${c.getHexString()} 0%, #0b0b0b 75%)`;
-    dye.copy(WHITE).lerp(ambCol, 0.6); for (const m of tintMats) m.color.copy(dye); }
+    document.body.style.background = `radial-gradient(120% 90% at 50% 40%, #${c.getHexString()} 0%, #0b0b0b 75%)`; }
 }
 const side = (color, x) => {
   const l = new THREE.SpotLight(color, 0.6, 0, 0.62, 1, 0);
@@ -130,7 +149,7 @@ const mat = {
 function slab(w, h, paint) {
   const [c, ctx] = canvas(w, h);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }); tintMats.push(face);
+  const face = tintable(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }));
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, DEPTH), [mat.edge, mat.edge, mat.edge, mat.edge, face, mat.edge]);
   m.position.set(w / 2, -h / 2, -DEPTH / 2); m.receiveShadow = true; m.castShadow = true;
   m.userData.repaint = () => { ctx.fillStyle = PINK; ctx.fillRect(0, 0, w, h); paint(ctx); tex.needsUpdate = true; };
@@ -141,7 +160,7 @@ function plate(w, h, d, draw, opts = {}) {
   const [c, ctx] = canvas(w, h);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const top = opts.bg === PINK ? new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }) : new THREE.MeshLambertMaterial({ map: tex });
-  if (opts.bg === PINK) tintMats.push(top);
+  if (opts.bg === PINK) tintable(top);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
   m.geometry.translate(w / 2, -h / 2, d / 2); m.castShadow = true; m.receiveShadow = true;
   m.userData.redraw = (f) => { ctx.fillStyle = opts.bg || INK; ctx.fillRect(0, 0, w, h); f(ctx, w, h); tex.needsUpdate = true; };
@@ -437,7 +456,7 @@ if (gridEl) {
   })();
   const bars = barEls.map((be) => {
     const b = rel(be, low);
-    const fm = new THREE.MeshStandardMaterial({ map: tex.on, roughness: 0.78 }); tintMats.push(fm);
+    const fm = tintable(new THREE.MeshStandardMaterial({ map: tex.on, roughness: 0.78 }));
     const frame = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.h), fm); frame.position.copy(pos(b.x + b.w / 2, b.y + b.h / 2, 0.3)); lower.add(frame);
     const bm = new THREE.MeshLambertMaterial({ color: 0x050505, transparent: true });
     const blk = new THREE.Mesh(new THREE.BoxGeometry(b.w - 4, 1, 10), bm); blk.castShadow = true; lower.add(blk);
