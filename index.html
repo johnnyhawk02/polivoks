@@ -203,6 +203,7 @@
     <div class="box" id="g-rnd" style="grid-area:2/14/3/20;--n:6"><h2>RANDOMISE</h2>
       <div class="f" style="grid-column:span 3"><span>SOUND</span><div class="row cells"><button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-nudge">NUDGE</button></div></div>
       <div class="f" style="grid-column:span 2"><span>SEQUENCES</span><div class="row cells"><button class="btn" id="rnd-groove">GROOVE</button><button class="btn" id="rnd-mess">MESS</button></div></div>
+      <div class="f" style="grid-column:span 1"><span>TONE MOD</span><div class="row"><input type="range" id="rnd-tdepth" min="0" max="100" aria-label="How deep the randomised modulations go, from virtually nothing to moderate"></div></div>
     </div>
   </div>
   <!-- no longer on the panel (clock/MIDI read-outs, external input, reset, wobble switch): kept unseen so their code still runs -->
@@ -986,11 +987,12 @@ class KnobSeq {
     this.sr = sr; this.e = engine; this.report = report || null;
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
-    this.seq = {};       // id -> { on, len, div, depth, slew, steps[16] }
+    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16] }; drift = % faster (+) or slower (−) than the clock
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;
     this.pos = 0;        // clock position in 16th notes
+    this.prevPos = 0; this.ph = {};   // phase of each sequence with DRIFT (16ths)
     this.time = 0;
     this.pulses = 0; this.extT = -1;   // MIDI clock, 24 pulses per quarter
     this.clkT = []; this.extBpm = 0;    // tempo measured from the MIDI clock
@@ -1001,7 +1003,7 @@ class KnobSeq {
   setSeq(id, s, range) {
     const was = this.seq[id] && this.seq[id].on;
     this.seq[id] = s; if (range) this.range[id] = range;
-    if (s.on && !was) this.cur[id] = 0;
+    if (s.on && !was) { this.cur[id] = 0; delete this.ph[id]; }
     if (!s.on && was && id in this.base) { this.e.setParam(id, this.base[id]); delete this.val[id]; }
   }
   setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
@@ -1024,9 +1026,17 @@ class KnobSeq {
     this.time += dt;
     if (!this.extActive()) this.pos += dt * this.bpm / 15;   // 4 sixteenths per beat
     let any = false;
+    const dpos = this.pos - this.prevPos; this.prevPos = this.pos;
+    const ph = {};
     for (const id in this.seq) {
       const s = this.seq[id]; if (!s.on) continue; any = true;
-      const step = Math.floor(this.pos / s.div) % s.len;
+      // DRIFT: 0 plays exactly to the clock; otherwise the sequence keeps its own phase that
+      // runs (1 + drift / 100) times as fast as the clock, so it slides against the grid
+      const dr = s.drift || 0;
+      if (!dr || dpos < 0) this.ph[id] = this.pos;
+      else this.ph[id] = (this.ph[id] === undefined ? this.pos - dpos : this.ph[id]) + dpos * (1 + dr / 100);
+      if (dr) ph[id] = Math.floor(this.ph[id]);
+      const step = Math.floor(this.ph[id] / s.div) % s.len;
       const k = s.slew > 0 ? 1 - Math.exp(-dt / s.slew) : 1;
       const c = this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k;
       const r = this.range[id] || [0, 1], b = id in this.base ? this.base[id] : r[0];
@@ -1034,7 +1044,7 @@ class KnobSeq {
       if (v !== this.val[id]) { this.val[id] = v; this.e.setParam(id, v); }
     }
     this.repT += dt;
-    if (this.report && this.repT >= 1 / 30) { this.repT = 0; this.report({ t: 'seqpos', pos: Math.floor(this.pos), ext: this.extActive(), v: any ? Object.assign({}, this.val) : null }); }
+    if (this.report && this.repT >= 1 / 30) { this.repT = 0; this.report({ t: 'seqpos', pos: Math.floor(this.pos), ph, ext: this.extActive(), v: any ? Object.assign({}, this.val) : null }); }
   }
   render(out, n) {
     const C = 64;
@@ -1220,6 +1230,7 @@ if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, S
 //     about one control in seven gets a bolder pick from a wider range
 //   - VCO II sits in unison (a few cents of detune), an octave or a fifth,
 //     using the exact PITCH knob positions for those intervals
+//   - subtle knob sequences on the filter, pulse width and (a few cents of) tune, scaled by AMOUNT
 //   - one shared LFO does at most one job, and gently: vibrato of a few
 //     cents, a slow filter sway, a light tremolo or a soft random sparkle
 //   - the VCA always follows its envelope (never HOLD), sustains and
@@ -1227,7 +1238,8 @@ if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, S
 //     the screaming zone and is lowered when the cutoff is low
 //   - the echo stays synced, on musical note values, with modest repeats
 // Level knobs (VOLUME, PHONES) and the output switch are never touched.
-// makeTone(rand) returns { kind, k: { id: value } } for every other control.
+// makeTone(rand) returns { kind, k: { id: value }, seqs: { id: sequence } }: a value
+// for every other control and very gentle sequences on the filter, pulse width and pitch.
 // ============================================================================
 // PITCH knob positions for exact intervals (inverse of pitchOct in dsp.js)
 const TONE_PITCH = { 0: 0, 3: 0.257, 4: 0.34216, 5: 0.42689, 7: 0.59465, 12: 1, '-5': -0.42689, '-7': -0.59465, '-12': -1 };
@@ -1235,8 +1247,11 @@ const TONE_CENT = 0.001025;     // DETUNE knob travel for one cent (detuneOct is
 // LFO RATE knob for a few rates: 0 = 1.8 Hz (slowest), 0.2 = 4.7 Hz, 0.27 ≈ 6.3 Hz
 const TONE_KINDS = ['pluck', 'bass', 'lead', 'keys', 'pad'];
 
-function makeTone(rand) {
+function makeTone(rand, amount) {
   const R = rand || Math.random;
+  // AMOUNT 0..1 scales every random modulation: 0.5 is the very subtle setting
+  // (factor 1), 0 is virtually nothing (a tenth) and 1 is moderate (2.5 times)
+  const amt = amount == null ? 0.5 : Math.max(0, Math.min(1, amount)), fac = amt <= 0.5 ? 0.1 * Math.pow(10, amt * 2) : Math.pow(2.5, (amt - 0.5) * 2);
   const mid = (a, b) => a + (b - a) * (R() + R() + R()) / 3;
   const bold = () => R() < 0.15;
   // a range that is sometimes widened toward [lo, hi]
@@ -1301,13 +1316,13 @@ function makeTone(rand) {
   const job = wpick({ none: 3, vibrato: kind === 'lead' || kind === 'pad' ? 4 : 2, sway: kind === 'pad' || kind === 'keys' ? 3 : 2, tremolo: 1, sparkle: 1 });
   if (job === 'vibrato') {
     k.lfoMode = 0; k.lfoRate = mid(0.17, 0.27);
-    k.o1mod = k.o2mod = mid(4, 12) * 0.000428;                  // ≈ cents of vibrato (modOct ≈ 2335 cents per unit at 1.43 V)
+    k.o1mod = k.o2mod = mid(4, 12) * 0.000428 * fac;                  // ≈ cents of vibrato (modOct ≈ 2335 cents per unit at 1.43 V)
   } else if (job === 'sway') {
-    k.lfoMode = 0; k.lfoRate = mid(0, 0.08); k.fMod = mid(0.03, 0.09);
+    k.lfoMode = 0; k.lfoRate = mid(0, 0.08); k.fMod = mid(0.03, 0.09) * fac;
   } else if (job === 'tremolo') {
-    k.lfoMode = 0; k.lfoRate = mid(0.12, 0.25); k.aMod = mid(0.02, 0.06);
+    k.lfoMode = 0; k.lfoRate = mid(0.12, 0.25); k.aMod = mid(0.02, 0.06) * fac;
   } else if (job === 'sparkle') {
-    k.lfoMode = 2; k.lfoRate = mid(0.1, 0.25); k.fMod = mid(0.02, 0.06);
+    k.lfoMode = 2; k.lfoRate = mid(0.1, 0.25); k.fMod = mid(0.02, 0.06) * fac;
   }
   if (kind === 'lead' && R() < 0.35) k.glide = mid(0.05, 0.22);
 
@@ -1316,8 +1331,36 @@ function makeTone(rand) {
   k.eFb = kind === 'pad' ? mid(0.3, 0.5) : rng(0.15, 0.4, 0.05, 0.55);
   k.eMix = R() < 0.2 ? 0 : kind === 'pad' ? mid(0.18, 0.32) : mid(0.08, 0.25);
   k.eTone = mid(0.3, 0.6); k.eSpread = mid(0.5, 0.9);
+
+  // ---- sequences, very subtle: the filter cutoff always breathes a little, resonance,
+  // envelope amount, pulse width and (very slightly) pitch sometimes join in.  A sequence moves its knob by
+  // DEPTH x step x the knob's range, so depths of a few percent are small nudges (times the AMOUNT factor).
+  // Steps are a slow drifting line (each a small move from the last); RATE is slow
+  // (a 1/4 note to 2 bars a step for the filter, up to 4 bars for pulse width and pitch) and
+  // SLEW is about half a step, so it glides rather than steps.  Cutoff steps are kept
+  // mostly upward so the knob never dips toward the near-silent zone.
+  const walk = (lo, hi) => { let v = mid(-0.2, 0.5); const st = []; for (let i = 0; i < 16; i++) { st.push(Math.round(Math.max(lo, Math.min(hi, v)) * 100) / 100); v += (R() - 0.5) * 0.8; } return st; };
+  // DRIFT stays near the centre: half the sequences play exactly to the tempo, the rest wander
+  // a percent or two against it (a little more at the higher TONE MOD settings, never over 6 %)
+  const drift = () => (R() < 0.5 ? 0 : (R() < 0.5 ? -1 : 1) * Math.round(Math.min(6, mid(0.5, 2.5) * fac)));
+  const seqs = {};
+  const mk = (id, depth, lo, hi, divs) => { const div = pick(divs || [4, 8, 16, 32]); seqs[id] = { on: true, len: pick([8, 16, 16]), div, drift: drift(), depth: Math.round(depth * 10000) / 10000, slew: Math.round(Math.max(0.08, Math.min(2, div * 0.125 * mid(0.3, 0.6))) * 1000) / 1000, steps: walk(lo, hi) }; };
+  mk('cutoff', mid(0.02, 0.05) * fac, -0.4, 1);
+  if (R() < 0.5) mk('res', mid(0.02, 0.06) * fac, -1, 1);
+  if (R() < 0.4) mk('fEnv', mid(0.03, 0.07) * fac, -1, 1);
+  // pulse width on every square or narrow-pulse oscillator.  The knob only narrows from 50 %,
+  // so a plain square is moved off 50 % a little first to give the sequence room both ways.
+  for (const n of ['o1', 'o2']) {
+    if (k[n + 'wave'] !== 2 || (n === 'o2' && k.mix2 === 0) || R() < 0.2) continue;
+    if (k[n + 'pw'] === 0) k[n + 'pw'] = Math.round(mid(0.12, 0.3) * 1e5) / 1e5;
+    mk(n + 'pw', Math.min(0.2, mid(0.04, 0.1) * fac), -1, 1, [8, 16, 32, 64]);
+  }
+  // pitch, just slightly: the global TUNE knob (both oscillators together, so they stay in tune
+  // with each other).  One unit of depth is 4 semitones, so 0.005 to 0.012 is about 2 to 5 cents
+  // at the subtle setting and never more than about 12 cents.
+  if (R() < 0.6) mk('tune', Math.min(0.03, mid(0.005, 0.012) * fac), -1, 1, [16, 32, 64]);
   for (const id in k) k[id] = Math.round(k[id] * 1e5) / 1e5;
-  return { kind, k };
+  return { kind, k, seqs };
 }
 
 if (typeof module !== 'undefined') module.exports = { makeTone, TONE_PITCH, TONE_CENT, TONE_KINDS };
@@ -1601,7 +1644,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.55.0';
+const VERSION = '1.58.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1763,8 +1806,9 @@ const SEQ_STORE = 'polivoks-seq-v1';
 let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
 const seqs = {};
 let bpm = seqSaved.bpm || 120, extBpm = 0, lastPos = null;
-const DIVS = [1, 2, 4, 8, 16], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR'];
-const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, steps: new Array(16).fill(0) }, (seqSaved.k || {})[id]));
+// RATE: how many 16th notes one step lasts, from 1/16 up to 8 bars
+const DIVS = [1, 2, 4, 8, 16, 32, 64, 128], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR', '2 BARS', '4 BARS', '8 BARS'];
+const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0) }, (seqSaved.k || {})[id]));
 const saveSeq = () => { try { localStorage.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
 const KNOBS = S.filter((c) => c.kind === 'knob');
 const seqMsg = (c) => { const s = seqOf(c.id); return { t: 'seq', id: c.id, s: Object.assign({}, s, { steps: s.steps.slice() }), range: c.scale === 'bip' ? [-1, 1] : [0, 1] }; };
@@ -1805,13 +1849,19 @@ const RND = {
     s.len = pick([4, 8, 8, 16]); s.slew = Math.min(s.slew, .02);
   },
   // anything goes, timing included
-  chaos(s) { for (let i = 0; i < 16; i++) s.steps[i] = q2(rnd(-1, 1)); s.len = 3 + Math.floor(rnd(0, 14)); s.div = pick(DIVS); s.slew = Math.random() < .5 ? 0 : rnd(0, 1.2) ** 2; s.depth = rnd(.3, 1); },
+  chaos(s) { for (let i = 0; i < 16; i++) s.steps[i] = q2(rnd(-1, 1)); s.len = 3 + Math.floor(rnd(0, 14)); s.div = pick(DIVS.slice(0, 5)); s.slew = Math.random() < .5 ? 0 : rnd(0, 1.2) ** 2; s.depth = rnd(.3, 1);
+    // off the grid: usually well away from the tempo, so the loop never lines up with it
+    s.drift = Math.random() < .9 ? Math.round((Math.random() < .5 ? -1 : 1) * rnd(6, 40)) : 0; },
 };
 const knobById = (id) => KNOBS.find((c) => c.id === id);
 const SAFE = (c) => c.id !== 'volume' && c.id !== 'phones' && c.id !== 'drive';   // never throw the level around
 // echo level knobs: PATCH keeps them in a tame range and MESS leaves them alone
 const ECHO_RANGE = { eFb: [.1, .55], eMix: [0, .4], eTone: [.2, .85] };
 function seqsOff() { for (const id in seqs) if (seqs[id].on) { seqs[id].on = false; pushSeq(knobById(id)); } }
+// TONE MOD slider: how deep TONE's modulations and filter sequences go (virtually nothing ... moderate)
+let toneAmt = 0.35; try { const v = parseFloat(localStorage.getItem('polivoks-tone-amt')); if (v >= 0 && v <= 1) toneAmt = v; } catch (e) {}
+const tDepth = document.getElementById('rnd-tdepth'); tDepth.value = Math.round(toneAmt * 100);
+tDepth.oninput = () => { toneAmt = tDepth.value / 100; try { localStorage.setItem('polivoks-tone-amt', toneAmt); } catch (e) {} };
 const dice = {
   // small moves of every knob around where it is
   nudge() { for (const c of KNOBS) if (SAFE(c)) c.set(c.v + rnd(-.08, .08) * (c.scale === 'bip' ? .5 : 1)); },
@@ -1822,7 +1872,7 @@ const dice = {
     const n = 2 + Math.floor(rnd(0, 2)), len = pick([8, 16]);
     for (const id of pool.slice(0, n)) {
       const s = seqOf(id); pick([RND.euclid, RND.steps, RND.walk])(s);
-      s.len = len === 8 && s.len > 8 ? 8 : s.len; s.div = pick([1, 1, 2]); s.depth = rnd(.2, .45); s.slew = pick([0, .01, .03, .08]); s.on = true; pushSeq(knobById(id));
+      s.len = len === 8 && s.len > 8 ? 8 : s.len; s.div = pick([1, 1, 2]); s.drift = 0; s.depth = rnd(.2, .45); s.slew = pick([0, .01, .03, .08]); s.on = true; pushSeq(knobById(id));
     }
   },
   // a new sound: every knob and selector at random (level knobs kept)
@@ -1836,11 +1886,13 @@ const dice = {
     if (state.mix1 < .3 && state.mix2 < .3) knobById('mix1').set(.6);
   },
   // a playable new sound (tone.js): a pluck, bass, lead, keys or pad from
-  // musical ranges with gentle modulation; sequences off, a new made-up name
+  // musical ranges with gentle modulation plus a few very subtle filter
+  // sequences; other sequences off, a new made-up name
   tone() {
     seqsOff();
-    const { k } = makeTone();
+    const { k, seqs: ts } = makeTone(null, toneAmt);
     for (const c of S) if (c.id in k) c.set(k[c.id]);
+    for (const id in ts) { const c = knobById(id); seqs[id] = Object.assign({}, ts[id], { steps: ts[id].steps.slice() }); pushSeq(c); }
     preName = freshName(); preI = -1; savePre(); drawPre();
   },
   // four to eight knobs on chaotic, out-of-step sequences
@@ -1862,7 +1914,8 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f dim" style="grid-column:span 2"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
   <div class="f" style="grid-column:span 4"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="sq-grid dim"></div>
-  <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>`);
+  <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
+  <div class="f dim" style="grid-column:span 4"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>`);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
 // which knob is being edited: a list grouped by panel section (● = its sequence runs);
 // touching a knob on the panel picks it too
@@ -1901,11 +1954,14 @@ function drawSeq() {
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
   q('.sq-depth').value = Math.round(s.depth * 100); q('.sq-depthv').textContent = Math.round(s.depth * 100) + '%';
   q('.sq-slew').value = Math.round(Math.sqrt(s.slew / 2) * 100); q('.sq-slewv').textContent = s.slew < 1 ? Math.round(s.slew * 1000) + ' ms' : s.slew.toFixed(2) + ' s';
+  q('.sq-drift').value = s.drift || 0; q('.sq-driftv').textContent = (s.drift > 0 ? '+' : '') + (s.drift || 0) + '%';
   q('.sq-bpm').value = bpm; q('.sq-bpmv').textContent = bpm + ' BPM';
   markStep();
 }
+// where a sequence is: the clock position, or its own phase when DRIFT is set
+const stepOf = (id, s) => s.on && lastPos ? Math.floor((lastPos.ph && lastPos.ph[id] !== undefined ? lastPos.ph[id] : lastPos.pos) / s.div) % s.len : -1;
 function markStep() {
-  const s = seqOf(edC.id), n = s.on && lastPos ? Math.floor(lastPos.pos / s.div) % s.len : -1;
+  const s = seqOf(edC.id), n = stepOf(edC.id, s);
   if (n !== nowStep) { if (bars[nowStep]) bars[nowStep].classList.remove('now'); if (bars[n]) bars[n].classList.add('now'); nowStep = n; }
 }
 const change = (fn) => { const s = seqOf(edC.id); fn(s); pushSeq(edC); drawSeq(); };
@@ -1918,6 +1974,9 @@ ed.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => change((s) => {
   else if (a === 'clear') s.steps.fill(0);
 }));
 q('.sq-depth').oninput = (e) => change((s) => { s.depth = e.target.value / 100; });
+// DRIFT: 0 % is exactly the tempo; the dial snaps to it within 2 %
+q('.sq-drift').oninput = (e) => change((s) => { let v = +e.target.value; if (Math.abs(v) <= 2) v = 0; s.drift = v; });
+q('.sq-drift').ondblclick = () => change((s) => { s.drift = 0; });
 q('.sq-slew').oninput = (e) => change((s) => { const u = e.target.value / 100; s.slew = 2 * u * u; });
 q('.sq-bpm').oninput = (e) => { bpm = +e.target.value; send({ t: 'bpm', v: bpm }); saveSeq(); drawSeq(); };
 // draw steps by dragging across the bars; drawing switches the sequence on
@@ -2014,7 +2073,7 @@ try { const c = JSON.parse(localStorage.getItem(PRE_CUR) || 'null'); if (c) { pr
 if (!(presets[preI] && presets[preI].name === preName)) preI = -1;
 const freshName = () => { let n = makeName(); for (let t = 0; t < 20 && presets.some((p) => p.name === n); t++) n = makeName(); return n; };
 if (!preName) preName = freshName();
-const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, steps: new Array(16).fill(0) });
+const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0) });
 const savePre = () => { try { localStorage.setItem(PRE_STORE, JSON.stringify(presets)); localStorage.setItem(PRE_CUR, JSON.stringify({ i: preI, name: preName })); } catch (e) {} };
 const preEl = { name: document.getElementById('pre-name'), txt: document.querySelector('#pre-name i'), n: document.getElementById('pre-n'), list: document.getElementById('pre-list'), del: document.getElementById('pre-del') };
 function drawPre() {
@@ -2249,7 +2308,7 @@ addEventListener('resize', fit); fit();
 // view3d.js only reads this app's state and works its controls (c.set, the
 // buttons' own clicks), so both views share every feature and setting.
 window.filthApp = {
-  S, KNOBS, seqOf, change, pickSeq, on, off, WOB, VERSION,
+  S, KNOBS, seqOf, stepOf, change, pickSeq, on, off, WOB, VERSION,
   get edC() { return edC; }, get lastPos() { return lastPos; },
   look, openOptions,
   get lfoV() { return lfoV; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },

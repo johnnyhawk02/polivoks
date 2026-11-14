@@ -507,7 +507,7 @@ if (gridEl) {
   let glowT = 0;
   ticks.push(() => {
     const c = A.edC; if (!c) return;
-    const s = A.seqOf(c.id), p = A.lastPos, now = s.on && p ? Math.floor(p.pos / s.div) % s.len : -1, gf = s.on ? 1 : 0.35;
+    const s = A.seqOf(c.id), now = A.stepOf(c.id, s), gf = s.on ? 1 : 0.35;
     let moved = false;
     bars.forEach((B, i) => {
       const v = s.steps[i], kind = i === now ? 'now' : i >= s.len ? 'off' : 'on', sig = v + kind + gf;

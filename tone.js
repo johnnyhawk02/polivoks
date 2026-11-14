@@ -8,6 +8,7 @@
 //     about one control in seven gets a bolder pick from a wider range
 //   - VCO II sits in unison (a few cents of detune), an octave or a fifth,
 //     using the exact PITCH knob positions for those intervals
+//   - subtle knob sequences on the filter, pulse width and (a few cents of) tune, scaled by AMOUNT
 //   - one shared LFO does at most one job, and gently: vibrato of a few
 //     cents, a slow filter sway, a light tremolo or a soft random sparkle
 //   - the VCA always follows its envelope (never HOLD), sustains and
@@ -15,7 +16,8 @@
 //     the screaming zone and is lowered when the cutoff is low
 //   - the echo stays synced, on musical note values, with modest repeats
 // Level knobs (VOLUME, PHONES) and the output switch are never touched.
-// makeTone(rand) returns { kind, k: { id: value } } for every other control.
+// makeTone(rand) returns { kind, k: { id: value }, seqs: { id: sequence } }: a value
+// for every other control and very gentle sequences on the filter, pulse width and pitch.
 // ============================================================================
 // PITCH knob positions for exact intervals (inverse of pitchOct in dsp.js)
 const TONE_PITCH = { 0: 0, 3: 0.257, 4: 0.34216, 5: 0.42689, 7: 0.59465, 12: 1, '-5': -0.42689, '-7': -0.59465, '-12': -1 };
@@ -23,8 +25,11 @@ const TONE_CENT = 0.001025;     // DETUNE knob travel for one cent (detuneOct is
 // LFO RATE knob for a few rates: 0 = 1.8 Hz (slowest), 0.2 = 4.7 Hz, 0.27 ≈ 6.3 Hz
 const TONE_KINDS = ['pluck', 'bass', 'lead', 'keys', 'pad'];
 
-function makeTone(rand) {
+function makeTone(rand, amount) {
   const R = rand || Math.random;
+  // AMOUNT 0..1 scales every random modulation: 0.5 is the very subtle setting
+  // (factor 1), 0 is virtually nothing (a tenth) and 1 is moderate (2.5 times)
+  const amt = amount == null ? 0.5 : Math.max(0, Math.min(1, amount)), fac = amt <= 0.5 ? 0.1 * Math.pow(10, amt * 2) : Math.pow(2.5, (amt - 0.5) * 2);
   const mid = (a, b) => a + (b - a) * (R() + R() + R()) / 3;
   const bold = () => R() < 0.15;
   // a range that is sometimes widened toward [lo, hi]
@@ -89,13 +94,13 @@ function makeTone(rand) {
   const job = wpick({ none: 3, vibrato: kind === 'lead' || kind === 'pad' ? 4 : 2, sway: kind === 'pad' || kind === 'keys' ? 3 : 2, tremolo: 1, sparkle: 1 });
   if (job === 'vibrato') {
     k.lfoMode = 0; k.lfoRate = mid(0.17, 0.27);
-    k.o1mod = k.o2mod = mid(4, 12) * 0.000428;                  // ≈ cents of vibrato (modOct ≈ 2335 cents per unit at 1.43 V)
+    k.o1mod = k.o2mod = mid(4, 12) * 0.000428 * fac;                  // ≈ cents of vibrato (modOct ≈ 2335 cents per unit at 1.43 V)
   } else if (job === 'sway') {
-    k.lfoMode = 0; k.lfoRate = mid(0, 0.08); k.fMod = mid(0.03, 0.09);
+    k.lfoMode = 0; k.lfoRate = mid(0, 0.08); k.fMod = mid(0.03, 0.09) * fac;
   } else if (job === 'tremolo') {
-    k.lfoMode = 0; k.lfoRate = mid(0.12, 0.25); k.aMod = mid(0.02, 0.06);
+    k.lfoMode = 0; k.lfoRate = mid(0.12, 0.25); k.aMod = mid(0.02, 0.06) * fac;
   } else if (job === 'sparkle') {
-    k.lfoMode = 2; k.lfoRate = mid(0.1, 0.25); k.fMod = mid(0.02, 0.06);
+    k.lfoMode = 2; k.lfoRate = mid(0.1, 0.25); k.fMod = mid(0.02, 0.06) * fac;
   }
   if (kind === 'lead' && R() < 0.35) k.glide = mid(0.05, 0.22);
 
@@ -104,8 +109,36 @@ function makeTone(rand) {
   k.eFb = kind === 'pad' ? mid(0.3, 0.5) : rng(0.15, 0.4, 0.05, 0.55);
   k.eMix = R() < 0.2 ? 0 : kind === 'pad' ? mid(0.18, 0.32) : mid(0.08, 0.25);
   k.eTone = mid(0.3, 0.6); k.eSpread = mid(0.5, 0.9);
+
+  // ---- sequences, very subtle: the filter cutoff always breathes a little, resonance,
+  // envelope amount, pulse width and (very slightly) pitch sometimes join in.  A sequence moves its knob by
+  // DEPTH x step x the knob's range, so depths of a few percent are small nudges (times the AMOUNT factor).
+  // Steps are a slow drifting line (each a small move from the last); RATE is slow
+  // (a 1/4 note to 2 bars a step for the filter, up to 4 bars for pulse width and pitch) and
+  // SLEW is about half a step, so it glides rather than steps.  Cutoff steps are kept
+  // mostly upward so the knob never dips toward the near-silent zone.
+  const walk = (lo, hi) => { let v = mid(-0.2, 0.5); const st = []; for (let i = 0; i < 16; i++) { st.push(Math.round(Math.max(lo, Math.min(hi, v)) * 100) / 100); v += (R() - 0.5) * 0.8; } return st; };
+  // DRIFT stays near the centre: half the sequences play exactly to the tempo, the rest wander
+  // a percent or two against it (a little more at the higher TONE MOD settings, never over 6 %)
+  const drift = () => (R() < 0.5 ? 0 : (R() < 0.5 ? -1 : 1) * Math.round(Math.min(6, mid(0.5, 2.5) * fac)));
+  const seqs = {};
+  const mk = (id, depth, lo, hi, divs) => { const div = pick(divs || [4, 8, 16, 32]); seqs[id] = { on: true, len: pick([8, 16, 16]), div, drift: drift(), depth: Math.round(depth * 10000) / 10000, slew: Math.round(Math.max(0.08, Math.min(2, div * 0.125 * mid(0.3, 0.6))) * 1000) / 1000, steps: walk(lo, hi) }; };
+  mk('cutoff', mid(0.02, 0.05) * fac, -0.4, 1);
+  if (R() < 0.5) mk('res', mid(0.02, 0.06) * fac, -1, 1);
+  if (R() < 0.4) mk('fEnv', mid(0.03, 0.07) * fac, -1, 1);
+  // pulse width on every square or narrow-pulse oscillator.  The knob only narrows from 50 %,
+  // so a plain square is moved off 50 % a little first to give the sequence room both ways.
+  for (const n of ['o1', 'o2']) {
+    if (k[n + 'wave'] !== 2 || (n === 'o2' && k.mix2 === 0) || R() < 0.2) continue;
+    if (k[n + 'pw'] === 0) k[n + 'pw'] = Math.round(mid(0.12, 0.3) * 1e5) / 1e5;
+    mk(n + 'pw', Math.min(0.2, mid(0.04, 0.1) * fac), -1, 1, [8, 16, 32, 64]);
+  }
+  // pitch, just slightly: the global TUNE knob (both oscillators together, so they stay in tune
+  // with each other).  One unit of depth is 4 semitones, so 0.005 to 0.012 is about 2 to 5 cents
+  // at the subtle setting and never more than about 12 cents.
+  if (R() < 0.6) mk('tune', Math.min(0.03, mid(0.005, 0.012) * fac), -1, 1, [16, 32, 64]);
   for (const id in k) k[id] = Math.round(k[id] * 1e5) / 1e5;
-  return { kind, k };
+  return { kind, k, seqs };
 }
 
 if (typeof module !== 'undefined') module.exports = { makeTone, TONE_PITCH, TONE_CENT, TONE_KINDS };

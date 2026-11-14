@@ -12,11 +12,12 @@ class KnobSeq {
     this.sr = sr; this.e = engine; this.report = report || null;
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
-    this.seq = {};       // id -> { on, len, div, depth, slew, steps[16] }
+    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16] }; drift = % faster (+) or slower (−) than the clock
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;
     this.pos = 0;        // clock position in 16th notes
+    this.prevPos = 0; this.ph = {};   // phase of each sequence with DRIFT (16ths)
     this.time = 0;
     this.pulses = 0; this.extT = -1;   // MIDI clock, 24 pulses per quarter
     this.clkT = []; this.extBpm = 0;    // tempo measured from the MIDI clock
@@ -27,7 +28,7 @@ class KnobSeq {
   setSeq(id, s, range) {
     const was = this.seq[id] && this.seq[id].on;
     this.seq[id] = s; if (range) this.range[id] = range;
-    if (s.on && !was) this.cur[id] = 0;
+    if (s.on && !was) { this.cur[id] = 0; delete this.ph[id]; }
     if (!s.on && was && id in this.base) { this.e.setParam(id, this.base[id]); delete this.val[id]; }
   }
   setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
@@ -50,9 +51,17 @@ class KnobSeq {
     this.time += dt;
     if (!this.extActive()) this.pos += dt * this.bpm / 15;   // 4 sixteenths per beat
     let any = false;
+    const dpos = this.pos - this.prevPos; this.prevPos = this.pos;
+    const ph = {};
     for (const id in this.seq) {
       const s = this.seq[id]; if (!s.on) continue; any = true;
-      const step = Math.floor(this.pos / s.div) % s.len;
+      // DRIFT: 0 plays exactly to the clock; otherwise the sequence keeps its own phase that
+      // runs (1 + drift / 100) times as fast as the clock, so it slides against the grid
+      const dr = s.drift || 0;
+      if (!dr || dpos < 0) this.ph[id] = this.pos;
+      else this.ph[id] = (this.ph[id] === undefined ? this.pos - dpos : this.ph[id]) + dpos * (1 + dr / 100);
+      if (dr) ph[id] = Math.floor(this.ph[id]);
+      const step = Math.floor(this.ph[id] / s.div) % s.len;
       const k = s.slew > 0 ? 1 - Math.exp(-dt / s.slew) : 1;
       const c = this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k;
       const r = this.range[id] || [0, 1], b = id in this.base ? this.base[id] : r[0];
@@ -60,7 +69,7 @@ class KnobSeq {
       if (v !== this.val[id]) { this.val[id] = v; this.e.setParam(id, v); }
     }
     this.repT += dt;
-    if (this.report && this.repT >= 1 / 30) { this.repT = 0; this.report({ t: 'seqpos', pos: Math.floor(this.pos), ext: this.extActive(), v: any ? Object.assign({}, this.val) : null }); }
+    if (this.report && this.repT >= 1 / 30) { this.repT = 0; this.report({ t: 'seqpos', pos: Math.floor(this.pos), ph, ext: this.extActive(), v: any ? Object.assign({}, this.val) : null }); }
   }
   render(out, n) {
     const C = 64;
