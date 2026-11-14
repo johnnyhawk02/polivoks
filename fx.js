@@ -112,4 +112,19 @@ class FxRack {
   render(out, n) { this.e.render(out, n); }
 }
 
-if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
+// Output level for the page (not circuit): RMS of both channels over the
+// last 0.2 s, kept as twelve 1/60 s slices so it is a true moving window.
+class Level {
+  constructor(sr) { this.chunk = Math.round(sr / 60); this.slices = new Float64Array(12); this.counts = new Float64Array(12); this.k = 0; this.acc = 0; this.n = 0; this.rms = 0; }
+  // returns true each time a slice completes (about 60 times a second)
+  add(L, R, n) {
+    let a = 0; for (let i = 0; i < n; i++) a += L[i] * L[i] + R[i] * R[i];
+    this.acc += a / 2; this.n += n;
+    if (this.n < this.chunk) return false;
+    this.slices[this.k] = this.acc; this.counts[this.k] = this.n; this.k = (this.k + 1) % 12; this.acc = 0; this.n = 0;
+    let s = 0, c = 0; for (let j = 0; j < 12; j++) { s += this.slices[j]; c += this.counts[j]; }
+    this.rms = Math.sqrt(s / Math.max(c, 1)); return true;
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
