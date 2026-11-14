@@ -396,6 +396,19 @@ let title = null, titleU = null;
   });
   const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 8.15);
   p.add(new THREE.Mesh(fg, sm));
+  // a glass cover over the plate: a clear, glossy pane that catches the side lights and the
+  // room, plus a faint diagonal glare; the lettering shows straight through (GLASS in OPTIONS)
+  {
+    const gm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.1, envMapIntensity: 3, depthWrite: false });
+    const pane = new THREE.Mesh(new THREE.BoxGeometry(w - 6, h - 6, 2), gm); pane.position.set(w / 2, -h / 2, 8 + 4); p.add(pane);
+    const [gc, gx] = canvas(w, h), gr = gx.createLinearGradient(0, 0, w, h);
+    gr.addColorStop(0.18, 'rgba(255,255,255,0)'); gr.addColorStop(0.3, 'rgba(255,255,255,.16)'); gr.addColorStop(0.36, 'rgba(255,255,255,.05)');
+    gr.addColorStop(0.42, 'rgba(255,255,255,.12)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)');
+    gx.fillStyle = gr; gx.fillRect(0, 0, w, h);
+    const glare = new THREE.Mesh(new THREE.PlaneGeometry(w - 6, h - 6), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    glare.position.set(w / 2, -h / 2, 8 + 5.1); p.add(glare);
+    ticks.push(() => { pane.visible = glare.visible = A.look.glass !== false; });
+  }
   const hinge = new THREE.Group(); hinge.position.copy(pos(r.x, r.y + h, 0)); hinge.rotation.x = TILT;
   p.position.set(0, h, 0); hinge.add(p); upper.add(hinge);
   title = p; p.userData.title = true; hits.push(p);
