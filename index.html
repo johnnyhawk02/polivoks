@@ -47,10 +47,10 @@
   .torn { position: absolute; inset: 0; z-index: -1; background: var(--pink); pointer-events: none; }
   .box { box-shadow: inset 0 0 0 2px var(--ink); position: relative; display: grid; grid-template-columns: repeat(var(--n), var(--cw)); grid-template-rows: repeat(var(--m, 1), var(--rh)); gap: var(--g); grid-auto-flow: row; }
   .box.down { grid-auto-flow: column; }
-  /* rows packed close together from the top (spare space falls to the bottom) */
-  .box.own { display: flex; flex-direction: column; gap: 0; }
-  .box.own > .orow { display: flex; justify-content: space-evenly; }
-  .box.own .ctl, .box.own .sw, .box.own .resp { height: auto; padding-bottom: 2px; }
+  /* FILTER, MIXER, AMPLIFIER: their own grid, equal columns, shorter rows from the top */
+  #stage { --orh: 94px; }
+  .box.own { grid-template-columns: repeat(var(--n), 1fr); grid-template-rows: repeat(var(--m, 1), var(--orh)); align-content: start; row-gap: 0; padding-top: 10px; }
+  .box.own .ctl, .box.own .sw, .box.own .resp { width: auto; height: var(--orh); padding-top: 8px; }
   /* section names: white letters on a plain black slab over the top edge */
   .box h2 {
     position: absolute; top: -10px; left: 10px; margin: 0;
@@ -148,7 +148,7 @@
   .v3d body { height: 100vh !important; overflow: hidden; }
   .v3d #stage { visibility: hidden; position: fixed; left: 0; top: 0; pointer-events: none; z-index: -1; }
   /* the 3D view lays the same panel out with more room around every control */
-  .v3d #stage { --cw: 92px; --rh: 138px; --g: 10px; }
+  .v3d #stage { --cw: 92px; --rh: 138px; --g: 10px; --orh: 118px; }
   /* and bigger lettering: the 3D view paints its text at these sizes */
   .v3d .lab { font-size: 15px; line-height: 17px; height: 36px; white-space: normal; }
   .v3d .sw .t { font-size: 13px; line-height: 14px; }
@@ -1593,7 +1593,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.53.0';
+const VERSION = '1.54.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1737,23 +1737,10 @@ for (const gid in L) {
     c.set(c.id in saved ? saved[c.id] : c.def, true); state[c.id] = c.v;
   }
 }
-// FILTER, MIXER and AMPLIFIER get their own grid: each row of controls is
-// spread evenly across its box (empty cells dropped) instead of sitting on the
-// panel's shared columns.  Rows keep the panel's row height, so knobs still
-// line up with the boxes beside them.
-for (const gid of ['g-f', 'g-mix', 'g-a']) {
-  const host = document.getElementById(gid), box = host;
-  const n = +getComputedStyle(box).getPropertyValue('--n'), m = +getComputedStyle(box).getPropertyValue('--m') || 1;
-  const kids = [...host.children].filter((e) => e.tagName !== 'H2');
-  const rows = [];
-  for (let r = 0; r < m; r++) rows.push(box.classList.contains('down') ? kids.filter((_, i) => i % m === r) : kids.slice(r * n, r * n + n));
-  for (const r of rows) {
-    const row = document.createElement('div'); row.className = 'orow';
-    for (const e of r) if (e.className) row.appendChild(e); else e.remove();   // blank cells go
-    host.appendChild(row);
-  }
-  box.classList.add('own');
-}
+// FILTER, MIXER and AMPLIFIER sit on their own grid: equal columns across
+// the box and their own, shorter row height, rows from the top, so the knobs
+// are closer together vertically.  Any spare height falls at the bottom.
+for (const gid of ['g-f', 'g-mix', 'g-a']) document.getElementById(gid).classList.add('own');
 applyLang();
 document.getElementById('resetbtn').onclick = () => {
   for (const c of S) c.set(c.def);
