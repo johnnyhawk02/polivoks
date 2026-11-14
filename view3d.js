@@ -58,8 +58,6 @@ const corner = document.createElement('div');
 corner.textContent = `FILTH v${A.VERSION}`;
 Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: PINK });
 document.body.appendChild(corner);
-// HILITE COLOUR (OPTIONS): the magenta of lit buttons, the step glow and this corner note
-const HI = () => `hsl(${A.look.hi ?? 315} 97% 52%)`;
 
 const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
@@ -70,7 +68,7 @@ const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
 const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 1.0); scene.add(amb);
 const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
-let bgHex = ''; const hiMats = [];   // materials that glow in the HILITE COLOUR
+let bgHex = '';
 // the pink of every face is swapped for this colour in the shader (black ink and white stay as they are)
 const tintMats = [], TINT = { uTint: { value: new THREE.Color(0xff1fa8) }, uAmt: { value: 0.9 }, uInk: { value: new THREE.Color(0, 0, 0) }, uDark: { value: 0 }, uInkAmt: { value: 1 } };
 function tintable(m) {
@@ -102,7 +100,6 @@ const brushed = (() => {
 })();
 function driveAmbient() {
   const L = A.look.lights, sig = [A.look.hue, A.look.sat, A.look.lit, A.look.finish, A.look.text].join() + JSON.stringify(L);
-  corner.style.color = HI(); for (const m of hiMats) m.emissive.setHSL((A.look.hi ?? 315) / 360, 1, .62);
   if (sig === bgHex) return; bgHex = sig;
   amb.color.set(L.amb.c); amb.groundColor.copy(amb.color).multiplyScalar(0.25); amb.intensity = 0.45 * L.amb.i;
   front.color.set(L.amb.c); front.intensity = 0.35 * L.amb.i;
@@ -524,12 +521,12 @@ sectionNames(low, lower);
 for (const el of low.querySelectorAll('button')) {
   if (el.closest('[hidden]')) continue;
   const r = rel(el, low); if (!r.w) continue;
-  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, el.classList.contains('lit') ? HI() : PAPER);
+  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, el.classList.contains('lit') ? PINK : PAPER);
   const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
   p.userData.btn = el; hits.push(p);
   let last = el.textContent + el.className, lastF = 1, n = 0;
   ticks.push(() => {
-    const s = el.textContent + el.className + A.look.hi; if (s !== last) { last = s; p.userData.redraw(draw); }
+    const s = el.textContent + el.className; if (s !== last) { last = s; p.userData.redraw(draw); }
     if (++n % 5 === 0) { const f = fade(el); if (f !== lastF) { lastF = f; p.material = p.material.map((m) => m.clone()); fadeMat(p.material, f); p.castShadow = f > 0.5; renderer.shadowMap.needsUpdate = true; } }
   });
 }
@@ -562,9 +559,13 @@ for (const el of lowEls.ranges) {
 // step bars of the knob being sequenced
 const gridEl = low.querySelector('.sq-grid');
 if (gridEl) {
+  // a row of step lamps runs under the bars (the bars give up LED_H for it): the lamp of the step
+  // playing now lights up red, like the CLIP LED, and dies away behind it
+  const LED_H = 13, LED_R = 4.5;
   const R = rel(gridEl, low), barEls = [...gridEl.children];
+  const barRect = (be) => { const b = rel(be, low); return { x: b.x, y: b.y, w: b.w, h: b.h - LED_H, full: b }; };
   const frameTex = (kind) => {
-    const b = rel(barEls[0], low), [c, ctx] = canvas(b.w, b.h);
+    const b = barRect(barEls[0]), [c, ctx] = canvas(b.w, b.h);
     ctx.fillStyle = PINK; ctx.fillRect(0, 0, b.w, b.h);
     if (kind === 'now') { ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(0, 0, b.w, b.h); }   // a soft wash, not solid white
     ctx.globalAlpha = kind === 'off' ? 0.25 : 1;
@@ -573,25 +574,22 @@ if (gridEl) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   };
   const tex = { on: frameTex('on'), now: frameTex('now'), off: frameTex('off') };
-  const glowTex = (() => {
-    const b = rel(barEls[0], low), w = b.w + 28, h = b.h + 28, [c, ctx] = canvas(w, h);
-    ctx.filter = 'blur(9px)'; ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillRect(14, 14, b.w, b.h);
-    ctx.filter = 'none'; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 3; ctx.strokeRect(12.5, 12.5, b.w + 3, b.h + 3);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-  })();
+  const [gc, gx] = canvas(64, 64), gr = gx.createRadialGradient(32, 32, 3, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,40,20,1)'); gr.addColorStop(1, 'rgba(255,20,0,0)'); gx.fillStyle = gr; gx.fillRect(0, 0, 64, 64);
+  const haloTex = new THREE.CanvasTexture(gc), ledGeo = new THREE.CylinderGeometry(LED_R, LED_R, 3, 24), haloGeo = new THREE.PlaneGeometry(LED_R * 7, LED_R * 7);
+  const ledOff = new THREE.Color(0x3a0008), ledOn = new THREE.Color(0xff3020);
   const bars = barEls.map((be) => {
-    const b = rel(be, low);
+    const b = barRect(be), cx = b.x + b.w / 2, cy = b.y + b.h + LED_H / 2 + 1;
+    const lm = new THREE.MeshBasicMaterial({ color: ledOff }), led = new THREE.Mesh(ledGeo, lm); led.rotation.x = Math.PI / 2; led.position.copy(pos(cx, cy, 1.5)); lower.add(led);
+    const hm = new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false });   // a red glow laid over the pale panel (adding light would only whiten it)
+    const halo = new THREE.Mesh(haloGeo, hm); halo.position.copy(pos(cx, cy, 3.5)); lower.add(halo);
     const fm = tintable(new THREE.MeshStandardMaterial({ map: tex.on, roughness: 0.78 }));
     const frame = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.h), fm); frame.position.copy(pos(b.x + b.w / 2, b.y + b.h / 2, 0.3)); lower.add(frame);
     const bm = new THREE.MeshLambertMaterial({ color: 0x050505, transparent: true });
     const blk = new THREE.Mesh(new THREE.BoxGeometry(b.w - 4, 1, 10), bm); blk.castShadow = true; lower.add(blk);
-    // the running light: a soft white glow over the step playing now, fading behind it
-    const gm = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const glow = new THREE.Mesh(new THREE.PlaneGeometry(b.w + 28, b.h + 28), gm); glow.position.copy(pos(b.x + b.w / 2, b.y + b.h / 2, 11)); lower.add(glow);
-    bm.emissive = new THREE.Color(0xff3fd0); bm.emissiveIntensity = 0; hiMats.push(bm);   // HILITE COLOUR, set in driveAmbient
-    return { b, fm, bm, blk, gm, g: 0, sig: '' };
+    return { b, fm, bm, blk, lm, hm, g: 0, sig: '' };
   });
-  const hit = hitBox(R.w, R.h, 14, R.x + R.w / 2, R.y + R.h / 2, 6, lower); hit.userData.grid = R;
+  const hit = hitBox(R.w, R.h, 14, R.x + R.w / 2, R.y + R.h / 2, 6, lower); hit.userData.grid = { x: R.x, y: R.y, w: R.w, h: R.h - LED_H };   // painting maps over the bars, not the lamps
   let glowT = 0;
   ticks.push(() => {
     const c = A.edC; if (!c) return;
@@ -606,10 +604,10 @@ if (gridEl) {
       B.blk.position.copy(pos(B.b.x + B.b.w / 2, B.b.y + B.b.h / 2 - (v >= 0 ? h / 2 : -h / 2), 5.3));
     });
     if (moved) renderer.shadowMap.needsUpdate = true;
-    const t = performance.now(), k = Math.exp(-(t - (glowT || t)) / 110); glowT = t;   // fades with a 0.11 s time constant
-    bars.forEach((B, i) => {   // glow: full on the step playing now, then a quick fade
-      B.g = i === now ? 1 : B.g * k; if (B.g < 0.01) B.g = 0;
-      B.gm.opacity = 0.2 * B.g; B.bm.emissiveIntensity = 0.3 * B.g;
+    const t = performance.now(), k = Math.exp(-(t - (glowT || t)) / 110); glowT = t;   // dies away with a 0.11 s time constant
+    bars.forEach((B, i) => {
+      B.g = i === now && s.on ? 1 : B.g * k; if (B.g < 0.01) B.g = 0;
+      B.lm.color.copy(ledOff).lerp(ledOn, B.g); B.hm.opacity = 0.55 * B.g;
     });
   });
 }
