@@ -1,6 +1,6 @@
 // Renders many random patches offline (synth engine + echo) and reports how
 // many are usable.  Compares TONE (tone.js) with the panel-wide PATCH dice.
-//   node tonecheck.js [patches per mode, default 200] [seed] [tone|patch]
+//   node tonecheck.js [patches per mode, default 200] [seed] [tone|patch] [tone depth 0..1]
 // Each patch plays the same phrase: four short notes (C3 G3 E4 C5), one held
 // note (C4, 1.5 s), then 3 s of nothing.  A patch is usable when
 //   - every note is heard (note RMS above -40 dBFS)
@@ -14,7 +14,8 @@
 //   - the modulation is gentle: the held note's level wobbles less than 2 dB
 //     (rms of 40 ms level around a 0.5 s moving average)
 const { PolivoksEngine } = require('./dsp.js');
-const { TapeEcho } = require('./fx.js');
+const { TapeEcho, FxRack } = require('./fx.js');
+const { KnobSeq } = require('./seq.js');
 const { makeTone } = require('./tone.js');
 const SR = 48000;
 
@@ -40,23 +41,27 @@ function patchDice(R) {
   return { kind: 'patch', k };
 }
 
-function engineFor(k) {
+function engineFor(k, seqs) {
   const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
   const fx = new TapeEcho(SR);
   for (const id in k) { if (id in fx.p) { fx.set(id, k[id]); fx.ps[id] = k[id]; } else { e.setParam(id, k[id]); e.ps[id] = k[id]; } }
-  return { e, fx };
+  const q = new KnobSeq(SR, new FxRack(e, fx));
+  for (const id in k) q.base[id] = k[id];
+  const rg = (id) => (id === 'o2detune' || /pitch|tune/.test(id) ? [-1, 1] : [0, 1]);
+  for (const id in seqs || {}) { q.setSeq(id, seqs[id], rg(id)); }
+  return { e, fx, q };
 }
 // events: [time s, 'on'|'off', note]
 const PHRASE = [[0.3, 'on', 48], [0.75, 'off', 48], [0.8, 'on', 55], [1.25, 'off', 55], [1.3, 'on', 64], [1.75, 'off', 64], [1.8, 'on', 72], [2.25, 'off', 72], [2.3, 'on', 60], [3.8, 'off', 60]];
 const END = 6.8;
-function render(k, events, secs) {
-  const { e, fx } = engineFor(k), n = Math.floor(secs * SR);
+function render(k, events, secs, seqs) {
+  const { e, fx, q } = engineFor(k, seqs), n = Math.floor(secs * SR);
   const dry = new Float32Array(n), L = new Float32Array(n), R = new Float32Array(n);
   let ei = 0; const blk = 128;
   for (let i = 0; i < n; i += blk) {
     while (ei < events.length && events[ei][0] * SR <= i) { const [, t, note] = events[ei++]; if (t === 'on') e.noteOn(note); else e.noteOff(note); }
     const m = Math.min(blk, n - i);
-    e.render(dry.subarray(i, i + m), m); L.set(dry.subarray(i, i + m), i);
+    q.render(dry.subarray(i, i + m), m); L.set(dry.subarray(i, i + m), i);
     fx.process(L.subarray(i, i + m), R.subarray(i, i + m), m);
   }
   return { dry, L, R };
@@ -85,8 +90,8 @@ function wobble(x, a, b) {
   for (let i = 6; i < lv.length - 6; i++) { let m = 0; for (let j = -6; j <= 6; j++) m += lv[i + j]; m /= 13; if (m > -60) { acc += (lv[i] - m) ** 2; n++; } }
   return n ? Math.sqrt(acc / n) : 0;
 }
-function check(k) {
-  const { dry, L, R } = render(k, PHRASE, END);
+function check(k, seqs) {
+  const { dry, L, R } = render(k, PHRASE, END, seqs);
   const notes = [[0.3, 0.75], [0.8, 1.25], [1.3, 1.75], [1.8, 2.25], [2.3, 3.8]].map(([a, b]) => dB(rms(dry, a, b + 0.05)));
   let hot = 0, peak = 0; for (let i = 0; i < L.length; i++) { const a = Math.max(Math.abs(L[i]), Math.abs(R[i])); if (a > 0.95) hot++; if (a > peak) peak = a; }
   const drone = dB(rms(dry, 5.8, 6.3)), tail = dB(Math.max(rms(L, 6.3, 6.8), rms(R, 6.3, 6.8)));
@@ -109,11 +114,12 @@ function check(k) {
 const N = +process.argv[2] || 200, seed = +process.argv[3] || 1;
 const pct = (v) => (100 * v).toFixed(0) + '%';
 const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+const AMT = process.argv[5] === undefined ? undefined : +process.argv[5];
 const only = (process.argv[4] || '').toUpperCase();
 for (const [name, gen] of [['TONE', makeTone], ['PATCH', patchDice]].filter(([n]) => !only || n === only)) {
   const R = mulberry(seed * 7919 + (name === 'TONE' ? 1 : 2)), res = [], kinds = {}, t0 = Date.now();
   for (let i = 0; i < N; i++) {
-    const { kind, k } = gen(R), r = check(k); r.kind = kind; r.k = k; res.push(r);
+    const { kind, k, seqs } = gen(R, AMT), r = check(k, seqs); r.kind = kind; r.k = k; res.push(r);
     const s = kinds[kind] || (kinds[kind] = { n: 0, ok: 0 }); s.n++; if (!r.why.length) s.ok++;
   }
   const count = (w) => res.filter((r) => r.why.includes(w)).length / N;

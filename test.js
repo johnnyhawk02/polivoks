@@ -241,10 +241,17 @@ console.log('--- stability sweep ---');
   }
   const kinds = {}; let n = 0;
   for (let i = 0; i < 5000; i++) {
-    const { kind, k } = makeTone(); kinds[kind] = (kinds[kind] || 0) + 1;
+    const { kind, k, seqs: sq } = makeTone(); kinds[kind] = (kinds[kind] || 0) + 1;
     for (const id in k) { const lo = id === 'o2detune' || id === 'o2pitch' ? -1 : 0, hi = /range/.test(id) ? 4 : /wave/.test(id) ? 2 : /lfoMode/.test(id) ? 3 : /pw$/.test(id) ? 1 : 1; if (!(k[id] >= lo && k[id] <= hi)) { bad++; if (n++ < 5) console.log('out of range', id, k[id]); } }
     if (k.vcaHold || k.fMode || k.res > 0.8 || k.cutoff < 0.38 || k.mix1 < 0.4 || 'volume' in k || 'phones' in k || 'outSel' in k || k.o1mod > 0.01 || k.aMod > 0.07 || k.fMod > 0.1 || k.eFb > 0.55 || k.eSync !== 1) { bad++; if (n++ < 5) console.log('outside the usable zone', kind, JSON.stringify(k)); }
+    if (!sq || !sq.cutoff) { bad++; if (n++ < 5) console.log('no cutoff sequence'); }
+    for (const id in sq || {}) { const q = sq[id]; if (!['cutoff', 'res', 'fEnv', 'o1pw', 'o2pw', 'tune'].includes(id) || !q.on || q.depth > (id === 'tune' ? 0.03 : 0.2) || q.slew < 0.05 || q.steps.length !== 16 || q.steps.some((v) => !(v >= -1 && v <= 1)) || (id === 'cutoff' && q.steps.some((v) => v < -0.4))) { bad++; if (n++ < 5) console.log('bad sequence', id, JSON.stringify(q)); } }
   }
+  // TONE MOD amount: mean cutoff-sequence depth must rise from virtually nothing to moderate
+  const md = (amt) => { let t = 0; for (let i = 0; i < 400; i++) t += makeTone(null, amt).seqs.cutoff.depth; return t / 400; };
+  const d0 = md(0), d5 = md(0.5), d1 = md(1);
+  console.log(`TONE MOD amount: mean cutoff sequence depth ${(d0 * 100).toFixed(1)}% / ${(d5 * 100).toFixed(1)}% / ${(d1 * 100).toFixed(1)}% at 0 / 0.5 / 1`);
+  if (!(d0 < 0.006 && d5 > 0.02 && d5 < 0.05 && d1 > 0.07 && d1 < 0.14)) { bad++; console.log('amount scaling off'); }
   console.log('5000 tones by kind:', JSON.stringify(kinds), bad ? 'FAILED' : 'all in range');
   if (bad) { console.log('TONE TEST FAILED'); process.exitCode = 1; }
 }
