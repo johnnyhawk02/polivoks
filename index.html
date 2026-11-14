@@ -1410,7 +1410,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.19.0';
+const VERSION = '1.20.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1768,11 +1768,12 @@ document.getElementById('pre-prev').onclick = () => step(-1);
 document.getElementById('pre-next').onclick = () => step(1);
 preEl.list.onchange = () => { const i = +preEl.list.value; loadPre(i); preEl.list.value = ''; };
 document.getElementById('pre-roll').onclick = () => { preName = freshName(); preI = -1; savePre(); drawPre(); };
-// SAVE writes over the preset that is loaded; after NEW NAME it adds a new one
+// SAVE writes over the preset that is loaded, otherwise adds a new one; either
+// way it then rolls a fresh name, so the next SAVE adds another preset
 document.getElementById('pre-save').onclick = () => {
   const p = snapshot();
-  if (preI >= 0 && presets[preI] && presets[preI].name === preName) presets[preI] = p; else { presets.push(p); preI = presets.length - 1; }
-  savePre(); drawPre();
+  if (preI >= 0 && presets[preI] && presets[preI].name === preName) presets[preI] = p; else presets.push(p);
+  preName = freshName(); preI = -1; savePre(); drawPre();
 };
 // DELETE asks twice: the first press turns it into SURE? for a few seconds
 let delT = null;
