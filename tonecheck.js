@@ -22,7 +22,7 @@ const SR = 48000;
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
 // the panel: knob ids, selector sizes and switches (level knobs left at default)
-const KNOBS = ['lfoRate', 'tune', 'glide', 'o1mod', 'o1fm', 'o1pitch', 'o2mod', 'o2detune', 'o2pitch', 'mix1', 'mix2', 'mixN', 'mixE',
+const KNOBS = ['lfoRate', 'tune', 'glide', 'o1mod', 'o1fm', 'o1pitch', 'o2mod', 'o2detune', 'o2pitch', 'mix1', 'mix2', 'mixN',
   'fA', 'fD', 'fS', 'fR', 'cutoff', 'res', 'fMod', 'fEnv', 'aA', 'aD', 'aS', 'aR', 'aMod', 'eTime', 'eFb', 'eTone', 'eSpread', 'eMix'];
 const BIP = { tune: 1, o1pitch: 1, o2pitch: 1, o2detune: 1 };
 const SELS = { lfoMode: 4, o1range: 5, o1wave: 3, o2range: 5, o2wave: 3 };
@@ -98,7 +98,7 @@ function check(k, seqs) {
   const held = Math.max(...notes.slice(4)) > -40 ? centroid(dry, 2.6) : 0;
   const wob = wobble(dry, 2.55, 3.8);
   // self-oscillation: same patch, every input down, a key held
-  const sk = Object.assign({}, k, { mix1: 0, mix2: 0, mixN: 0, mixE: 0, eMix: 0 }), sk0 = Object.assign({}, sk, { res: 0 });
+  const sk = Object.assign({}, k, { mix1: 0, mix2: 0, mixN: 0, eMix: 0 }), sk0 = Object.assign({}, sk, { res: 0 });
   const so = (q) => dB(rms(render(q, [[0, 'on', 60]], 1.2).dry, 0.6, 1.2)), sl = so(sk), scream = Math.min(sl - so(sk0), sl + 35);
   const level = dB(rms(L, 0.3, 3.8));
   const why = [];

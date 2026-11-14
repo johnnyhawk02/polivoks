@@ -183,7 +183,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"><h2>MASTER</h2></div>
     <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:6;--m:1"><h2>VCO I</h2></div>
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
-    <div class="box down" id="g-mix" style="grid-area:1/10/3/12;--n:2;--m:2"><h2>MIXER</h2></div>
+    <div class="box" id="g-mix" style="grid-area:1/10/3/12;--n:2;--m:2"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/12;--n:8;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/12/4/16;--n:4;--m:3"><h2>FILTER</h2></div>
     <div class="ttl" style="grid-area:1/16/2/20"><span id="ttlw">FILTH</span></div>
@@ -208,7 +208,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     </div>
   </div>
   <!-- no longer on the panel (clock/MIDI read-outs, external input, reset, wobble switch): kept unseen so their code still runs -->
-  <div id="spare" hidden><b class="val sq-src" style="text-align:left">INTERNAL</b><b class="val" id="midi">—</b><span id="octv">4</span><span id="extname">EXT. INPUT</span><button class="btn" id="extbtn">LOAD FILE</button><input type="file" id="extfile" accept="audio/*" hidden><button class="btn" id="resetbtn">RESET</button><button class="sb" id="wobbtn" aria-pressed="true">ON</button></div>
+  <div id="spare" hidden><b class="val sq-src" style="text-align:left">INTERNAL</b><b class="val" id="midi">—</b><span id="octv">4</span><button class="btn" id="resetbtn">RESET</button><button class="sb" id="wobbtn" aria-pressed="true">ON</button></div>
   <div class="foot">
     <span>Engine: <b id="emode">off</b></span>
     <span>FILTH v<b id="ver"></b></span>
@@ -578,6 +578,8 @@ class EG {
 //  ngspice in spice/mixer/.  A2's output goes through C2 0.22 µF and R85 39k
 //  into the filter (≈1 k to ground there): an 18 Hz high-pass.
 //  Pot taper: linear (group А) EST.
+//  The original's fourth channel, R106 Внеш. (external input), is left out
+//  of FILTH: the mixer here sums the two VCOs and the noise only.
 // ============================================================================
 // DRIVE (added, not on the original panel): a 150k log pot in series with
 // A2's feedback resistor R10 22k.  The mixer's gain rises with the feedback
@@ -819,11 +821,11 @@ const PARAM_DEFAULTS = {
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
   o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o1pw: 0,
   o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0, o2pw: 0,
-  mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0, drive: 0,
+  mix1: 0.65, mix2: 0.5, mixN: 0, drive: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','mixE','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -844,7 +846,6 @@ class PolivoksEngine {
     this.T1 = 303; this.T2 = 303; this.drift1 = 0; this.drift2 = 0;
     this.noiseLP = 0;
     this.hpX = 0; this.hpY = 0; this.vcaHpX = 0; this.vcaHpY = 0;
-    this.ext = null; this.extPos = 0;
     this.lastVal = 0;
     this.powerLevel = 0;
     // decimation FIR (Blackman windowed sinc)
@@ -862,7 +863,6 @@ class PolivoksEngine {
   }
 
   setParam(id, v) { if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
-  setExt(data) { this.ext = data; this.extPos = 0; }
 
   // keys go to the keyboard board; the envelopes follow its gate
   noteOn(n) { this.kb.press(n); }
@@ -931,9 +931,7 @@ class PolivoksEngine {
       this.vca.control(ps.aMod * lfo, 100e3 * ps.aMod * (1 - ps.aMod), venv);
       // mixer (sheet 9): per-channel gain into A2's virtual earth
       const g1 = mixGain(ps.mix1, vco1.Rout[w1]), g2 = mixGain(ps.mix2, vco2.Rout[w2]);
-      const gn = mixGain(ps.mixN, 0), ge = mixGain(ps.mixE, 0), dg = driveGain(ps.drive);
-      let ext = 0;
-      if (this.ext && ge > 0.001) { ext = this.ext[this.extPos]; if (++this.extPos >= this.ext.length) this.extPos = 0; }   // 1 V peak line level EST
+      const gn = mixGain(ps.mixN, 0), dg = driveGain(ps.drive);
 
       // modulator noise: A2 bandwidth ≈15 kHz (КР140УД8Б GBW / 101), 0.25 V rms EST
       const nk = 1 - Math.exp(-ho * 2 * Math.PI * 15000);
@@ -946,7 +944,7 @@ class PolivoksEngine {
         const o1 = vco1.out(w1);
         this.noiseLP += (rng.g() * 0.25 * Math.sqrt(1 / (nk * 0.5)) - this.noiseLP) * nk;
         nzs += this.noiseLP;
-        const a2 = rail(-(g1 * o1 + g2 * o2 + gn * this.noiseLP + ge * ext) * dg, 11);
+        const a2 = rail(-(g1 * o1 + g2 * o2 + gn * this.noiseLP) * dg, 11);
         this.mixHp += (a2 - this.mixHp) * kmix;
         vcf.step(a2 - this.mixHp, Iset, VTf);
         const vf = lp ? -vcf.y2 : -vcf.y1;          // both outputs invert
@@ -1064,7 +1062,6 @@ class KnobSeq {
     else if (d.t === 'on') this.e.noteOn(d.n);
     else if (d.t === 'off') this.e.noteOff(d.n);
     else if (d.t === 'all') this.e.allOff();
-    else if (d.t === 'ext') this.e.setExt(d.data);
   }
 }
 
@@ -1199,7 +1196,6 @@ class FxRack {
   noteOn(n) { this.e.noteOn(n); }
   noteOff(n) { this.e.noteOff(n); }
   allOff() { this.e.allOff(); }
-  setExt(d) { this.e.setExt(d); }
   render(out, n) { this.e.render(out, n); }
 }
 
@@ -1261,7 +1257,7 @@ function makeTone(rand, amount) {
   const kind = wpick({ pluck: 3, bass: 3, lead: 3, keys: 2, pad: 2 });
   const k = {
     tune: 0, glide: 0, voice: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o2mod: 0, o2detune: 0, o2pitch: 0,
-    mixN: 0, mixE: 0, fEgMode: 0, fMode: 0, fMod: 0, aEgMode: 0, aMod: 0, vcaHold: 0, lfoMode: 0, lfoRate: 0.2,
+    mixN: 0, fEgMode: 0, fMode: 0, fMod: 0, aEgMode: 0, aMod: 0, vcaHold: 0, lfoMode: 0, lfoRate: 0.2,
   };
 
   // ---- oscillators: waves, ranges, interval
@@ -1566,7 +1562,7 @@ const L = {
     knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0), knob('o1pw', 'PULSE W.', '06', 0, { added: true })],
   'g-o2': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 2),
     knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0), knob('o2pw', 'PULSE W.', '06', 0, { added: true })],
-  'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0), knob('mixE', 'ВНЕШ.', '06', 0)],
+  'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0)],
   // FILTER and AMPLIFIER share their bottom two rows: MOD, depth, envelope mode, then A D S R
   'g-f': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0, 'ТИП'), { kind: 'resp' },
     knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
@@ -1611,7 +1607,7 @@ function noNarrow(k) { for (const v of [1, 2]) if (k && k['o' + v + 'wave'] === 
 noNarrow(saved);
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
-let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
+let engineMode = '', node = null, ctx = null, analyser = null, powered = false;
 let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
 // ---------------------------------------------------------------- title wobble
@@ -1644,7 +1640,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.60.0';
+const VERSION = '1.61.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1926,7 +1922,7 @@ ed.querySelectorAll('[data-note]').forEach((b) => {
 });
 // which knob is being edited: a list grouped by panel section (● = its sequence runs);
 // touching a knob on the panel picks it too
-const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', o1pw: 'VCO I PULSE W.', o2pw: 'VCO II PULSE W.', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE', mixE: 'MIX EXT.',
+const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', o1pw: 'VCO I PULSE W.', o2pw: 'VCO II PULSE W.', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE',
   fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD',
   eTime: 'ECHO TIME', eFb: 'ECHO FEEDBACK', eTone: 'ECHO TONE', eSpread: 'ECHO SPREAD', eMix: 'ECHO MIX' };
 const knobSel = q('.sq-knob'), pickO = {}, ORDER = [];
@@ -2191,7 +2187,6 @@ registerProcessor('polivoks', PolivoksProc);`;
     for (const c of S) send({ t: 'p', id: c.id, v: c.v });
     send({ t: 'bpm', v: bpm });
     for (const c of KNOBS) if (seqs[c.id]) send(seqMsg(c));
-    if (extData) send({ t: 'ext', data: extData });
     send({ t: 'p', id: 'power', v: 1 });
     for (const m of early.splice(0)) send(m);
   }
@@ -2246,7 +2241,7 @@ const BSII = {
   70: ['o1range', (v) => v >= 63 && v <= 66 ? v - 62 : undefined],     // 16' 8' 4' 2'
   75: ['o2range', (v) => v >= 63 && v <= 66 ? v - 62 : undefined],
   26: ['tune', 'b'], 29: ['o2detune', 'b'],
-  20: ['mix1', 'u'], 21: ['mix2', 'u'], 23: ['mixN', 'u'], 25: ['mixE', 'u'],
+  20: ['mix1', 'u'], 21: ['mix2', 'u'], 23: ['mixN', 'u'],
 };
 const BSII_LSB = {}; for (const cc of [16, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31]) BSII_LSB[cc + 32] = cc;
 const bsiiMsb = {};
@@ -2285,19 +2280,6 @@ function midiInit() {
 }
 midiEl.style.cursor = 'pointer'; midiEl.onclick = midiInit;
 midiInit();
-// external input
-const extfile = document.getElementById('extfile');
-document.getElementById('extbtn').onclick = () => extfile.click();
-extfile.onchange = async () => {
-  const f = extfile.files[0]; if (!f) return;
-  try {
-    const ab = await (ctx || new AudioContext()).decodeAudioData(await f.arrayBuffer());
-    const len = Math.min(ab.length, ab.sampleRate * 60), mono = new Float32Array(len);
-    for (let c = 0; c < ab.numberOfChannels; c++) { const d = ab.getChannelData(c); for (let i = 0; i < len; i++) mono[i] += d[i] / ab.numberOfChannels; }
-    extData = mono; send({ t: 'ext', data: mono });
-    document.getElementById('extname').textContent = f.name + ' — turn up ' + tr('ВНЕШ.');
-  } catch (e) { document.getElementById('extname').textContent = 'could not decode file'; }
-};
 
 // ---------------------------------------------------------------- fit to width
 const stage = document.getElementById('stage');
