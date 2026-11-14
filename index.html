@@ -94,13 +94,14 @@
   /* knob step sequences (performance feature): label on a black slab while one runs */
   .ctl .lab.seq { background: var(--ink); color: var(--pink); padding: 1px 5px; }
   .sq-grid { grid-column: 1 / -1; margin: 0 8px; display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; height: 104px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
-  .bar { position: relative; border: 2px solid var(--ink); }
+  .bar { position: relative; border: 2px solid var(--ink); transition: background-color .35s, box-shadow .35s; }
   .bar::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--ink); }
   .bar i { position: absolute; left: 0; right: 0; background: var(--ink); }
   .bar.off { opacity: .25; }
   /* the knob shown in the sequencer is not running: its settings and steps are greyed out */
   #seqpanel.idle .dim { opacity: .35; }
-  .bar.now { background: var(--paper); }
+  /* the running light: the step playing now lights up white and glows, then fades as the next one lights */
+  .bar.now { background: var(--paper); box-shadow: 0 0 10px 2px rgba(255,255,255,.9), 0 0 22px 6px rgba(255,255,255,.35); z-index: 1; transition: none; }
   /* preset names are made up by names.js, never typed */
   .pre-name { flex: 1; min-width: 0; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 2px solid var(--ink); font: 400 13px var(--display); letter-spacing: .02em; text-transform: uppercase; }
   .pre-name > i { font-style: normal; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1525,7 +1526,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.28.0';
+const VERSION = '1.29.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];

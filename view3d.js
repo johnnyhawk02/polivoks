@@ -391,15 +391,26 @@ if (gridEl) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   };
   const tex = { on: frameTex('on'), now: frameTex('now'), off: frameTex('off') };
+  const glowTex = (() => {
+    const b = rel(barEls[0], low), w = b.w + 28, h = b.h + 28, [c, ctx] = canvas(w, h);
+    ctx.filter = 'blur(9px)'; ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillRect(14, 14, b.w, b.h);
+    ctx.filter = 'none'; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 3; ctx.strokeRect(12.5, 12.5, b.w + 3, b.h + 3);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
   const bars = barEls.map((be) => {
     const b = rel(be, low);
     const fm = new THREE.MeshStandardMaterial({ map: tex.on, roughness: 0.78 });
     const frame = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.h), fm); frame.position.copy(pos(b.x + b.w / 2, b.y + b.h / 2, 0.3)); lower.add(frame);
     const bm = new THREE.MeshLambertMaterial({ color: 0x050505, transparent: true });
     const blk = new THREE.Mesh(new THREE.BoxGeometry(b.w - 4, 1, 10), bm); blk.castShadow = true; lower.add(blk);
-    return { b, fm, bm, blk, sig: '' };
+    // the running light: a soft white glow over the step playing now, fading behind it
+    const gm = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(b.w + 28, b.h + 28), gm); glow.position.copy(pos(b.x + b.w / 2, b.y + b.h / 2, 11)); lower.add(glow);
+    bm.emissive = new THREE.Color(0xff3fd0); bm.emissiveIntensity = 0;
+    return { b, fm, bm, blk, gm, g: 0, sig: '' };
   });
   const hit = hitBox(R.w, R.h, 14, R.x + R.w / 2, R.y + R.h / 2, 6, lower); hit.userData.grid = R;
+  let glowT = 0;
   ticks.push(() => {
     const c = A.edC; if (!c) return;
     const s = A.seqOf(c.id), p = A.lastPos, now = s.on && p ? Math.floor(p.pos / s.div) % s.len : -1, gf = s.on ? 1 : 0.35;
@@ -413,6 +424,11 @@ if (gridEl) {
       B.blk.position.copy(pos(B.b.x + B.b.w / 2, B.b.y + B.b.h / 2 - (v >= 0 ? h / 2 : -h / 2), 5.3));
     });
     if (moved) renderer.shadowMap.needsUpdate = true;
+    const t = performance.now(), k = Math.exp(-(t - (glowT || t)) / 110); glowT = t;   // fades with a 0.11 s time constant
+    bars.forEach((B, i) => {   // glow: full on the step playing now, then a quick fade
+      B.g = i === now ? 1 : B.g * k; if (B.g < 0.01) B.g = 0;
+      B.gm.opacity = 0.55 * B.g; B.bm.emissiveIntensity = 0.9 * B.g;
+    });
   });
 }
 // paint steps by dragging across the bars (as on the 2D panel: drawing switches the sequence on)
