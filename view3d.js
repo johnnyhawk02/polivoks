@@ -83,12 +83,24 @@ function tintable(m) {
 // steady too: the ambient and front light as set in OPTIONS, the pink of the
 // faces swapped for the PANEL COLOUR, and a glow of it in the room behind
 const panelCol = new THREE.Color();
+// matt: no shine at all; plastic: a soft gloss; metallic: anodised metal, the colour in the reflections
+const FINISH = { matt: { r: 0.95, m: 0, e: 0.2 }, plastic: { r: 0.42, m: 0, e: 0.55 }, metal: { r: 0.5, m: 0.6, e: 1.1, brushed: true } };
+// metallic panels are brushed: fine horizontal streaks in how rough the surface is
+const brushed = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512; const x = c.getContext('2d');
+  x.fillStyle = '#808080'; x.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 2600; i++) { const v = 90 + Math.random() * 90 | 0; x.fillStyle = `rgba(${v},${v},${v},.35)`; x.fillRect(Math.random() * 512, Math.random() * 512, 40 + Math.random() * 220, 1); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); return t;
+})();
 function driveAmbient() {
-  const L = A.look.lights, sig = A.look.hue + JSON.stringify(L);
+  const L = A.look.lights, sig = [A.look.hue, A.look.sat, A.look.lit, A.look.finish].join() + JSON.stringify(L);
   if (sig === bgHex) return; bgHex = sig;
   amb.color.set(L.amb.c); amb.groundColor.copy(amb.color).multiplyScalar(0.25); amb.intensity = 0.45 * L.amb.i;
   front.color.set(L.amb.c); front.intensity = 0.35 * L.amb.i;
-  panelCol.setHSL(A.look.hue, 0.97, 0.52); TINT.uTint.value.copy(panelCol);
+  panelCol.setHSL(A.look.hue, A.look.sat, A.look.lit); TINT.uTint.value.copy(panelCol);
+  // FINISH: how the panel faces take the light
+  const F = FINISH[A.look.finish] || FINISH.matt;
+  for (const m of tintMats) { m.roughness = F.r; m.metalness = F.m; m.envMapIntensity = F.e; const rm = F.brushed ? brushed : null; if (m.roughnessMap !== rm) { m.roughnessMap = rm; m.needsUpdate = true; } }
   const c = panelCol.clone().multiplyScalar(0.45);
   document.body.style.background = `radial-gradient(120% 90% at 50% 40%, #${c.getHexString()} 0%, #0b0b0b 75%)`;
 }
