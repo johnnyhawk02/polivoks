@@ -1,9 +1,9 @@
-// Copy dsp.js, seq.js, fx.js and names.js into their <script type="text/plain"> blocks of
+// Copy dsp.js, seq.js, fx.js, names.js and tone.js into their <script type="text/plain"> blocks of
 // index.html so the files never drift apart.  Run after every change to
 // either:  node sync.js
 const fs = require('fs');
 let html = fs.readFileSync(__dirname + '/index.html', 'utf8');
-for (const [file, id] of [['dsp.js', 'dsp-src'], ['seq.js', 'seq-src'], ['fx.js', 'fx-src'], ['names.js', 'names-src']]) {
+for (const [file, id] of [['dsp.js', 'dsp-src'], ['seq.js', 'seq-src'], ['fx.js', 'fx-src'], ['names.js', 'names-src'], ['tone.js', 'tone-src']]) {
   const src = fs.readFileSync(__dirname + '/' + file, 'utf8');
   const tag = `<script type="text/plain" id="${id}">`;
   const a = html.indexOf(tag) + tag.length, b = html.indexOf('</script>', a);
