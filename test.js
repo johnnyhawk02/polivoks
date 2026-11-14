@@ -245,7 +245,7 @@ console.log('--- stability sweep ---');
     for (const id in k) { const lo = id === 'o2detune' || id === 'o2pitch' ? -1 : 0, hi = /range/.test(id) ? 4 : /wave/.test(id) ? 2 : /lfoMode/.test(id) ? 3 : /pw$/.test(id) ? 1 : 1; if (!(k[id] >= lo && k[id] <= hi)) { bad++; if (n++ < 5) console.log('out of range', id, k[id]); } }
     if (k.vcaHold || k.fMode || k.res > 0.8 || k.cutoff < 0.38 || k.mix1 < 0.4 || 'volume' in k || 'phones' in k || 'outSel' in k || k.o1mod > 0.01 || k.aMod > 0.07 || k.fMod > 0.1 || k.eFb > 0.55 || k.eSync !== 1) { bad++; if (n++ < 5) console.log('outside the usable zone', kind, JSON.stringify(k)); }
     if (!sq || !sq.cutoff) { bad++; if (n++ < 5) console.log('no cutoff sequence'); }
-    for (const id in sq || {}) { const q = sq[id]; if (!['cutoff', 'res', 'fEnv', 'o1pw', 'o2pw', 'tune'].includes(id) || !q.on || q.depth > (id === 'tune' ? 0.03 : 0.2) || q.slew < 0.05 || q.steps.length !== 16 || q.steps.some((v) => !(v >= -1 && v <= 1)) || (id === 'cutoff' && q.steps.some((v) => v < -0.4))) { bad++; if (n++ < 5) console.log('bad sequence', id, JSON.stringify(q)); } }
+    for (const id in sq || {}) { const q = sq[id]; if (!['cutoff', 'res', 'fEnv', 'o1pw', 'o2pw', 'tune'].includes(id) || !q.on || q.depth > (id === 'tune' ? 0.03 : 0.2) || q.slew < 0.05 || ![4, 8, 16, 32, 64].includes(q.div) || q.steps.length !== 16 || q.steps.some((v) => !(v >= -1 && v <= 1)) || (id === 'cutoff' && q.steps.some((v) => v < -0.4))) { bad++; if (n++ < 5) console.log('bad sequence', id, JSON.stringify(q)); } }
   }
   // TONE MOD amount: mean cutoff-sequence depth must rise from virtually nothing to moderate
   const md = (amt) => { let t = 0; for (let i = 0; i < 400; i++) t += makeTone(null, amt).seqs.cutoff.depth; return t / 400; };
@@ -281,4 +281,13 @@ console.log('--- stability sweep ---');
   for (const f of own) if (f !== './' && !fs.existsSync(__dirname + '/' + f)) { bad++; console.log('sw caches a missing file', f); }
   console.log(`PWA: ${man.icons.length} icons, ${own.length} files cached on install, apple icon ${png('icons/apple-touch-icon.png')}`, bad ? 'FAILED' : 'ok');
   if (bad) process.exitCode = 1;
+}
+// sequence RATE at the long end: 8 bars per step (128 sixteenths) at 120 BPM = 16 s, 1 BAR = 2 s
+{
+  const { KnobSeq } = require('./seq.js');
+  const e = new PolivoksEngine(SR), q = new KnobSeq(SR, e); q.msg({ t: 'p', id: 'cutoff', v: 0.5 });
+  const stepAt = (div, t) => { const k = new KnobSeq(SR, e); k.setSeq('cutoff', { on: true, len: 4, div, depth: 1, slew: 0, steps: [1, 0.5, 0, -0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, [0, 1]); k.base.cutoff = 0.5; k.tick(t); return Math.floor(k.pos / div) % 4; };
+  const r = [stepAt(128, 15.9), stepAt(128, 16.1), stepAt(128, 47), stepAt(128, 64.1), stepAt(16, 1.9), stepAt(16, 2.1), stepAt(1, 0.1)];
+  console.log('--- sequence RATE range ---\n8 bars/step at 120 BPM: step at 15.9 s, 16.1 s, 47 s, 64.1 s =', r.slice(0, 4).join(' '), '; 1 bar: 1.9 s, 2.1 s =', r.slice(4, 6).join(' '), '; 1/16 at 0.1 s =', r[6]);
+  if (r.join() !== '0,1,2,0,0,1,0') { console.log('RATE RANGE FAILED'); process.exitCode = 1; }
 }

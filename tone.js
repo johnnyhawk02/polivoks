@@ -113,12 +113,13 @@ function makeTone(rand, amount) {
   // ---- sequences, very subtle: the filter cutoff always breathes a little, resonance,
   // envelope amount, pulse width and (very slightly) pitch sometimes join in.  A sequence moves its knob by
   // DEPTH x step x the knob's range, so depths of a few percent are small nudges (times the AMOUNT factor).
-  // Steps are a slow drifting line (each a small move from the last), RATE is 1/8
-  // or 1/4 and SLEW is long, so it glides rather than steps.  Cutoff steps are kept
+  // Steps are a slow drifting line (each a small move from the last); RATE is slow
+  // (a 1/4 note to 2 bars a step for the filter, up to 4 bars for pulse width and pitch) and
+  // SLEW is about half a step, so it glides rather than steps.  Cutoff steps are kept
   // mostly upward so the knob never dips toward the near-silent zone.
   const walk = (lo, hi) => { let v = mid(-0.2, 0.5); const st = []; for (let i = 0; i < 16; i++) { st.push(Math.round(Math.max(lo, Math.min(hi, v)) * 100) / 100); v += (R() - 0.5) * 0.8; } return st; };
   const seqs = {};
-  const mk = (id, depth, lo, hi) => { seqs[id] = { on: true, len: pick([8, 16, 16]), div: pick([2, 2, 4]), depth: Math.round(depth * 10000) / 10000, slew: Math.round(mid(0.08, 0.35) * 1000) / 1000, steps: walk(lo, hi) }; };
+  const mk = (id, depth, lo, hi, divs) => { const div = pick(divs || [4, 8, 16, 32]); seqs[id] = { on: true, len: pick([8, 16, 16]), div, depth: Math.round(depth * 10000) / 10000, slew: Math.round(Math.max(0.08, Math.min(2, div * 0.125 * mid(0.3, 0.6))) * 1000) / 1000, steps: walk(lo, hi) }; };
   mk('cutoff', mid(0.02, 0.05) * fac, -0.4, 1);
   if (R() < 0.5) mk('res', mid(0.02, 0.06) * fac, -1, 1);
   if (R() < 0.4) mk('fEnv', mid(0.03, 0.07) * fac, -1, 1);
@@ -127,12 +128,12 @@ function makeTone(rand, amount) {
   for (const n of ['o1', 'o2']) {
     if (k[n + 'wave'] !== 2 || (n === 'o2' && k.mix2 === 0) || R() < 0.2) continue;
     if (k[n + 'pw'] === 0) k[n + 'pw'] = Math.round(mid(0.12, 0.3) * 1e5) / 1e5;
-    mk(n + 'pw', Math.min(0.2, mid(0.04, 0.1) * fac), -1, 1);
+    mk(n + 'pw', Math.min(0.2, mid(0.04, 0.1) * fac), -1, 1, [8, 16, 32, 64]);
   }
   // pitch, just slightly: the global TUNE knob (both oscillators together, so they stay in tune
   // with each other).  One unit of depth is 4 semitones, so 0.005 to 0.012 is about 2 to 5 cents
   // at the subtle setting and never more than about 12 cents.
-  if (R() < 0.6) mk('tune', Math.min(0.03, mid(0.005, 0.012) * fac), -1, 1);
+  if (R() < 0.6) mk('tune', Math.min(0.03, mid(0.005, 0.012) * fac), -1, 1, [16, 32, 64]);
   for (const id in k) k[id] = Math.round(k[id] * 1e5) / 1e5;
   return { kind, k, seqs };
 }
