@@ -1579,9 +1579,9 @@ const L = {
     knob('o2pw', 'PULSE W.', '06', 0, { added: true }), knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0)],
   'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0)],
   // FILTER and AMPLIFIER share their bottom two rows: MOD, depth, envelope mode, then A D S R
-  // FILTER: cutoff, resonance, type and its sketch, then the two modulation amounts;
+  // FILTER: cutoff, resonance, type, then the two modulation amounts;
   // its envelope (A D S R and mode) has its own box, FILTER ENVELOPE, underneath
-  'g-f': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0, 'ТИП'), { kind: 'resp' },
+  'g-f': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0, 'ТИП'),
     knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0),
   ],
   'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
