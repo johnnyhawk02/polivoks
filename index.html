@@ -35,9 +35,6 @@
   .panel { display: grid; grid-template-columns: repeat(19, var(--cw)); grid-template-rows: repeat(3, var(--rh)); gap: var(--g);
     padding: 18px; position: relative; isolation: isolate; color: var(--ink); }
   .torn { position: absolute; inset: 0; z-index: -1; background: var(--pink); pointer-events: none; }
-  /* edge wobble: the sheet is 6 px bigger all round and clipped back to the
-     panel's outline, roughed up by the modulator's output (see wobble()) */
-  .wob .torn { inset: -6px; will-change: clip-path; }
   .box { box-shadow: inset 0 0 0 2px var(--ink); position: relative; display: grid; grid-template-columns: repeat(var(--n), var(--cw)); grid-template-rows: repeat(var(--m, 1), var(--rh)); gap: var(--g); grid-auto-flow: row; }
   .box.down { grid-auto-flow: column; }
   /* section names: white letters on a plain black slab over the top edge */
@@ -114,7 +111,9 @@
     <div class="box down" id="g-mix" style="grid-area:1/10/3/12;--n:2;--m:2"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/12;--n:8;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/12/4/16;--n:4;--m:3"><h2>FILTER</h2></div>
-    <div class="ttl" style="grid-area:1/16/2/20">FILTH</div>
+    <div class="ttl" style="grid-area:1/16/2/20"><span id="ttlw">FILTH</span></div>
+    <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
     <div class="box" id="g-a" style="grid-area:2/16/4/20;--n:4;--m:2"><h2>AMPLIFIER</h2></div>
   </div>
   <div class="panel low" id="low">
@@ -140,7 +139,7 @@
     <div class="box" id="g-panel" style="grid-area:2/16/3/20;--n:4"><h2>INPUT / RESET</h2>
       <div class="f" style="grid-column:span 2"><span id="extname">EXT. INPUT</span><div class="row"><button class="btn" id="extbtn">LOAD FILE</button><input type="file" id="extfile" accept="audio/*" hidden></div></div>
       <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="resetbtn">RESET</button></div></div>
-      <div class="f" style="grid-column:span 1"><span>EDGES</span><div class="row"><button class="sb" id="wobbtn" aria-pressed="true">WOBBLE</button></div></div>
+      <div class="f" style="grid-column:span 1"><span>WOBBLE</span><div class="row"><button class="sb" id="wobbtn" aria-pressed="true">ON</button></div></div>
     </div>
   </div>
   <div class="foot">
@@ -821,7 +820,7 @@ class PolivoksEngine {
       this.lfo.C = slow ? 160e-6 : 10e-6;
       const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3);
       const lfo = this.lfo.step(lfoR, p.lfoMode | 0, this.nzAvg);
-      this.lfoV = lfo;                            // last modulator output (V), read by the page for the edge wobble
+      this.lfoV = lfo;                            // last modulator output (V), read by the page for the title wobble
 
       // keyboard board: gate, track-and-hold, voice 2, glide (sheet 3)
       const kb = this.kb;
@@ -1464,59 +1463,36 @@ const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); }
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
 let lfoV = 0;   // the modulator's output in volts, posted by the engine ~60 times a second
 
-// ---------------------------------------------------------------- edge wobble
-// The pink sheets' edges are roughed up by a fixed torn-paper noise whose
-// depth is the modulator's output right now: straight at 0 V, torn one way at
-// the top of the triangle and the other way at the bottom, so the edges move
-// with RATE, RANGE (SLOW too) and MODE.  Only the sheets' clip-path changes,
-// once per frame and only when the value has moved, so no layout work.
-const WOB = { on: true, A: 4.5, step: 4, vmax: 1.43, last: NaN, sheets: [] };
+// ---------------------------------------------------------------- title wobble
+// The letters of FILTH are pushed about by a fixed noise whose depth is the
+// modulator's output right now: plain at 0 V, warped one way at the top of
+// the triangle and the other way at the bottom, so it moves with RATE, RANGE
+// (SLOW too) and MODE.  Only the title's filter changes, once per frame and
+// only when the value has moved; near 0 V the filter is dropped so the
+// letters are crisp.
+const WOB = { on: true, A: 9, vmax: 1.43, last: NaN };
 try { const w = localStorage.getItem('polivoks-wobble'); WOB.on = w ? w === '1' : !matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
-function wobNoise(seed, n) {
-  // three octaves of smooth value noise, wavelengths about 40, 16 and 7 px
-  let r = seed >>> 0; const rnd = () => ((r = (r * 1664525 + 1013904223) >>> 0) / 4294967296) * 2 - 1;
-  const oct = [[10, .55], [4, .3], [1.75, .15]].map(([len, a]) => { const k = Math.ceil(n / len) + 2, g = Array.from({ length: k }, rnd); return { len, a, g }; });
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) for (const o of oct) { const x = i / o.len, j = x | 0, t = x - j, u = t * t * (3 - 2 * t); out[i] += o.a * (o.g[j] + (o.g[j + 1] - o.g[j]) * u); }
-  return out;
-}
-function wobSheets() {
-  WOB.sheets = [...document.querySelectorAll('.panel .torn')].map((el, k) => {
-    // points every few px along the panel's own outline, 6 px in from the sheet's edge
-    const W = el.offsetWidth, H = el.offsetHeight, st = WOB.step, nx = Math.ceil((W - 12) / st), ny = Math.ceil((H - 12) / st);
-    return { el, W, H, nx, ny, n: wobNoise(7 + k * 101, 2 * (nx + ny)) };
-  });
-  WOB.last = NaN;
-}
+const wobW = document.getElementById('ttlw'), wobD = document.getElementById('wobd');
 function wobDraw(v) {
-  const A = WOB.A, st = WOB.step, r = (x) => Math.round(x * 10) / 10;
-  for (const s of WOB.sheets) {
-    const { W, H, nx, ny, n } = s; let i = 0, p = 'polygon(';
-    const d = () => r(6 - A * v * n[i++]);   // distance in from the sheet's edge; 6 = the panel's own edge
-    for (let k = 0; k < nx; k++) p += Math.min(6 + k * st, W - 6) + 'px ' + d() + 'px,';
-    for (let k = 0; k < ny; k++) p += r(W - d()) + 'px ' + Math.min(6 + k * st, H - 6) + 'px,';
-    for (let k = 0; k < nx; k++) p += Math.max(W - 6 - k * st, 6) + 'px ' + r(H - d()) + 'px,';
-    for (let k = 0; k < ny; k++) p += d() + 'px ' + Math.max(H - 6 - k * st, 6) + 'px,';
-    s.el.style.clipPath = p.slice(0, -1) + ')';
-  }
+  if (Math.abs(v) < 0.03) { wobW.style.filter = ''; return; }
+  wobD.setAttribute('scale', (WOB.A * v).toFixed(2));
+  wobW.style.filter = 'url(#wobf)';
 }
 function wobFrame() {
   if (!WOB.on) return;
   const v = Math.max(-1, Math.min(1, lfoV / WOB.vmax));
-  if (!(Math.abs(v - WOB.last) < 0.004)) { WOB.last = v; wobDraw(v); }
+  if (!(Math.abs(v - WOB.last) < 0.01)) { WOB.last = v; wobDraw(v); }
   requestAnimationFrame(wobFrame);
 }
 function wobSet(on) {
   WOB.on = on; try { localStorage.setItem('polivoks-wobble', on ? '1' : '0'); } catch (e) {}
-  const b = document.getElementById('wobbtn'); b.classList.toggle('lit', on); b.textContent = on ? 'WOBBLE' : 'STILL'; b.setAttribute('aria-pressed', on);
-  document.getElementById('stage').classList.toggle('wob', on);
-  if (on) { wobSheets(); requestAnimationFrame(wobFrame); } else for (const s of WOB.sheets) s.el.style.clipPath = '';
+  const b = document.getElementById('wobbtn'); b.classList.toggle('lit', on); b.textContent = on ? 'ON' : 'OFF'; b.setAttribute('aria-pressed', on);
+  WOB.last = NaN; if (on) requestAnimationFrame(wobFrame); else wobW.style.filter = '';
 }
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
-new ResizeObserver(() => { if (WOB.on) wobSheets(); }).observe(document.getElementById('low'));   // the lower sheet grows as its controls are built
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.22.0';
+const VERSION = '1.23.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
