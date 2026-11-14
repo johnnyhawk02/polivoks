@@ -527,7 +527,11 @@ function paintLower(ctx) {
     if (/Depth$/.test(m.dataset.m)) { ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(cx, cy - R - 3); ctx.lineTo(cx, cy - R - 6); ctx.stroke(); }   // ENV / LFO: a centre tick (bipolar)
   }
   ctx.globalAlpha = 1;
-  for (const e of lowEls.ranges) { const r = rel(e, low); ctx.globalAlpha = fade(e); ctx.fillStyle = INK; ctx.fillRect(r.x, r.y + r.h / 2 - 2, r.w, 4); }
+  for (const e of lowEls.ranges) {
+    const r = rel(e, low); ctx.globalAlpha = fade(e); ctx.fillStyle = INK;
+    if (e.classList.contains('vert')) { ctx.fillRect(r.x + r.w / 2 - 2, r.y, 4, r.h); ctx.fillRect(r.x + r.w / 2 - 9, r.y + r.h / 2 - 1, 18, 2); }   // vertical, a zero mark across the middle
+    else ctx.fillRect(r.x, r.y + r.h / 2 - 2, r.w, 4);
+  }
   ctx.globalAlpha = 1;
 }
 const lowSlab = slab(UW, LH, paintLower); lowSlab.userData.repaint(); lower.add(lowSlab);
@@ -601,9 +605,10 @@ function openList(el) {
 for (const el of lowEls.ranges) {
   const r = rel(el, low), min = +el.min || 0, max = +el.max || 100;
   const t = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 7, 24), mat.ink.clone()); t.rotation.x = Math.PI / 2; t.castShadow = true; lower.add(t);
-  const hit = hitBox(r.w + 16, 26, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower); hit.userData.range = { el, r, min, max };
+  const vert = el.classList.contains('vert');
+  const hit = vert ? hitBox(30, r.h + 16, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower) : hitBox(r.w + 16, 26, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower); hit.userData.range = { el, r, min, max, vert };
   let last = null, n = 0;
-  ticks.push(() => { if (++n % 5 === 0) fadeMat(t.material, fade(el)); if (el.value !== last) { last = el.value; t.position.copy(pos(r.x + (el.value - min) / (max - min) * r.w, r.y + r.h / 2, 3.5)); renderer.shadowMap.needsUpdate = true; } });
+  ticks.push(() => { if (++n % 5 === 0) fadeMat(t.material, fade(el)); if (el.value !== last) { last = el.value; { const u = (el.value - min) / (max - min); t.position.copy(vert ? pos(r.x + r.w / 2, r.y + (1 - u) * r.h, 3.5) : pos(r.x + u * r.w, r.y + r.h / 2, 3.5)); } renderer.shadowMap.needsUpdate = true; } });
 }
 // step bars of the knob being sequenced
 const gridEl = low.querySelector('.sq-grid');
@@ -726,8 +731,8 @@ cv.addEventListener('pointerdown', (e) => {
   else if (u.grid) { paint = null; grab = { grid: u.grid }; const lp = onLower(e); if (lp) paintAt(u.grid, lp); }
 });
 function slide(e) {
-  const { el, r, min, max } = grab.range, lp = onLower(e); if (!lp) return;
-  const u = Math.max(0, Math.min(1, (lp.x - r.x) / r.w)), v = Math.round(min + u * (max - min));
+  const { el, r, min, max, vert } = grab.range, lp = onLower(e); if (!lp) return;
+  const u = Math.max(0, Math.min(1, vert ? 1 - (-lp.y - r.y) / r.h : (lp.x - r.x) / r.w)), v = Math.round(min + u * (max - min));
   if (+el.value !== v) { el.value = v; el.dispatchEvent(new Event('input')); }
 }
 cv.addEventListener('pointermove', (e) => {
