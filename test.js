@@ -182,3 +182,25 @@ console.log('--- stability sweep ---');
   console.log(`MIDI clock 100 BPM: tempo ${q2.tempo()}, echo 1/4 = ${(fx.target() / SR * 1e3).toFixed(1)} ms`);
   if (q2.tempo() !== 100 || Math.abs(fx.target() / SR - 0.6) > 1e-6) { console.log('ECHO CLOCK FAILED'); process.exitCode = 1; }
 }
+// TONE randomiser (tone.js): interval knob positions and the ranges it draws from
+{
+  const { makeTone, TONE_PITCH, TONE_CENT } = require('./tone.js');
+  console.log('--- TONE randomiser ---');
+  let bad = 0;
+  for (const s in TONE_PITCH) { const c = 1200 * pitchOct(TONE_PITCH[s]) - 100 * s; if (Math.abs(c) > 0.5) { console.log('pitch knob for', s, 'off by', c.toFixed(2), 'cents'); bad++; } }
+  if (Math.abs(1200 * detuneOct(10 * TONE_CENT) - 10) > 0.1) { console.log('detune cent constant off'); bad++; }
+  // heard: VCO II against VCO I on the fifth and the fourth (both saw, filter open)
+  for (const s of [7, 5]) {
+    const f = (solo) => freqOf(run(Object.assign({}, open, { o2wave: 1, o2pitch: TONE_PITCH[s] }, solo), 1, [57]).out, SR);
+    const c = 1200 * Math.log2(f({ mix1: 0, mix2: 0.6 }) / f({ mix1: 0.6, mix2: 0 })) - 100 * s;
+    console.log(`VCO II at +${s} semitones: ${c.toFixed(1)} cents off`); if (Math.abs(c) > 6) bad++;
+  }
+  const kinds = {}; let n = 0;
+  for (let i = 0; i < 5000; i++) {
+    const { kind, k } = makeTone(); kinds[kind] = (kinds[kind] || 0) + 1;
+    for (const id in k) { const lo = id === 'o2detune' || id === 'o2pitch' ? -1 : 0, hi = /range/.test(id) ? 4 : /wave|lfoMode/.test(id) ? 3 : 1; if (!(k[id] >= lo && k[id] <= hi)) { bad++; if (n++ < 5) console.log('out of range', id, k[id]); } }
+    if (k.vcaHold || k.fMode || k.res > 0.8 || k.cutoff < 0.38 || k.mix1 < 0.4 || 'volume' in k || 'phones' in k || 'outSel' in k || k.o1mod > 0.01 || k.aMod > 0.07 || k.fMod > 0.1 || k.eFb > 0.55 || k.eSync !== 1) { bad++; if (n++ < 5) console.log('outside the usable zone', kind, JSON.stringify(k)); }
+  }
+  console.log('5000 tones by kind:', JSON.stringify(kinds), bad ? 'FAILED' : 'all in range');
+  if (bad) { console.log('TONE TEST FAILED'); process.exitCode = 1; }
+}
