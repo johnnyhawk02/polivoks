@@ -584,7 +584,8 @@ cv.addEventListener('pointerdown', (e) => {
   else if (u.ctl) {
     const c = u.ctl; grab = { c, y0: e.clientY, v0: c.v, moved: false, scale: 220 * Math.min(1, innerWidth / 1400) + 80 };
     if (c.kind === 'knob' && e.button === 0) A.pickSeq(c);
-  } else if (u.btn) { pressed(o); u.btn.click(); }
+  } else if (u.btn && u.btn.dataset.note) { pressed(o); grab = { note: +u.btn.dataset.note }; A.on(grab.note, 'pad'); }   // PLAY keys: held while pressed
+  else if (u.btn) { pressed(o); u.btn.click(); }
   else if (u.sel) { pressed(o); openList(u.sel); }
   else if (u.range) { grab = { range: u.range }; slide(e); }
   else if (u.grid) { paint = null; grab = { grid: u.grid }; const lp = onLower(e); if (lp) paintAt(u.grid, lp); }
@@ -610,6 +611,7 @@ function release() {
     if (c.kind === 'sw') c.set(c.v ? 0 : 1);
     else if (c.kind === 'sel') c.set((c.v + 1) % c.opts.length);
   }
+  if (grab && grab.note != null) A.off(grab.note, 'pad');
   release3d(); grab = null; paint = null;
 }
 cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release); addEventListener('pointerup', release3d);

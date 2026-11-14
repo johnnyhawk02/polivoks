@@ -127,6 +127,8 @@
   .foot a { color: inherit; }
   /* fields that continue the row above need no label line of their own */
   .f.nolab > span { display: none; }
+  /* PLAY keys: only on touch screens, where there is no computer keyboard */
+  @media (pointer: fine) { .notekeys { display: none !important; } }
   /* OPTIONS: a box that opens when FILTH is tapped */
   .ttl { cursor: pointer; }
   #opts { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: none; }   /* no dimming: the colours show in place */
@@ -1644,7 +1646,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.58.0';
+const VERSION = '1.59.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1915,8 +1917,15 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f" style="grid-column:span 4"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="sq-grid dim"></div>
   <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
-  <div class="f dim" style="grid-column:span 4"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>`);
+  <div class="f dim" style="grid-column:span 4"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>
+  <div class="f notekeys" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>`);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
+// PLAY: note keys for a phone with no keyboard: press to sound, release to stop, through the same on/off as the computer keys and MIDI
+ed.querySelectorAll('[data-note]').forEach((b) => {
+  const n = +b.dataset.note; let down = false;
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!down) { down = true; on(n, 'pad'); } });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => { if (down) { down = false; off(n, 'pad'); } });
+});
 // which knob is being edited: a list grouped by panel section (● = its sequence runs);
 // touching a knob on the panel picks it too
 const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', o1pw: 'VCO I PULSE W.', o2pw: 'VCO II PULSE W.', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE', mixE: 'MIX EXT.',
