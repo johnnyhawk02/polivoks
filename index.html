@@ -1701,7 +1701,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.79.0';
+const VERSION = '1.80.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1957,7 +1957,7 @@ const dice = {
   tone() {
     seqsOff();
     const { k, seqs: ts } = makeTone(null, toneAmt);
-    for (const c of S) if (c.id in k) c.set(k[c.id]);
+    for (const c of S) if (c.id in k && c.id !== 'voice') c.set(k[c.id]);   // MONO/DUO stays as it is
     for (const id in ts) { const c = knobById(id); seqs[id] = Object.assign({}, ts[id], { steps: ts[id].steps.slice() }); pushSeq(c); }
     preName = freshName(); preI = -1; savePre(); drawPre();
   },
