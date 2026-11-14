@@ -7,7 +7,6 @@
 // presets, RANDOMISE, the sequencer, MIDI and saving are the app's, not a copy.
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const A = window.filthApp;
 const PINK = '#fc0fc0', INK = '#0b0b0b', PAPER = '#ffffff';
@@ -32,6 +31,7 @@ function text(x, s, px, py, font, col = INK, align = 'center', ls = 0) {
   if ('letterSpacing' in x) x.letterSpacing = ls + 'px';
   x.fillText(s, px, py);
 }
+const fs = (el) => parseFloat(getComputedStyle(el).fontSize) || 12;
 const linesOf = (el) => el ? el.innerHTML.split(/<br\s*\/?>/i).map((t) => { const d = document.createElement('div'); d.innerHTML = t; return d.textContent.trim(); }) : [];
 const IC = { tri: [[2, 10], [8, 2], [14, 10]], saw: [[2, 10], [12, 2], [12, 10]], sq: [[2, 10], [2, 3], [8, 3], [8, 10], [14, 10]],
   sh: [[1, 8], [4, 8], [4, 3], [7, 3], [7, 10], [10, 10], [10, 5], [14, 5]], nz: [[1, 6], [2.5, 3], [4, 9], [5.5, 2], [7, 8], [8.5, 4], [10, 10], [11.5, 3], [13, 7]] };
@@ -131,7 +131,7 @@ function slab(w, h, paint) {
   const [c, ctx] = canvas(w, h);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }); tintMats.push(face);
-  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, DEPTH, 3, 7), [mat.edge, mat.edge, mat.edge, mat.edge, face, mat.edge]);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, DEPTH), [mat.edge, mat.edge, mat.edge, mat.edge, face, mat.edge]);
   m.position.set(w / 2, -h / 2, -DEPTH / 2); m.receiveShadow = true; m.castShadow = true;
   m.userData.repaint = () => { ctx.fillStyle = PINK; ctx.fillRect(0, 0, w, h); paint(ctx); tex.needsUpdate = true; };
   return m;
@@ -142,7 +142,7 @@ function plate(w, h, d, draw, opts = {}) {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const top = opts.bg === PINK ? new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }) : new THREE.MeshLambertMaterial({ map: tex });
   if (opts.bg === PINK) tintMats.push(top);
-  const m = new THREE.Mesh(d >= 3 && !opts.square ? new RoundedBoxGeometry(w, h, d, 2, Math.min(2.5, d / 2.2)) : new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
   m.geometry.translate(w / 2, -h / 2, d / 2); m.castShadow = true; m.receiveShadow = true;
   m.userData.redraw = (f) => { ctx.fillStyle = opts.bg || INK; ctx.fillRect(0, 0, w, h); f(ctx, w, h); tex.needsUpdate = true; };
   m.userData.redraw(draw);
@@ -172,12 +172,21 @@ const CTL = A.S.filter((c) => c.el && panel.contains(c.el));
 function paintCtl(ctx, c) {
   const svg = c.el.querySelector('svg'), lab = c.el.querySelector('.lab');
   if (lab) {
-    const r = rel(lab, panel), lines = linesOf(lab), seq = lab.classList.contains('seq');
-    if (seq && lines.length) {   // a running sequence: label on a black slab in pink, as on the 2D panel
-      ctx.font = `600 10.5px ${MONO}`; const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14;
-      ctx.fillStyle = INK; ctx.fillRect(r.x + r.w / 2 - w / 2, r.y - 1, w, lines.length * 12 + 2);
+    const r = rel(lab, panel), seq = lab.classList.contains('seq'), size = fs(lab), lh = size + 2, font = `600 ${size}px ${MONO}`;
+    const cell = rel(c.el, panel).w - 4;
+    ctx.font = font; if ('letterSpacing' in ctx) ctx.letterSpacing = '.5px';
+    // wrap at spaces where a line is wider than the cell
+    const lines = [];
+    for (const l of linesOf(lab)) {
+      let cur = '';
+      for (const w of l.split(' ')) { const t = cur ? cur + ' ' + w : w; if (cur && ctx.measureText(t).width > cell) { lines.push(cur); cur = w; } else cur = t; }
+      if (cur) lines.push(cur);
     }
-    lines.forEach((l, i) => text(ctx, l, r.x + r.w / 2, r.y + 6 + i * 12, `600 10.5px ${MONO}`, seq ? PINK : INK, 'center', .7));
+    if (seq && lines.length) {   // a running sequence: label on a black slab in pink, as on the 2D panel
+      const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 12;
+      ctx.fillStyle = INK; ctx.fillRect(r.x + r.w / 2 - w / 2, r.y - 1, w, lines.length * lh + 2);
+    }
+    lines.forEach((l, i) => text(ctx, l, r.x + r.w / 2, r.y + lh / 2 + i * lh, font, seq ? PINK : INK, 'center', .5));
   }
   const r = rel(c.el, panel);
   if (c.kind === 'knob') {
@@ -194,11 +203,11 @@ function paintCtl(ctx, c) {
     const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 34;
     c.opts.forEach((o, i) => {
       const a = selA(c, i), px = cx + Math.sin(a) * (KR + 11), py = cy - Math.cos(a) * (KR + 12);
-      if (o.t) text(ctx, o.t, px, py, `600 10.5px ${MONO}`);
+      if (o.t) text(ctx, o.t, px, py, `600 12px ${MONO}`);
       else { ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); IC[o.i].forEach(([u, v], k) => ctx[k ? 'lineTo' : 'moveTo'](px - 8 + u, py - 6 + v)); ctx.stroke(); }
     });
   } else if (c.kind === 'sw') {
-    for (const t of c.el.querySelectorAll('.t')) { const q = rel(t, panel); text(ctx, t.textContent, q.x + q.w / 2, q.y + q.h / 2, `500 10px ${MONO}`, INK, 'center', .6); }
+    for (const t of c.el.querySelectorAll('.t')) { const q = rel(t, panel); text(ctx, t.textContent, q.x + q.w / 2, q.y + q.h / 2, `600 ${fs(t)}px ${MONO}`, INK, 'center', .6); }
     const q = rel(c.el.querySelector('.slot'), panel);
     ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(q.x - 1, q.y - 1, q.w + 2, q.h + 2);
     ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(q.x + 1, q.y + 1, q.w - 2, q.h - 2);
@@ -211,17 +220,8 @@ function paintResp(ctx, bp) {
   P2([[6, 24], [44, 24], [52, 62]], bp ? 1 : 2.4, bp); P2([[40, 62], [52, 8], [62, 62]], bp ? 2.4 : 1, !bp); ctx.setLineDash([]);
   text(ctx, 'LP', 14 * k, 17 * k, `500 8.5px ${MONO}`, INK, 'left'); text(ctx, 'BP', 64 * k, 51 * k, `500 8.5px ${MONO}`, INK, 'left');
 }
-// a section: a shallow recess in the panel, darker inside, shaded along its top and left edges, a fine black rule
-function recess(ctx, r) {
-  ctx.fillStyle = 'rgba(40,0,30,.10)'; ctx.fillRect(r.x, r.y, r.w, r.h);
-  let g = ctx.createLinearGradient(0, r.y, 0, r.y + 14); g.addColorStop(0, 'rgba(0,0,0,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, 14);
-  g = ctx.createLinearGradient(r.x, 0, r.x + 10, 0); g.addColorStop(0, 'rgba(0,0,0,.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g; ctx.fillRect(r.x, r.y, 10, r.h);
-  g = ctx.createLinearGradient(0, r.y + r.h - 3, 0, r.y + r.h); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.35)');
-  ctx.fillStyle = g; ctx.fillRect(r.x, r.y + r.h - 3, r.w, 3);
-  ctx.strokeStyle = 'rgba(11,11,11,.85)'; ctx.lineWidth = 1.5; ctx.strokeRect(r.x + .75, r.y + .75, r.w - 1.5, r.h - 1.5);
-}
+// a section: a plain black rule, flat
+function recess(ctx, r) { ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2); }
 function paintUpper(ctx) {
   for (const b of panel.querySelectorAll('.box')) recess(ctx, rel(b, panel));
   for (const c of CTL) paintCtl(ctx, c);
@@ -236,7 +236,7 @@ const seqSig = () => CTL.map((c) => { const l = c.el.querySelector('.lab'); retu
 function sectionNames(root, group) {
   for (const h of root.querySelectorAll('.box h2')) {
     const r = rel(h, root), t = h.textContent;
-    const p = plate(r.w, r.h, 4, (ctx, w, hh) => text(ctx, t, w / 2, hh / 2 + .5, `400 14px ${DISPLAY}`, PAPER, 'center', .42));
+    const size = fs(h), p = plate(r.w, r.h, 4, (ctx, w, hh) => text(ctx, t, w / 2, hh / 2 + .5, `400 ${size}px ${DISPLAY}`, PAPER, 'center', .42));
     p.position.copy(pos(r.x, r.y, 0)); group.add(p);
   }
 }
@@ -298,7 +298,7 @@ for (const c of CTL) {
 // panel), and lit up by the output level.
 let title = null, titleU = null;
 {
-  const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0.22;
+  const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0;   // flat, raised plate
   const p = plate(w, h, 18, () => {});
   const layer = (blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
@@ -327,8 +327,6 @@ let title = null, titleU = null;
   p.add(new THREE.Mesh(fg, sm));
   const hinge = new THREE.Group(); hinge.position.copy(pos(r.x, r.y + h, 0)); hinge.rotation.x = TILT;
   p.position.set(0, h, 0); hinge.add(p); upper.add(hinge);
-  const skirt = new THREE.Mesh(new THREE.BoxGeometry(w, h, Math.sin(TILT) * h + 18), mat.inkMatte);
-  skirt.position.copy(pos(r.x + w / 2, r.y + h / 2, (Math.sin(TILT) * h + 18) / 2 - 18)); skirt.castShadow = true; upper.add(skirt);
   title = p; p.userData.title = true; hits.push(p);
 }
 function driveTitle() {
@@ -360,13 +358,13 @@ function paintLower(ctx) {
       ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
       const i = e.querySelector('i'), b = e.querySelector('b');
       ctx.save(); ctx.beginPath(); ctx.rect(r.x + 4, r.y, r.w - 60, r.h); ctx.clip();
-      text(ctx, i.textContent.toUpperCase(), r.x + 9, r.y + r.h / 2 + .5, `400 13px ${DISPLAY}`, INK, 'left', .26); ctx.restore();
-      text(ctx, b.textContent, r.x + r.w - 9, r.y + r.h / 2 + .5, `600 11px ${MONO}`, INK, 'right');
+      text(ctx, i.textContent.toUpperCase(), r.x + 9, r.y + r.h / 2 + .5, `400 ${fs(e)}px ${DISPLAY}`, INK, 'left', .26); ctx.restore();
+      text(ctx, b.textContent, r.x + r.w - 9, r.y + r.h / 2 + .5, `600 ${fs(b)}px ${MONO}`, INK, 'right');
     } else if (e.classList.contains('val')) {
       const left = e.style.textAlign === 'left';
       ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y - 4, r.w, r.h + 8); ctx.clip();
-      text(ctx, e.textContent.toUpperCase(), left ? r.x : r.x + r.w / 2, r.y + r.h / 2, `600 12px ${MONO}`, INK, left ? 'left' : 'center', .5); ctx.restore();
-    } else text(ctx, e.textContent.replace(/ /g, ' ').trim(), r.x, r.y + r.h / 2, `600 10.5px ${MONO}`, INK, 'left', .7);
+      text(ctx, e.textContent.toUpperCase(), left ? r.x : r.x + r.w / 2, r.y + r.h / 2, `600 ${fs(e)}px ${MONO}`, INK, left ? 'left' : 'center', .5); ctx.restore();
+    } else text(ctx, e.textContent.replace(/ /g, ' ').trim(), r.x, r.y + r.h / 2, `600 ${fs(e)}px ${MONO}`, INK, 'left', .7);
   }
   ctx.globalAlpha = 1;
   for (const e of lowEls.ranges) { const r = rel(e, low); ctx.globalAlpha = fade(e); ctx.fillStyle = INK; ctx.fillRect(r.x, r.y + r.h / 2 - 2, r.w, 4); }
@@ -383,7 +381,7 @@ sectionNames(low, lower);
 for (const el of low.querySelectorAll('button')) {
   if (el.closest('[hidden]')) continue;
   const r = rel(el, low); if (!r.w) continue;
-  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 12px ${DISPLAY}`, el.classList.contains('lit') ? PINK : PAPER);
+  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, el.classList.contains('lit') ? PINK : PAPER);
   const p = plate(r.w, r.h, 6, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);
   p.userData.btn = el; hits.push(p);
   let last = el.textContent + el.className, lastF = 1, n = 0;
@@ -396,7 +394,7 @@ for (const el of low.querySelectorAll('button')) {
 for (const el of low.querySelectorAll('select')) {
   const r = rel(el, low);
   const label = () => { const o = el.selectedOptions[0]; return (o ? o.textContent : '').toUpperCase() + ' ▾'; };
-  const draw = (ctx, w, h) => { ctx.save(); ctx.beginPath(); ctx.rect(4, 0, w - 8, h); ctx.clip(); text(ctx, label(), w / 2, h / 2 + .5, `400 13px ${DISPLAY}`, PAPER); ctx.restore(); };
+  const draw = (ctx, w, h) => { ctx.save(); ctx.beginPath(); ctx.rect(4, 0, w - 8, h); ctx.clip(); text(ctx, label(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, PAPER); ctx.restore(); };
   const p = plate(r.w, r.h, 6, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);
   p.userData.sel = el; hits.push(p);
   let last = label();
