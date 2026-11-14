@@ -26,37 +26,37 @@
   }
   /* the panels are flat hot pink */
   ::selection { background: var(--ink); color: var(--paper); }
-  #stage { transform-origin: 0 0; width: 1580px; padding: 14px 26px 0; }
-  .panel { display: grid; grid-template-columns: 250px 690px minmax(0,1fr); gap: 14px; padding: 18px 18px 14px; position: relative; isolation: isolate; color: var(--ink); }
+  /* One grid for the whole panel: every control sits in a cell of the same
+     size (--cw wide, --rh tall), cells are --g apart, and each section box
+     spans whole cells.  Knob centres, switch slots and labels all sit at the
+     same height in every cell. */
+  #stage { --cw: 78px; --rh: 110px; --g: 8px; --top: 18px;
+    transform-origin: 0 0; width: calc(18 * var(--cw) + 17 * var(--g) + 88px); padding: 14px 26px 0; }
+  .panel { display: grid; grid-template-columns: repeat(18, var(--cw)); grid-template-rows: repeat(3, var(--rh)); gap: var(--g);
+    padding: 18px; position: relative; isolation: isolate; color: var(--ink); }
   .torn { position: absolute; inset: 0; z-index: -1; background: var(--pink); pointer-events: none; }
-  .box { border: 2px solid var(--ink); padding: 16px 8px 6px; position: relative; }
+  .box { box-shadow: inset 0 0 0 2px var(--ink); position: relative; display: grid; grid-template-columns: repeat(var(--n), var(--cw)); grid-template-rows: repeat(var(--m, 1), var(--rh)); gap: var(--g); grid-auto-flow: row; }
+  .box.down { grid-auto-flow: column; }
   /* section names: white letters on a plain black slab over the top edge */
   .box h2 {
     position: absolute; top: -10px; left: 10px; margin: 0;
     font: 400 14px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--paper);
     padding: 4px 8px 3px; background: var(--ink);
   }
-  .col { display: flex; flex-direction: column; gap: 14px; }
-  .row { display: flex; justify-content: space-around; align-items: flex-start; gap: 4px; }
-  .row + .row { margin-top: 2px; }
-  .ctl { display: flex; flex-direction: column; align-items: center; user-select: none; -webkit-user-select: none; touch-action: none; }
+  /* a cell: 62 px of control, then two lines kept for the label */
+  .ctl, .sw, .resp { width: var(--cw); height: var(--rh); padding-top: var(--top); display: flex; flex-direction: column; align-items: center;
+    user-select: none; -webkit-user-select: none; }
+  .ctl { touch-action: none; }
   .ctl svg { display: block; cursor: ns-resize; overflow: visible; }
-  .ctl .lab { font: 500 10.5px var(--mono); text-transform: uppercase; letter-spacing: .07em; text-align: center; margin-top: 2px; white-space: nowrap; }
+  .lab { font: 500 10.5px/12px var(--mono); text-transform: uppercase; letter-spacing: .07em; text-align: center; margin-top: 2px; white-space: nowrap; height: 24px; }
   .ctl svg text { fill: var(--ink); font-family: var(--mono); font-size: 9.5px; }
-  .sw { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; user-select: none; -webkit-user-select: none; }
-  .sw .slot { width: 18px; height: 38px; border: 2px solid var(--ink); position: relative; }
-  .sw .lev { --lh: 15px; position: absolute; left: 2px; right: 2px; height: var(--lh); background: var(--ink); transition: top .08s; }
-  .sw .t { font: 500 10px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
-  .head { display: flex; align-items: center; gap: 14px; padding: 4px 0 0 2px; }
-  /* the echo is an effect after the synth: one compact row beside the title */
-  .head .echo { flex: 1; padding: 12px 6px 2px; }
-  .head .echo .row { align-items: center; }
-  .head .echo .sw .slot { height: 30px; }
-  .head .echo .sw .lev { --lh: 11px; }
-  .head .ttl {
-    width: fit-content; white-space: nowrap; background: var(--ink); color: var(--paper);
-    font: 400 32px/1 var(--display); letter-spacing: -.01em; text-transform: uppercase; padding: 8px 12px 6px;
-  }
+  .sw { cursor: pointer; }
+  .sw .grp { height: 62px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+  .sw .slot { width: 18px; height: 32px; border: 2px solid var(--ink); position: relative; }
+  .sw .lev { --lh: 12px; position: absolute; left: 2px; right: 2px; height: var(--lh); background: var(--ink); transition: top .08s; }
+  .sw .t { font: 500 10px/12px var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
+  .ttl { display: flex; align-items: center; justify-content: center; background: var(--ink); color: var(--paper);
+    font: 400 40px/1 var(--display); letter-spacing: -.01em; text-transform: uppercase; white-space: nowrap; }
   /* below the panels: a plain white band */
   .foot { margin: 12px -26px 0; padding: 10px 26px 12px; background: var(--paper); color: var(--ink); }
   .info { display: flex; gap: 8px 20px; align-items: center; flex-wrap: wrap; font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
@@ -68,7 +68,6 @@
     padding: 6px 11px 5px; font-size: 13px;
   }
   .btn:hover, .sb:hover { color: var(--pink); }
-  .resp { margin-top: 4px; }
   .dice { display: flex; align-items: center; gap: 8px; }
   /* knob step sequences (performance feature): label on a black slab while one runs */
   .ctl .lab.seq { background: var(--ink); color: var(--pink); padding: 1px 5px; }
@@ -109,33 +108,16 @@
 <div id="stage">
   <div class="panel" id="panel">
     <div class="torn"></div>
-    <div class="col">
-      <div class="box"><h2>MODULATOR</h2><div class="row" id="g-mod"></div></div>
-      <div class="box" style="flex:1">
-        <div class="row" id="g-l1"></div>
-        <div class="row" id="g-l2" style="margin-top:8px"></div>
-        <div class="row" id="g-l3" style="margin-top:6px"></div>
-      </div>
-    </div>
-    <div class="col">
-      <div class="head">
-        <div class="ttl">THEE FILF</div>
-        <div class="box echo"><h2>ECHO</h2><div class="row" id="g-echo"></div></div>
-      </div>
-      <div class="row" style="gap:8px;align-items:stretch">
-        <div class="box" style="flex:1"><h2>VCO I</h2><div class="row" id="g-o1a"></div><div class="row" id="g-o1b"></div></div>
-        <div class="box" style="flex:1"><h2>VCO II</h2><div class="row" id="g-o2a"></div><div class="row" id="g-o2b"></div></div>
-      </div>
-      <div class="box"><h2>MIXER</h2><div class="row" id="g-mix"></div></div>
-    </div>
-    <div class="row" style="gap:8px;align-items:stretch">
-      <div class="box" style="flex:1.4"><h2>FILTER</h2>
-        <div class="row" id="g-f1"></div><div class="row" id="g-f2"></div><div class="row" id="g-f3"></div><div class="row" id="g-f4"></div>
-      </div>
-      <div class="box" style="flex:1"><h2>AMPLIFIER</h2>
-        <div class="row" id="g-a1"></div><div class="row" id="g-a2" style="margin-top:4px"></div><div class="row" id="g-a3" style="margin-top:8px"></div><div class="row" id="g-a4" style="margin-top:4px"></div>
-      </div>
-    </div>
+    <!-- 18 columns × 3 rows of equal cells; each box spans whole cells -->
+    <div class="box" id="g-mod" style="grid-area:1/1/2/4;--n:3;--m:1"><h2>MODULATOR</h2></div>
+    <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"></div>
+    <div class="box" id="g-o1" style="grid-area:1/4/2/9;--n:5;--m:1"><h2>VCO I</h2></div>
+    <div class="box" id="g-o2" style="grid-area:2/4/3/9;--n:5;--m:1"><h2>VCO II</h2></div>
+    <div class="box down" id="g-mix" style="grid-area:1/9/3/11;--n:2;--m:2"><h2>MIXER</h2></div>
+    <div class="box" id="g-echo" style="grid-area:3/4/4/11;--n:7;--m:1"><h2>ECHO</h2></div>
+    <div class="box" id="g-f" style="grid-area:1/11/4/15;--n:4;--m:3"><h2>FILTER</h2></div>
+    <div class="ttl" style="grid-area:1/15/2/19">THEE FILF</div>
+    <div class="box" id="g-a" style="grid-area:2/15/4/19;--n:4;--m:2"><h2>AMPLIFIER</h2></div>
   </div>
   <div class="foot">
   <div class="info">
@@ -1367,27 +1349,28 @@ const S = []; // all controls
 const knob = (id, label, scale, def, extra) => Object.assign({ id, label, kind: 'knob', scale, def }, extra || {});
 const sel = (id, label, opts, def) => ({ id, label, kind: 'sel', opts, def });
 const sw = (id, top, bot, def, label) => ({ id, kind: 'sw', top, bot, def, label });
+// each list fills its box's cells left to right, row by row (MIXER top to
+// bottom); `at` pins a control to a cell [column, row] where order matters
+const at = (c, col, row) => Object.assign(c, { at: [col, row] });
+const gap = { kind: 'spacer' };
 const L = {
   'g-mod': [knob('lfoRate', 'ЧАСТОТА', 'mm', .45), sw('lfoRange', 'БЫСТР.', 'МЕДЛ.', 0, 'ДИАПАЗОН'), sel('lfoMode', 'РЕЖИМ', [{i:'tri'},{i:'sq'},{i:'sh'},{i:'nz'}], 0)],
-  'g-l1': [knob('phones', 'ТЛФ.', '06', .6), knob('tune', 'НАСТРОЙКА', 'bip', 0)],
-  'g-l2': [knob('glide', 'ГЛИССАНДО', 'mm', 0), sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1)],
-  'g-l3': [knob('volume', 'ГРОМКОСТЬ', '06', .7), sw('outSel', 'ЛИН.', 'ТЛФ.', 0, 'ВЫХОД')],
-  'g-o1a': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 1)],
-  'g-o1b': [knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ГЕНЕРАТОР II', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0)],
-  'g-o2a': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 2)],
-  'g-o2b': [knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0)],
+  'g-perf': [at(knob('phones', 'ТЛФ.', '06', .6), 1, 2), at(knob('tune', 'НАСТРОЙКА', 'bip', 0), 1, 1), at(knob('glide', 'ГЛИССАНДО', 'mm', 0), 2, 1), at(sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1), 3, 1),
+    at(knob('volume', 'ГРОМКОСТЬ', '06', .7), 2, 2), at(sw('outSel', 'ЛИН.', 'ТЛФ.', 0, 'ВЫХОД'), 3, 2)],
+  'g-o1': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 1),
+    knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0)],
+  'g-o2': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'},{i:'pul'}], 2),
+    knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0)],
   'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0), knob('mixE', 'ВНЕШ.', '06', 0)],
-  'g-f1': [knob('fA', 'АТАКА', 'mm', .05), { kind: 'spacer' }, sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
-  'g-f2': [knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
-  'g-f3': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0)],
-  'g-f4': [knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), { kind: 'resp' }],
-  'g-a1': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5)],
-  'g-a2': [knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
-  'g-a3': [sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
-  'g-a4': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0)],
+  // FILTER and AMPLIFIER share their bottom two rows: MOD, depth, envelope mode, then A D S R
+  'g-f': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0, 'ТИП'), { kind: 'resp' },
+    knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
+    knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
+  'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
+    knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
-  'g-echo': [knob('eTime', 'TIME', '06', .5, { sm: 1 }), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35, { sm: 1 }),
-    knob('eTone', 'TONE', '06', .45, { sm: 1 }), knob('eSpread', 'SPREAD', '06', .8, { sm: 1 }), knob('eMix', 'MIX', '06', .25, { sm: 1 })],
+  'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35),
+    knob('eTone', 'TONE', '06', .45), knob('eSpread', 'SPREAD', '06', .8), knob('eMix', 'MIX', '06', .25)],
 };
 // fMode switch: top = ПФ (band-pass, value 1), bottom = ФНЧ (low-pass, 0) → invert mapping
 const INVERT = { fMode: true, voice: false };
@@ -1398,7 +1381,7 @@ const EN = {
   'РАССТРОЙКА':'DETUNE','ВЫСОТА':'PITCH','МИКШЕР':'MIXER','ШУМ':'NOISE','ВНЕШ.':'EXT.','ФИЛЬТР':'FILTER','УСИЛИТЕЛЬ':'AMPLIFIER',
   'АТАКА':'ATTACK','ЗАТУХАНИЕ':'DECAY','ПЬЕДЕСТАЛ':'SUSTAIN','ПОСЛЕЗВУЧ.':'RELEASE','ЧАСТОТА СРЕЗА':'CUTOFF',
   'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
-  'ОГИБ.':'ENV','БЫСТР.':'FAST','МЕДЛ.':'SLOW','ВКЛ.':'HOLD','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
+  'ОГИБ.':'ENV','БЫСТР.':'FAST','МЕДЛ.':'SLOW','ВКЛ.':'HOLD','ЧМ':'FM','ТИП':'TYPE','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
 };
 // labels are written in Russian as on the original panel and shown in English
 const lang = 'en';
@@ -1418,7 +1401,7 @@ let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); }
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-const VERSION = '1.17.0';
+const VERSION = '1.18.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1435,9 +1418,11 @@ function setParam(id, v) {
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
 const ang = (u) => (-135 + 270 * u) * Math.PI / 180;
+// every knob and selector: the same cell, the same centre, the same diameter
+const CW = 78, CH = 62, CY = 34, KR = 17;
 function makeKnob(c) {
   const wrap = document.createElement('div'); wrap.className = 'ctl';
-  const W = c.sm ? 70 : 92, H = c.sm ? 46 : 58, cx = W / 2, cy = c.sm ? 24 : 30, R = c.sm ? 14 : 17;
+  const W = CW, H = CH, cx = W / 2, cy = CY, R = KR;
   const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, wrap);
   const bip = c.scale === 'bip';
   // scale: plain tick marks only
@@ -1480,12 +1465,12 @@ function makeKnob(c) {
 }
 function makeSel(c) {
   const wrap = document.createElement('div'); wrap.className = 'ctl';
-  const W = 104, H = 80, cx = W / 2, cy = 42, R = 19, n = c.opts.length;
-  const span = n === 5 ? 160 : 150;
+  const W = CW, H = CH, cx = W / 2, cy = CY, R = KR, n = c.opts.length;
+  const span = n === 5 ? 140 : 130;
   const posA = (i) => (-span / 2 + span * i / (n - 1)) * Math.PI / 180;
   const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, wrap);
   c.opts.forEach((o, i) => {
-    const a = posA(i), x = cx + Math.sin(a) * (R + 17), y = cy - Math.cos(a) * (R + 13);
+    const a = posA(i), x = cx + Math.sin(a) * (R + 9), y = cy - Math.cos(a) * (R + 10);
     if (o.t) { const t = el('text', { x, y: y + 3.5, 'text-anchor': 'middle', 'font-size': 10.5, 'font-weight': 600 }, svg); t.textContent = o.t; }
     else el('path', { d: IC[o.i], transform: `translate(${x - 8} ${y - 6})`, fill: 'none', stroke: '#0b0b0b', 'stroke-width': 1.4, 'stroke-linejoin': 'miter' }, svg);
   });
@@ -1504,12 +1489,13 @@ function makeSel(c) {
 }
 function makeSwitch(c) {
   const wrap = document.createElement('div'); wrap.className = 'sw';
-  if (c.label) { const l = document.createElement('div'); l.className = 't'; mark(l, c.label); l.style.marginBottom = '2px'; wrap.appendChild(l); }
   const top = document.createElement('div'); top.className = 't'; mark(top, c.top);
   const slot = document.createElement('div'); slot.className = 'slot';
   const lev = document.createElement('div'); lev.className = 'lev'; slot.appendChild(lev);
   const bot = document.createElement('div'); bot.className = 't'; mark(bot, c.bot);
-  wrap.append(top, slot, bot);
+  const grp = document.createElement('div'); grp.className = 'grp'; grp.append(top, slot, bot);
+  const lab = document.createElement('div'); lab.className = 'lab'; if (c.label) mark(lab, c.label);
+  wrap.append(grp, lab);
   // value: 0 = top, 1 = bottom  (fMode is inverted: top ПФ = 1)
   const inv = !!INVERT[c.id];
   c.set = (v, quiet) => { c.v = v ? 1 : 0; const down = inv ? !c.v : !!c.v; lev.style.top = down ? 'calc(100% - var(--lh))' : '2px'; if (!quiet) setParam(c.id, c.v); };
@@ -1519,7 +1505,7 @@ function makeSwitch(c) {
 let respSvg = null;
 function makeResp() {
   const d = document.createElement('div'); d.className = 'resp';
-  respSvg = el('svg', { width: 96, height: 70, viewBox: '0 0 96 70' }, d); drawResp(); return d;
+  respSvg = el('svg', { width: 72, height: 54, viewBox: '0 0 96 70' }, d); respSvg.style.marginTop = '4px'; drawResp(); return d;
 }
 function drawResp() {
   if (!respSvg) return; respSvg.innerHTML = '';
@@ -1534,9 +1520,10 @@ function drawResp() {
 for (const gid in L) {
   const host = document.getElementById(gid);
   for (const c of L[gid]) {
-    if (c.kind === 'spacer') { const s = document.createElement('div'); s.style.width = '92px'; host.appendChild(s); continue; }
+    if (c.kind === 'spacer') { host.appendChild(document.createElement('div')); continue; }
     if (c.kind === 'resp') { host.appendChild(makeResp()); continue; }
-    host.appendChild(c.kind === 'knob' ? makeKnob(c) : c.kind === 'sel' ? makeSel(c) : makeSwitch(c));
+    const e = host.appendChild(c.kind === 'knob' ? makeKnob(c) : c.kind === 'sel' ? makeSel(c) : makeSwitch(c));
+    if (c.at) e.style.gridArea = `${c.at[1]} / ${c.at[0]}`;
     S.push(c);
     c.set(c.id in saved ? saved[c.id] : c.def, true); state[c.id] = c.v;
   }
@@ -1948,9 +1935,10 @@ extfile.onchange = async () => {
 const stage = document.getElementById('stage');
 // scale to the window's width; on a laptop or bigger screen also to its height, so the whole page fits without scrolling
 function fit() {
-  let s = Math.min(1, innerWidth / 1580);
+  const W = stage.offsetWidth;
+  let s = Math.min(1, innerWidth / W);
   if (innerWidth >= 1100) s = Math.min(s, innerHeight / stage.offsetHeight);
-  stage.style.transform = `scale(${s})`; stage.style.marginLeft = Math.max(0, (innerWidth - 1580 * s) / 2) + 'px';
+  stage.style.transform = `scale(${s})`; stage.style.marginLeft = Math.max(0, (innerWidth - W * s) / 2) + 'px';
   document.body.style.height = (stage.offsetHeight * s) + 'px';
 }
 addEventListener('resize', fit); fit();
