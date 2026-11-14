@@ -368,7 +368,12 @@ let title = null, titleU = null;
   const p = plate(w, h, 8, () => {});   // a thin plate, so tipping the top panel up never lets it cover the AMPLIFIER name
   const layer = (blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
-    text(ctx, 'FILTH', w / 2, h / 2 + 4, `400 86px ${DISPLAY}`, PAPER, 'center', .9);
+    // FILTH stretched to fill its box: sized by the letters' own outline, a margin all round
+    const PADX = w * 0.07, PADY = h * 0.13; ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    const m = ctx.measureText('FILTH'), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale((w - 2 * PADX) / iw, (h - 2 * PADY) / ih);
+    ctx.fillStyle = PAPER; ctx.fillText('FILTH', -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
   titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) } };
