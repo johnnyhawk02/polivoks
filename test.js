@@ -248,3 +248,18 @@ console.log('--- stability sweep ---');
   console.log('5000 tones by kind:', JSON.stringify(kinds), bad ? 'FAILED' : 'all in range');
   if (bad) { console.log('TONE TEST FAILED'); process.exitCode = 1; }
 }
+
+// DRIVE (added): 0 is the original circuit; turned up, A2 and the filter
+// saturate, so the wave gets fuller (RMS closer to its peak) and stays finite
+{
+  const run = (drive) => {
+    const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
+    for (const [k, v] of Object.entries({ cutoff: 0.85, res: 0.2, mix1: 0.8, mix2: 0, o1wave: 0, aS: 1, volume: 0.8, drive })) { e.setParam(k, v); e.ps[k] = v; }
+    e.noteOn(48); const out = new Float32Array(SR); for (let i = 0; i < SR; i += 128) e.render(out.subarray(i, i + 128), 128);
+    let pk = 0, ss = 0, bad = 0; for (let i = SR / 2; i < SR; i++) { const v = out[i]; if (!isFinite(v)) bad++; pk = Math.max(pk, Math.abs(v)); ss += v * v; }
+    return { crest: Math.sqrt(ss / (SR / 2)) / pk, pk, bad };
+  };
+  const a = run(0), b = run(1);
+  console.log(`drive: off rms/peak ${a.crest.toFixed(3)} (peak ${a.pk.toFixed(3)}), full ${b.crest.toFixed(3)} (peak ${b.pk.toFixed(3)})`);
+  if (a.bad || b.bad || !(b.crest > a.crest * 1.08) || b.pk > 1.5) { console.log('DRIVE FAILED'); process.exitCode = 1; }
+}
