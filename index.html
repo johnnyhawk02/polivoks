@@ -813,13 +813,23 @@ class Keyboard {
 //    "Генератор II" (VCO I): VCO II triangle through R64 100k onto R66 100k,
 //        wiper through R63* 100k (* = selected on test, EST)
 //    "Расстройка" (VCO II): R79 100k across ±12.5 V, wiper through R77 1.0 MΩ
+//  As drawn, full FM is 0.222 oct/V: ≈ −3.8 … +5.2 semitones for VCO II's
+//  3.35 V p-p triangle (an FM index of ≈0.3 with both VCOs at one pitch).
+//  FM MOD (OPTIONS, an addition): R64 jumpered, R63* 47k: 1.42 oct/V at full,
+//  ≈ −2.8 … +2.0 octaves.
 //  Pot tapers linear EST; which way the detune turns is EST (kept sharp to
 //  the right).
 // ============================================================================
 const I_OCT = 1.5 / 100e3;
 // wiper at a (0…1 from the ground end) of a 100k pot with v on top, then rs
 function modOct(a, v) { return -(a * v) / (47e3 + 100e3 * a * (1 - a)) / I_OCT; }
-function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; return -(a / 2) / (100e3 + rth) / I_OCT; }
+function fmOctPerVolt(a, mod) {
+  // FM MOD (an addition, set in OPTIONS): R64 jumpered, so the triangle sits
+  // on the top of R66 with no divider, and R63* fitted as 47k (the value of
+  // R62/R76 on the LFO pots).  Chosen values, not from any Polivoks.
+  if (mod) return -a / (47e3 + 100e3 * a * (1 - a)) / I_OCT;
+  const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; return -(a / 2) / (100e3 + rth) / I_OCT;
+}
 // "Pitch" (an addition, not on the original panel): a 100k pot across
 // ±12.5 V into each VCO's summing node through 833k, i.e. ±15 µA = ±1 octave.
 function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
@@ -885,6 +895,7 @@ class PolivoksEngine {
   noteOff(n) { this.kb.release(n); }
   allOff() { this.kb.held.length = 0; }
   setPrio(last) { this.kb.last = !!last; }
+  setFmMod(on) { this.fmMod = !!on; }        // FM MOD (OPTIONS), off = as drawn
   get held() { return this.kb.held; }
 
   render(out, n) {
@@ -927,7 +938,7 @@ class PolivoksEngine {
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.vpw = vpwOf(ps.o1pw); vco2.vpw = vpwOf(ps.o2pw);
       const w1 = Math.min(2, p.o1wave | 0), w2 = Math.min(2, p.o2wave | 0);   // 0 tri, 1 saw, 2 pulse
-      const fmk = fmOctPerVolt(ps.o1fm) * LN2;      // nepers per volt of VCO II triangle
+      const fmk = fmOctPerVolt(ps.o1fm, this.fmMod) * LN2;      // nepers per volt of VCO II triangle
 
       // filter Iset: currents into A1's summing node (sheet 7 + panel, sheet 11)
       //   cutoff pot log taper EST; amount pots linear EST; modulation bus
@@ -1080,6 +1091,7 @@ class KnobSeq {
     else if (d.t === 'off') this.e.noteOff(d.n);
     else if (d.t === 'all') this.e.allOff();
     else if (d.t === 'prio') this.e.setPrio(d.v);
+    else if (d.t === 'fmmod') this.e.setFmMod(d.v);
   }
 }
 
@@ -1215,6 +1227,7 @@ class FxRack {
   noteOff(n) { this.e.noteOff(n); }
   allOff() { this.e.allOff(); }
   setPrio(last) { this.e.setPrio(last); }
+  setFmMod(on) { this.e.setFmMod(on); }
   render(out, n) { this.e.render(out, n); }
 }
 
@@ -1662,7 +1675,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.71.2';
+const VERSION = '1.72.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2048,6 +2061,10 @@ function applyLook() {
 // VCO II in DUO); LAST plays the newest key, or the two newest in DUO
 const PRIO_STORE = 'polivoks-prio';
 let keyPrio = 'low'; try { if (localStorage.getItem(PRIO_STORE) === 'last') keyPrio = 'last'; } catch (e) {}
+// FM MOD: ORIGINAL is the circuit as drawn (gentle FM, ±4.5 semitones at
+// full); MOD is a hardware mod (R64 jumpered, R63* 47k), about ±2.5 octaves
+const FMMOD_STORE = 'polivoks-fmmod';
+let fmMod = false; try { fmMod = localStorage.getItem(FMMOD_STORE) === 'mod'; } catch (e) {}
 const optsEl = document.createElement('div'); optsEl.id = 'opts';
 optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTIONS</h2><button class="btn x" aria-label="Close">✕</button>
   <div class="f"><span>TEMPO</span><div class="row" id="opt-tempo"></div></div>
@@ -2061,6 +2078,7 @@ optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTI
   <div class="f"><span>FINISH (3D)</span><div class="row cells" id="opt-finish"><button class="sb" data-f="matt">MATT</button><button class="sb" data-f="plastic">PLASTIC</button><button class="sb" data-f="metal">METALLIC</button></div></div>
   ${[['left', 'LEFT LIGHT'], ['right', 'RIGHT LIGHT'], ['amb', 'AMBIENT LIGHT']].map(([k, t]) => `<div class="f"><span>${t}</span><div class="row"><input type="color" data-l="${k}" aria-label="${t} colour"><input type="range" min="0" max="200" data-li="${k}" aria-label="${t} brightness"><b class="val" data-lv="${k}"></b></div></div>`).join('')}
   <div class="f"><span>KEY PRIORITY</span><div class="row cells" id="opt-prio"><button class="sb" data-k="low">LOW</button><button class="sb" data-k="last">LAST</button></div></div>
+  <div class="f"><span>FM DEPTH</span><div class="row cells" id="opt-fm"><button class="sb" data-m="orig">ORIGINAL</button><button class="sb" data-m="mod">MOD</button></div></div>
   <div class="f"><span>UPDATE</span><div class="row"><button class="btn" id="opt-reload" style="flex:none;width:120px">RELOAD</button><b class="val" id="opt-ver" style="text-align:left;width:auto;flex:1"></b></div></div></div>`;
 document.body.appendChild(optsEl);
 { const tf = q('.sq-bpm').closest('.f'); optsEl.querySelector('#opt-tempo').append(...tf.querySelector('.row').childNodes); tf.remove(); }
@@ -2070,6 +2088,7 @@ function drawOpts() {
   optLit.value = Math.round(look.lit * 100); optsEl.querySelector('#opt-litv').textContent = Math.round(look.lit * 100) + '%';
   optsEl.querySelectorAll('[data-f]').forEach((b) => b.classList.toggle('lit', b.dataset.f === look.finish));
   optsEl.querySelectorAll('[data-k]').forEach((b) => b.classList.toggle('lit', b.dataset.k === keyPrio));
+  optsEl.querySelectorAll('[data-m]').forEach((b) => b.classList.toggle('lit', (b.dataset.m === 'mod') === fmMod));
   // shown as the lens's field of view: 5° long (flat) to 60° wide
   optPar.value = Math.round(look.lens * 100); optsEl.querySelector('#opt-parv').textContent = Math.round(5 * Math.pow(12, look.lens)) + '°';
   optAngle2.value = look.angleLow; optsEl.querySelector('#opt-angle2v').textContent = look.angleLow + '°';
@@ -2091,6 +2110,7 @@ optText.oninput = () => { look.text = optText.value / 100; applyLook(); drawOpts
 optSat.oninput = () => { look.sat = optSat.value / 100; applyLook(); drawOpts(); };
 optLit.oninput = () => { look.lit = optLit.value / 100; applyLook(); drawOpts(); };
 optsEl.querySelectorAll('[data-k]').forEach((b) => { b.onclick = () => { keyPrio = b.dataset.k; try { localStorage.setItem(PRIO_STORE, keyPrio); } catch (e) {} send({ t: 'prio', v: keyPrio === 'last' }); drawOpts(); }; });
+optsEl.querySelectorAll('[data-m]').forEach((b) => { b.onclick = () => { fmMod = b.dataset.m === 'mod'; try { localStorage.setItem(FMMOD_STORE, fmMod ? 'mod' : 'orig'); } catch (e) {} send({ t: 'fmmod', v: fmMod }); drawOpts(); }; });
 optsEl.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { look.finish = b.dataset.f; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-l]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.l].c = e.value; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-li]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.li].i = e.value / 100; applyLook(); drawOpts(); }; });
@@ -2238,6 +2258,7 @@ registerProcessor('polivoks', PolivoksProc);`;
     send({ t: 'bpm', v: bpm });
     for (const c of KNOBS) if (seqs[c.id]) send(seqMsg(c));
     send({ t: 'prio', v: keyPrio === 'last' });
+    send({ t: 'fmmod', v: fmMod });
     send({ t: 'p', id: 'power', v: 1 });
     for (const m of early.splice(0)) send(m);
   }

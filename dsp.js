@@ -589,13 +589,23 @@ class Keyboard {
 //    "Генератор II" (VCO I): VCO II triangle through R64 100k onto R66 100k,
 //        wiper through R63* 100k (* = selected on test, EST)
 //    "Расстройка" (VCO II): R79 100k across ±12.5 V, wiper through R77 1.0 MΩ
+//  As drawn, full FM is 0.222 oct/V: ≈ −3.8 … +5.2 semitones for VCO II's
+//  3.35 V p-p triangle (an FM index of ≈0.3 with both VCOs at one pitch).
+//  FM MOD (OPTIONS, an addition): R64 jumpered, R63* 47k: 1.42 oct/V at full,
+//  ≈ −2.8 … +2.0 octaves.
 //  Pot tapers linear EST; which way the detune turns is EST (kept sharp to
 //  the right).
 // ============================================================================
 const I_OCT = 1.5 / 100e3;
 // wiper at a (0…1 from the ground end) of a 100k pot with v on top, then rs
 function modOct(a, v) { return -(a * v) / (47e3 + 100e3 * a * (1 - a)) / I_OCT; }
-function fmOctPerVolt(a) { const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; return -(a / 2) / (100e3 + rth) / I_OCT; }
+function fmOctPerVolt(a, mod) {
+  // FM MOD (an addition, set in OPTIONS): R64 jumpered, so the triangle sits
+  // on the top of R66 with no divider, and R63* fitted as 47k (the value of
+  // R62/R76 on the LFO pots).  Chosen values, not from any Polivoks.
+  if (mod) return -a / (47e3 + 100e3 * a * (1 - a)) / I_OCT;
+  const rth = a * 100e3 * (200e3 - a * 100e3) / 200e3; return -(a / 2) / (100e3 + rth) / I_OCT;
+}
 // "Pitch" (an addition, not on the original panel): a 100k pot across
 // ±12.5 V into each VCO's summing node through 833k, i.e. ±15 µA = ±1 octave.
 function pitchOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (12.5 / I_OCT + rth) / I_OCT; }
@@ -661,6 +671,7 @@ class PolivoksEngine {
   noteOff(n) { this.kb.release(n); }
   allOff() { this.kb.held.length = 0; }
   setPrio(last) { this.kb.last = !!last; }
+  setFmMod(on) { this.fmMod = !!on; }        // FM MOD (OPTIONS), off = as drawn
   get held() { return this.kb.held; }
 
   render(out, n) {
@@ -703,7 +714,7 @@ class PolivoksEngine {
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.vpw = vpwOf(ps.o1pw); vco2.vpw = vpwOf(ps.o2pw);
       const w1 = Math.min(2, p.o1wave | 0), w2 = Math.min(2, p.o2wave | 0);   // 0 tri, 1 saw, 2 pulse
-      const fmk = fmOctPerVolt(ps.o1fm) * LN2;      // nepers per volt of VCO II triangle
+      const fmk = fmOctPerVolt(ps.o1fm, this.fmMod) * LN2;      // nepers per volt of VCO II triangle
 
       // filter Iset: currents into A1's summing node (sheet 7 + panel, sheet 11)
       //   cutoff pot log taper EST; amount pots linear EST; modulation bus
