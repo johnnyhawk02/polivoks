@@ -533,6 +533,11 @@ class Modulator {
 //  stable reading is used, checked in spice/kybd/), КП303В on-resistance
 //  333 Ω, key contact resistance, R48 taper (log).
 //  Voltages here are string volts; a MIDI note n is key n − 53 (F).
+//  Key priority LAST (an addition, not on the original, set in OPTIONS): a
+//  digital front end that lets only the newest held key (1-voice) or the two
+//  newest (2-voice) onto the string, so the newest key always sounds and
+//  lifting it brings back the one before.  Everything after the string
+//  (track-and-hold, A4, glide) is unchanged, and voice 1 is still the lower key.
 // ============================================================================
 class Keyboard {
   constructor(h) {
@@ -540,6 +545,7 @@ class Keyboard {
     this.v9 = 0; this.v12 = 0; this.d2 = 0; this.c4 = 0;
     this.gate = false; this.offT = 0;
     this.lo = 0; this.hi = 0;
+    this.last = false;
   }
   static volts(n) { return -0.125 * (n - 53); }
   press(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); this.held.push(n); }
@@ -548,7 +554,10 @@ class Keyboard {
   step(rGlide, twoVoice) {
     const H = this.held, h = this.h, keys = H.length > 0;
     if (keys) {
-      let lo = 1e9, hi = -1e9; for (const n of H) { if (n < lo) lo = n; if (n > hi) hi = n; }
+      // LOW (the original): every held key is on the string.  LAST (an
+      // addition): only the newest key, or the two newest in 2-voice, reach it.
+      const ks = this.last ? H.slice(twoVoice ? -2 : -1) : H;
+      let lo = 1e9, hi = -1e9; for (const n of ks) { if (n < lo) lo = n; if (n > hi) hi = n; }
       this.lo = lo; this.hi = hi; this.gate = true; this.offT = 262e-6;
     } else if (this.gate) { this.offT -= h; if (this.offT <= 0) this.gate = false; }
     // C9 / V6 / C12, backward Euler in 4 substeps
@@ -651,6 +660,7 @@ class PolivoksEngine {
   noteOn(n) { this.kb.press(n); }
   noteOff(n) { this.kb.release(n); }
   allOff() { this.kb.held.length = 0; }
+  setPrio(last) { this.kb.last = !!last; }
   get held() { return this.kb.held; }
 
   render(out, n) {

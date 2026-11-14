@@ -753,6 +753,11 @@ class Modulator {
 //  stable reading is used, checked in spice/kybd/), КП303В on-resistance
 //  333 Ω, key contact resistance, R48 taper (log).
 //  Voltages here are string volts; a MIDI note n is key n − 53 (F).
+//  Key priority LAST (an addition, not on the original, set in OPTIONS): a
+//  digital front end that lets only the newest held key (1-voice) or the two
+//  newest (2-voice) onto the string, so the newest key always sounds and
+//  lifting it brings back the one before.  Everything after the string
+//  (track-and-hold, A4, glide) is unchanged, and voice 1 is still the lower key.
 // ============================================================================
 class Keyboard {
   constructor(h) {
@@ -760,6 +765,7 @@ class Keyboard {
     this.v9 = 0; this.v12 = 0; this.d2 = 0; this.c4 = 0;
     this.gate = false; this.offT = 0;
     this.lo = 0; this.hi = 0;
+    this.last = false;
   }
   static volts(n) { return -0.125 * (n - 53); }
   press(n) { const i = this.held.indexOf(n); if (i >= 0) this.held.splice(i, 1); this.held.push(n); }
@@ -768,7 +774,10 @@ class Keyboard {
   step(rGlide, twoVoice) {
     const H = this.held, h = this.h, keys = H.length > 0;
     if (keys) {
-      let lo = 1e9, hi = -1e9; for (const n of H) { if (n < lo) lo = n; if (n > hi) hi = n; }
+      // LOW (the original): every held key is on the string.  LAST (an
+      // addition): only the newest key, or the two newest in 2-voice, reach it.
+      const ks = this.last ? H.slice(twoVoice ? -2 : -1) : H;
+      let lo = 1e9, hi = -1e9; for (const n of ks) { if (n < lo) lo = n; if (n > hi) hi = n; }
       this.lo = lo; this.hi = hi; this.gate = true; this.offT = 262e-6;
     } else if (this.gate) { this.offT -= h; if (this.offT <= 0) this.gate = false; }
     // C9 / V6 / C12, backward Euler in 4 substeps
@@ -871,6 +880,7 @@ class PolivoksEngine {
   noteOn(n) { this.kb.press(n); }
   noteOff(n) { this.kb.release(n); }
   allOff() { this.kb.held.length = 0; }
+  setPrio(last) { this.kb.last = !!last; }
   get held() { return this.kb.held; }
 
   render(out, n) {
@@ -1065,6 +1075,7 @@ class KnobSeq {
     else if (d.t === 'on') this.e.noteOn(d.n);
     else if (d.t === 'off') this.e.noteOff(d.n);
     else if (d.t === 'all') this.e.allOff();
+    else if (d.t === 'prio') this.e.setPrio(d.v);
   }
 }
 
@@ -1199,6 +1210,7 @@ class FxRack {
   noteOn(n) { this.e.noteOn(n); }
   noteOff(n) { this.e.noteOff(n); }
   allOff() { this.e.allOff(); }
+  setPrio(last) { this.e.setPrio(last); }
   render(out, n) { this.e.render(out, n); }
 }
 
@@ -1646,7 +1658,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.65.1';
+const VERSION = '1.66.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2028,6 +2040,10 @@ function applyLook() {
   document.documentElement.style.setProperty('--pink', lookCss());
   try { localStorage.setItem(LOOK_STORE, JSON.stringify(look)); } catch (e) {}
 }
+// KEY PRIORITY: LOW is the original keyboard (lowest key on VCO I, highest on
+// VCO II in DUO); LAST plays the newest key, or the two newest in DUO
+const PRIO_STORE = 'polivoks-prio';
+let keyPrio = 'low'; try { if (localStorage.getItem(PRIO_STORE) === 'last') keyPrio = 'last'; } catch (e) {}
 const optsEl = document.createElement('div'); optsEl.id = 'opts';
 optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTIONS</h2><button class="btn x" aria-label="Close">✕</button>
   <div class="f"><span>TEMPO</span><div class="row" id="opt-tempo"></div></div>
@@ -2040,6 +2056,7 @@ optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTI
   <div class="f"><span>TEXT (3D)</span><div class="row"><input type="range" min="0" max="100" id="opt-text" aria-label="Text: lit by the lights or lit up"><b class="val" id="opt-textv"></b></div></div>
   <div class="f"><span>FINISH (3D)</span><div class="row cells" id="opt-finish"><button class="sb" data-f="matt">MATT</button><button class="sb" data-f="plastic">PLASTIC</button><button class="sb" data-f="metal">METALLIC</button></div></div>
   ${[['left', 'LEFT LIGHT'], ['right', 'RIGHT LIGHT'], ['amb', 'AMBIENT LIGHT']].map(([k, t]) => `<div class="f"><span>${t}</span><div class="row"><input type="color" data-l="${k}" aria-label="${t} colour"><input type="range" min="0" max="200" data-li="${k}" aria-label="${t} brightness"><b class="val" data-lv="${k}"></b></div></div>`).join('')}
+  <div class="f"><span>KEY PRIORITY</span><div class="row cells" id="opt-prio"><button class="sb" data-k="low">LOW</button><button class="sb" data-k="last">LAST</button></div></div>
   <div class="f"><span>UPDATE</span><div class="row"><button class="btn" id="opt-reload" style="flex:none;width:120px">RELOAD</button><b class="val" id="opt-ver" style="text-align:left;width:auto;flex:1"></b></div></div></div>`;
 document.body.appendChild(optsEl);
 { const tf = q('.sq-bpm').closest('.f'); optsEl.querySelector('#opt-tempo').append(...tf.querySelector('.row').childNodes); tf.remove(); }
@@ -2048,6 +2065,7 @@ function drawOpts() {
   optSat.value = Math.round(look.sat * 100); optsEl.querySelector('#opt-satv').textContent = Math.round(look.sat * 100) + '%';
   optLit.value = Math.round(look.lit * 100); optsEl.querySelector('#opt-litv').textContent = Math.round(look.lit * 100) + '%';
   optsEl.querySelectorAll('[data-f]').forEach((b) => b.classList.toggle('lit', b.dataset.f === look.finish));
+  optsEl.querySelectorAll('[data-k]').forEach((b) => b.classList.toggle('lit', b.dataset.k === keyPrio));
   // shown as the lens's field of view: 5° long (flat) to 60° wide
   optPar.value = Math.round(look.lens * 100); optsEl.querySelector('#opt-parv').textContent = Math.round(5 * Math.pow(12, look.lens)) + '°';
   optAngle2.value = look.angleLow; optsEl.querySelector('#opt-angle2v').textContent = look.angleLow + '°';
@@ -2068,6 +2086,7 @@ optAngle.oninput = () => { look.angle = +optAngle.value; applyLook(); drawOpts()
 optText.oninput = () => { look.text = optText.value / 100; applyLook(); drawOpts(); };
 optSat.oninput = () => { look.sat = optSat.value / 100; applyLook(); drawOpts(); };
 optLit.oninput = () => { look.lit = optLit.value / 100; applyLook(); drawOpts(); };
+optsEl.querySelectorAll('[data-k]').forEach((b) => { b.onclick = () => { keyPrio = b.dataset.k; try { localStorage.setItem(PRIO_STORE, keyPrio); } catch (e) {} send({ t: 'prio', v: keyPrio === 'last' }); drawOpts(); }; });
 optsEl.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { look.finish = b.dataset.f; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-l]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.l].c = e.value; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-li]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.li].i = e.value / 100; applyLook(); drawOpts(); }; });
@@ -2214,6 +2233,7 @@ registerProcessor('polivoks', PolivoksProc);`;
     for (const c of S) send({ t: 'p', id: c.id, v: c.v });
     send({ t: 'bpm', v: bpm });
     for (const c of KNOBS) if (seqs[c.id]) send(seqMsg(c));
+    send({ t: 'prio', v: keyPrio === 'last' });
     send({ t: 'p', id: 'power', v: 1 });
     for (const m of early.splice(0)) send(m);
   }
