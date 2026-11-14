@@ -1701,7 +1701,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.76.1';
+const VERSION = '1.77.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1871,7 +1871,7 @@ document.getElementById('resetbtn').onclick = () => {
 const SEQ_STORE = 'polivoks-seq-v1';
 let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
 const seqs = {};
-let bpm = seqSaved.bpm || 120, extBpm = 0, lastPos = null;
+let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
 // RATE: how many 16th notes one step lasts, from 1/16 up to 8 bars
 const DIVS = [1, 2, 4, 8, 16, 32, 64, 128], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR', '2 BARS', '4 BARS', '8 BARS'];
 const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0) }, (seqSaved.k || {})[id]));
@@ -2076,7 +2076,7 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addE
 // sequencer), the panel colour, and the 3D view's three lights (left, right,
 // ambient), each a colour and a brightness.
 const LOOK_STORE = 'polivoks-look';
-const look = { hue: 252 / 360, sat: 0.07, lit: 0.8, finish: 'matt', text: 0.42, glass: true, angle: 5, angleLow: 0, lens: 0, lights: { left: { c: '#c2e34a', i: 1.42 }, right: { c: '#d3f5d6', i: 1.75 }, amb: { c: '#ffffff', i: 1.64 } } };   // Johnny's look, 14 Nov
+const look = { hue: 87 / 360, sat: 1, lit: 0.9, finish: 'plastic', text: 0.81, glass: true, angle: 0, angleLow: 0, lens: 0, lights: { left: { c: '#ffffff', i: 2 }, right: { c: '#d6d6d6', i: 1.91 }, amb: { c: '#ffffff', i: 2 } } };   // Johnny's defaults, 14 Nov (evening); saved settings still win
 try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'glass', 'angle', 'angleLow', 'lens']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
 const lookCss = () => `hsl(${Math.round(look.hue * 360)} ${Math.round(look.sat * 100)}% ${Math.round(look.lit * 100)}%)`;
 function applyLook() {
@@ -2090,10 +2090,10 @@ let keyPrio = 'low'; try { if (localStorage.getItem(PRIO_STORE) === 'last') keyP
 // FM MOD: ORIGINAL is the circuit as drawn (gentle FM, ±4.5 semitones at
 // full); MOD is a hardware mod (R64 jumpered, R63* 47k), about ±2.5 octaves
 const FMMOD_STORE = 'polivoks-fmmod';
-let fmMod = false; try { fmMod = localStorage.getItem(FMMOD_STORE) === 'mod'; } catch (e) {}
+let fmMod = true; try { const v = localStorage.getItem(FMMOD_STORE); if (v) fmMod = v === 'mod'; } catch (e) {}   // default MOD
 // BEND RANGE: semitones at full MIDI pitch bend (the bend resistor, see dsp.js)
 const BEND_STORE = 'polivoks-bend', BENDS = [1, 2, 3, 5, 7, 12];
-let bendSt = 2; try { const b = +localStorage.getItem(BEND_STORE); if (BENDS.includes(b)) bendSt = b; } catch (e) {}
+let bendSt = 12; try { const b = +localStorage.getItem(BEND_STORE); if (BENDS.includes(b)) bendSt = b; } catch (e) {}
 const optsEl = document.createElement('div'); optsEl.id = 'opts';
 optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTIONS</h2><button class="btn x" aria-label="Close">✕</button>
   <div class="f"><span>TEMPO</span><div class="row" id="opt-tempo"></div></div>
