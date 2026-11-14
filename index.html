@@ -113,6 +113,8 @@
     font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
   .foot b { font-weight: 600; }
   .foot a { color: inherit; }
+  /* fields that continue the row above need no label line of their own */
+  .f.nolab > span { display: none; }
   /* OPTIONS: a box that opens when FILTH is tapped */
   .ttl { cursor: pointer; }
   #opts { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.5); }
@@ -155,7 +157,7 @@
     <div class="torn"></div>
     <!-- 19 columns × 3 rows of equal cells; each box spans whole cells -->
     <div class="box" id="g-mod" style="grid-area:1/1/2/4;--n:3;--m:1"><h2>MODULATOR</h2></div>
-    <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"></div>
+    <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"><h2>MASTER</h2></div>
     <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:6;--m:1"><h2>VCO I</h2></div>
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
     <div class="box down" id="g-mix" style="grid-area:1/10/3/12;--n:2;--m:2"><h2>MIXER</h2></div>
@@ -171,10 +173,10 @@
     <div class="box" id="seqpanel" style="grid-area:1/1/3/14;--n:13" aria-label="Knob sequencer"><h2>SEQUENCER</h2></div>
     <div class="box" id="g-pre" style="grid-area:1/14/2/20;--n:6"><h2>PRESETS</h2>
       <div class="f" style="grid-column:span 6"><span>PRESET</span><div class="row"><button class="sb sm" id="pre-prev" aria-label="Previous preset">◀</button><div class="pre-name" id="pre-name"><i></i><b id="pre-n"></b></div><button class="sb sm" id="pre-next" aria-label="Next preset">▶</button></div></div>
-      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><select id="pre-list" aria-label="Saved presets"></select></div></div>
-      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-roll" aria-label="New name">NEW</button></div></div>
-      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-save">SAVE</button></div></div>
-      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-del">DELETE</button></div></div>
+      <div class="f nolab" style="grid-column:span 3"><span>&nbsp;</span><div class="row"><select id="pre-list" aria-label="Saved presets"></select></div></div>
+      <div class="f nolab" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-roll" aria-label="New name">NEW</button></div></div>
+      <div class="f nolab" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-save">SAVE</button></div></div>
+      <div class="f nolab" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-del">DELETE</button></div></div>
     </div>
     <div class="box" id="g-rnd" style="grid-area:2/14/3/20;--n:6"><h2>RANDOMISE</h2>
       <div class="f" style="grid-column:span 3"><span>SOUND</span><div class="row cells"><button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-nudge">NUDGE</button></div></div>
@@ -1500,8 +1502,9 @@ const L = {
   'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
     knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
-  'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35),
-    knob('eTone', 'TONE', '06', .45), knob('eSpread', 'SPREAD', '06', .8), knob('eMix', 'MIX', '06', .25)],
+  // three pairs across the eight cells: time, then the repeats, then the stereo mix
+  'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), gap, knob('eFb', 'FEEDBACK', '06', .35),
+    knob('eTone', 'TONE', '06', .45), gap, knob('eSpread', 'SPREAD', '06', .8), knob('eMix', 'MIX', '06', .25)],
 };
 // fMode switch: top = ПФ (band-pass, value 1), bottom = ФНЧ (low-pass, 0) → invert mapping
 const INVERT = { fMode: true, voice: false };
@@ -1569,7 +1572,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.41.0';
+const VERSION = '1.42.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1822,8 +1825,8 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f"><span>RUN</span><div class="row"><button class="sb sq-on"></button></div></div>
   <div class="f dim" style="grid-column:span 2"><span>STEPS</span><div class="row"><button class="sb sm" data-a="len-">−</button><b class="val sq-len"></b><button class="sb sm" data-a="len+">+</button></div></div>
   <div class="f dim" style="grid-column:span 2"><span>RATE</span><div class="row"><button class="sb sm" data-a="div-">−</button><b class="val sq-div"></b><button class="sb sm" data-a="div+">+</button></div></div>
-  <div class="f dim" style="grid-column:span 3"><span>DEPTH</span><div class="row"><input type="range" class="sq-depth" min="0" max="100"><b class="val sq-depthv" style="flex:none;width:56px"></b></div></div>
-  <div class="f dim" style="grid-column:span 3"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
+  <div class="f dim" style="grid-column:span 2"><span>DEPTH</span><div class="row"><input type="range" class="sq-depth" min="0" max="100"><b class="val sq-depthv" style="flex:none;width:56px"></b></div></div>
+  <div class="f dim" style="grid-column:span 2"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
   <div class="f" style="grid-column:span 4"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="sq-grid dim"></div>
   <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>`);
