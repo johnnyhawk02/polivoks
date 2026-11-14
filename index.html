@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FILTH — Polivoks circuit model</title>
 <meta name="theme-color" content="#fc0fc0">
+<!-- installable on a phone (manifest + sw.js); the iOS tags are for Add to Home Screen in Safari -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FILTH">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <script>
 // two views of the same synth: the 3D panel (view3d.js, the main view) or
 // the flat 2D panel.  ?view=2d / ?view=3d picks one and is remembered.
@@ -1593,7 +1601,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.54.0';
+const VERSION = '1.55.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2072,6 +2080,8 @@ function vcoInfo(e) {
   return [ps.mix1 * env * vol, ps.mix2 * env * vol, o1, o2];
 }`;
 async function powerOn() {
+  // iOS 17+: play through the silent switch, like a music app, not like a web page's beeps
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     ctx.onstatechange = () => { powered = ctx.state === 'running'; document.getElementById('emode').textContent = powered ? engineMode : 'waiting for a click or key'; };
@@ -2246,6 +2256,9 @@ window.filthApp = {
 };
 // the version in the address, so a new release is never served from the browser's cache
 if (document.documentElement.classList.contains('v3d')) import('./view3d.js?v=' + VERSION);
+// offline copy for the installed app (sw.js); a new version means a new
+// worker and a fresh cache, so an old release is never kept
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js?v=' + VERSION).catch(() => {});
 })();
 </script>
 </body>

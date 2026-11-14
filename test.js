@@ -263,3 +263,15 @@ console.log('--- stability sweep ---');
   console.log(`drive: off rms/peak ${a.crest.toFixed(3)} (peak ${a.pk.toFixed(3)}), full ${b.crest.toFixed(3)} (peak ${b.pk.toFixed(3)})`);
   if (a.bad || b.bad || !(b.crest > a.crest * 1.08) || b.pk > 1.5) { console.log('DRIVE FAILED'); process.exitCode = 1; }
 }
+
+// PWA (added): the manifest parses, its icons are PNGs of the stated size, and
+// every file sw.js caches on install exists, so installing never fails
+{
+  const man = JSON.parse(fs.readFileSync(__dirname + '/manifest.webmanifest', 'utf8')); let bad = 0;
+  const png = (f) => { const d = fs.readFileSync(__dirname + '/' + f); return d.readUInt32BE(16) + 'x' + d.readUInt32BE(20); };
+  for (const i of man.icons) if (png(i.src) !== i.sizes) { bad++; console.log('icon size wrong', i.src); }
+  const sw = fs.readFileSync(__dirname + '/sw.js', 'utf8'), own = JSON.parse(sw.match(/const OWN = (\[[^\]]*\])/)[1].replace(/'/g, '"').replace(/"view3d\.js\?v=" \+ V/, '"view3d.js"'));
+  for (const f of own) if (f !== './' && !fs.existsSync(__dirname + '/' + f)) { bad++; console.log('sw caches a missing file', f); }
+  console.log(`PWA: ${man.icons.length} icons, ${own.length} files cached on install, apple icon ${png('icons/apple-touch-icon.png')}`, bad ? 'FAILED' : 'ok');
+  if (bad) process.exitCode = 1;
+}
