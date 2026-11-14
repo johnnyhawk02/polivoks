@@ -302,6 +302,9 @@ function driveTitle() {
 // Everything here is the 2D panel's own elements: buttons click themselves,
 // sliders and lists take their value and fire their own events, read-outs are
 // read back every few frames and painted again when they change.
+// how faded an element is on the 2D panel (a greyed-out sequencer, bars past the last step)
+function fade(el) { let o = 1; for (let e = el; e && e !== low; e = e.parentElement) o *= +getComputedStyle(e).opacity; return o; }
+const fadeMat = (m, o) => { for (const x of [].concat(m)) { if (x.transparent !== o < 1) { x.transparent = o < 1; x.needsUpdate = true; } x.opacity = o; } };
 const lowEls = {
   boxes: [...low.querySelectorAll('.box')],
   texts: [...low.querySelectorAll('.f > span, .val, .pre-name')],
@@ -311,7 +314,7 @@ function paintLower(ctx) {
   for (const b of lowEls.boxes) { const r = rel(b, low); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2); }
   for (const e of lowEls.texts) {
     if (!e.offsetParent && getComputedStyle(e).display === 'none') continue;
-    const r = rel(e, low);
+    const r = rel(e, low); ctx.globalAlpha = fade(e);
     if (e.classList.contains('pre-name')) {
       if (e.classList.contains('kept')) { ctx.fillStyle = PAPER; ctx.fillRect(r.x, r.y, r.w, r.h); }
       ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
@@ -325,11 +328,13 @@ function paintLower(ctx) {
       text(ctx, e.textContent.toUpperCase(), left ? r.x : r.x + r.w / 2, r.y + r.h / 2, `600 12px ${MONO}`, INK, left ? 'left' : 'center', .5); ctx.restore();
     } else text(ctx, e.textContent.replace(/ /g, ' ').trim(), r.x, r.y + r.h / 2, `600 10.5px ${MONO}`, INK, 'left', .7);
   }
-  for (const e of lowEls.ranges) { const r = rel(e, low); ctx.fillStyle = INK; ctx.fillRect(r.x, r.y + r.h / 2 - 2, r.w, 4); }
+  ctx.globalAlpha = 1;
+  for (const e of lowEls.ranges) { const r = rel(e, low); ctx.globalAlpha = fade(e); ctx.fillStyle = INK; ctx.fillRect(r.x, r.y + r.h / 2 - 2, r.w, 4); }
+  ctx.globalAlpha = 1;
 }
 const lowSlab = slab(UW, LH, paintLower); lowSlab.userData.repaint(); lower.add(lowSlab);
 {
-  const sig = () => lowEls.texts.map((e) => e.textContent + (e.classList.contains('kept') ? '*' : '')).join('|');
+  const sig = () => lowEls.texts.map((e) => e.textContent + (e.classList.contains('kept') ? '*' : '')).join('|') + lowEls.ranges.map(fade).join();
   let last = sig(), n = 0;
   ticks.push(() => { if (++n % 5) return; const s = sig(); if (s !== last) { last = s; lowSlab.userData.repaint(); } });
 }
@@ -341,8 +346,11 @@ for (const el of low.querySelectorAll('button')) {
   const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 12px ${DISPLAY}`, el.classList.contains('lit') ? PINK : PAPER);
   const p = plate(r.w, r.h, 6, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);
   p.userData.btn = el; hits.push(p);
-  let last = el.textContent + el.className;
-  ticks.push(() => { const s = el.textContent + el.className; if (s !== last) { last = s; p.userData.redraw(draw); } });
+  let last = el.textContent + el.className, lastF = 1, n = 0;
+  ticks.push(() => {
+    const s = el.textContent + el.className; if (s !== last) { last = s; p.userData.redraw(draw); }
+    if (++n % 5 === 0) { const f = fade(el); if (f !== lastF) { lastF = f; p.material = p.material.map((m) => m.clone()); fadeMat(p.material, f); p.castShadow = f > 0.5; renderer.shadowMap.needsUpdate = true; } }
+  });
 }
 // lists (which knob to sequence, saved presets)
 for (const el of low.querySelectorAll('select')) {
@@ -365,10 +373,10 @@ function openList(el) {
 // sliders
 for (const el of lowEls.ranges) {
   const r = rel(el, low), min = +el.min || 0, max = +el.max || 100;
-  const t = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 7, 24), mat.ink); t.rotation.x = Math.PI / 2; t.castShadow = true; lower.add(t);
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 7, 24), mat.ink.clone()); t.rotation.x = Math.PI / 2; t.castShadow = true; lower.add(t);
   const hit = hitBox(r.w + 16, 26, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower); hit.userData.range = { el, r, min, max };
-  let last = null;
-  ticks.push(() => { if (el.value !== last) { last = el.value; t.position.copy(pos(r.x + (el.value - min) / (max - min) * r.w, r.y + r.h / 2, 3.5)); renderer.shadowMap.needsUpdate = true; } });
+  let last = null, n = 0;
+  ticks.push(() => { if (++n % 5 === 0) fadeMat(t.material, fade(el)); if (el.value !== last) { last = el.value; t.position.copy(pos(r.x + (el.value - min) / (max - min) * r.w, r.y + r.h / 2, 3.5)); renderer.shadowMap.needsUpdate = true; } });
 }
 // step bars of the knob being sequenced
 const gridEl = low.querySelector('.sq-grid');
@@ -394,12 +402,12 @@ if (gridEl) {
   const hit = hitBox(R.w, R.h, 14, R.x + R.w / 2, R.y + R.h / 2, 6, lower); hit.userData.grid = R;
   ticks.push(() => {
     const c = A.edC; if (!c) return;
-    const s = A.seqOf(c.id), p = A.lastPos, now = s.on && p ? Math.floor(p.pos / s.div) % s.len : -1;
+    const s = A.seqOf(c.id), p = A.lastPos, now = s.on && p ? Math.floor(p.pos / s.div) % s.len : -1, gf = s.on ? 1 : 0.35;
     let moved = false;
     bars.forEach((B, i) => {
-      const v = s.steps[i], kind = i === now ? 'now' : i >= s.len ? 'off' : 'on', sig = v + kind;
+      const v = s.steps[i], kind = i === now ? 'now' : i >= s.len ? 'off' : 'on', sig = v + kind + gf;
       if (sig === B.sig) return; B.sig = sig; moved = true;
-      B.fm.map = tex[kind]; B.fm.needsUpdate = true; B.bm.opacity = kind === 'off' ? 0.25 : 1;
+      B.fm.map = tex[kind]; B.fm.needsUpdate = true; fadeMat(B.fm, gf); B.bm.opacity = (kind === 'off' ? 0.25 : 1) * gf;
       const h = Math.max(0.01, Math.abs(v) * (B.b.h / 2));
       B.blk.scale.y = h; B.blk.visible = Math.abs(v) > 0.005;
       B.blk.position.copy(pos(B.b.x + B.b.w / 2, B.b.y + B.b.h / 2 - (v >= 0 ? h / 2 : -h / 2), 5.3));

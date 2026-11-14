@@ -98,6 +98,8 @@
   .bar::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--ink); }
   .bar i { position: absolute; left: 0; right: 0; background: var(--ink); }
   .bar.off { opacity: .25; }
+  /* the knob shown in the sequencer is not running: its settings and steps are greyed out */
+  #seqpanel.idle .dim { opacity: .35; }
   .bar.now { background: var(--paper); }
   /* preset names are made up by names.js, never typed */
   .pre-name { flex: 1; min-width: 0; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 2px solid var(--ink); font: 400 13px var(--display); letter-spacing: .02em; text-transform: uppercase; }
@@ -1523,7 +1525,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.27.2';
+const VERSION = '1.28.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1759,11 +1761,11 @@ const ed = document.getElementById('seqpanel');
 ed.insertAdjacentHTML('beforeend', `
   <div class="f" style="grid-column:span 4"><span>KNOB</span><div class="row"><button class="sb sm" data-k="-1" aria-label="Previous knob">◀</button><select class="sq-knob" aria-label="Knob to sequence"></select><button class="sb sm" data-k="1" aria-label="Next knob">▶</button></div></div>
   <div class="f"><span>RUN</span><div class="row"><button class="sb sq-on"></button></div></div>
-  <div class="f" style="grid-column:span 2"><span>STEPS</span><div class="row"><button class="sb sm" data-a="len-">−</button><b class="val sq-len"></b><button class="sb sm" data-a="len+">+</button></div></div>
-  <div class="f" style="grid-column:span 2"><span>RATE</span><div class="row"><button class="sb sm" data-a="div-">−</button><b class="val sq-div"></b><button class="sb sm" data-a="div+">+</button></div></div>
-  <div class="f" style="grid-column:span 3"><span>DEPTH</span><div class="row"><input type="range" class="sq-depth" min="0" max="100"><b class="val sq-depthv" style="flex:none;width:56px"></b></div></div>
-  <div class="f" style="grid-column:span 3"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
-  <div class="sq-grid"></div>
+  <div class="f dim" style="grid-column:span 2"><span>STEPS</span><div class="row"><button class="sb sm" data-a="len-">−</button><b class="val sq-len"></b><button class="sb sm" data-a="len+">+</button></div></div>
+  <div class="f dim" style="grid-column:span 2"><span>RATE</span><div class="row"><button class="sb sm" data-a="div-">−</button><b class="val sq-div"></b><button class="sb sm" data-a="div+">+</button></div></div>
+  <div class="f dim" style="grid-column:span 3"><span>DEPTH</span><div class="row"><input type="range" class="sq-depth" min="0" max="100"><b class="val sq-depthv" style="flex:none;width:56px"></b></div></div>
+  <div class="f dim" style="grid-column:span 3"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
+  <div class="sq-grid dim"></div>
   <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>`);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
 // which knob is being edited: a list grouped by panel section (● = its sequence runs);
@@ -1797,7 +1799,7 @@ function drawSeq() {
     f.style.top = v >= 0 ? (50 - v * 50) + '%' : '50%'; f.style.height = Math.abs(v) * 50 + '%';
     b.classList.toggle('off', i >= s.len);
   });
-  const on = q('.sq-on'); on.textContent = s.on ? 'ON' : 'OFF'; on.classList.toggle('lit', s.on);
+  const on = q('.sq-on'); on.textContent = s.on ? 'ON' : 'OFF'; on.classList.toggle('lit', s.on); ed.classList.toggle('idle', !s.on);
   for (const id in pickO) pickO[id].textContent = (seqs[id] && seqs[id].on ? '● ' : '') + pickO[id].dataset.n;
   knobSel.value = edC.id;
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
