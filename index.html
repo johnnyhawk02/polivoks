@@ -1570,9 +1570,9 @@ const L = {
   'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
     knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
-  // three pairs across the eight cells: time, then the repeats, then the stereo mix
-  'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), gap, knob('eFb', 'FEEDBACK', '06', .35),
-    knob('eTone', 'TONE', '06', .45), gap, knob('eSpread', 'SPREAD', '06', .8), knob('eMix', 'MIX', '06', .25)],
+  // packed to the left; the cells after them stay empty
+  'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35),
+    knob('eTone', 'TONE', '06', .45), knob('eSpread', 'SPREAD', '06', .8), knob('eMix', 'MIX', '06', .25)],
 };
 // fMode switch: top = ПФ (band-pass, value 1), bottom = ФНЧ (low-pass, 0) → invert mapping
 const INVERT = { fMode: true, voice: false };
@@ -1640,7 +1640,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.61.0';
+const VERSION = '1.61.1';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
