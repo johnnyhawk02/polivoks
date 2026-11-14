@@ -450,7 +450,8 @@ if (gridEl) {
   const R = rel(gridEl, low), barEls = [...gridEl.children];
   const frameTex = (kind) => {
     const b = rel(barEls[0], low), [c, ctx] = canvas(b.w, b.h);
-    ctx.fillStyle = kind === 'now' ? PAPER : PINK; ctx.fillRect(0, 0, b.w, b.h);
+    ctx.fillStyle = PINK; ctx.fillRect(0, 0, b.w, b.h);
+    if (kind === 'now') { ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(0, 0, b.w, b.h); }   // a soft wash, not solid white
     ctx.globalAlpha = kind === 'off' ? 0.25 : 1;
     ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(1, 1, b.w - 2, b.h - 2);
     ctx.setLineDash([3, 3]); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, b.h / 2); ctx.lineTo(b.w, b.h / 2); ctx.stroke();
@@ -493,7 +494,7 @@ if (gridEl) {
     const t = performance.now(), k = Math.exp(-(t - (glowT || t)) / 110); glowT = t;   // fades with a 0.11 s time constant
     bars.forEach((B, i) => {   // glow: full on the step playing now, then a quick fade
       B.g = i === now ? 1 : B.g * k; if (B.g < 0.01) B.g = 0;
-      B.gm.opacity = 0.55 * B.g; B.bm.emissiveIntensity = 0.9 * B.g;
+      B.gm.opacity = 0.2 * B.g; B.bm.emissiveIntensity = 0.3 * B.g;
     });
   });
 }
