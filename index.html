@@ -124,7 +124,11 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .sq-mods .row { height: 40px; gap: 8px; }
   .sq-mods .val { flex: none; width: 46px; text-align: left; }
   .mknob { width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--ink); }
-  .sq-lane.off .mknob, .sq-lane.off .val { opacity: .35; }
+  .sq-lane.off .mknob, .sq-lane.off .val, .sq-lane.off input { opacity: .35; }
+  /* MOD and ENV: one-column boxes, LED key on top, a vertical depth slider (up = +), its value under it */
+  .vlane { align-items: center; gap: 6px; margin: 0 4px; }
+  .vlane input.vert { writing-mode: vertical-lr; direction: rtl; width: 24px; height: 120px; flex: none; }
+  .vlane .val { flex: none; width: 100%; }
   /* the knob shown in the sequencer is not running: its settings and steps are greyed out */
   #seqpanel.idle .dim { opacity: .35; }
   /* the running light: the step playing now lights up white and glows, then fades as the next one lights */
@@ -1722,7 +1726,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.85.0';
+const VERSION = '1.86.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1999,22 +2003,23 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f nolab" style="grid-column:span 6"><span>KNOB</span><div class="row"><button class="sb sm" data-k="-1" aria-label="Previous knob">◀</button><select class="sq-knob" aria-label="Knob to modulate"></select><button class="sb sm" data-k="1" aria-label="Next knob">▶</button></div></div>
   <div class="f" style="grid-column:span 4;display:none"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="f notekeys nolab" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>
-  <div class="box sub" style="grid-column:1/-1;--n:13" aria-label="Mod sources for the knob"><h2>MOD SOURCE</h2>
+  <div class="box sub" style="grid-column:span 11;--n:11" aria-label="Step sequence for the knob"><h2>SEQUENCER</h2>
     <div class="f sq-lane"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>LENGTH</span><div class="row"><div class="mknob" data-m="len" aria-label="LENGTH"></div><b class="val sq-len"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>RATE</span><div class="row"><div class="mknob" data-m="div" aria-label="RATE"></div><b class="val sq-div"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>DEPTH</span><div class="row"><div class="mknob" data-m="depth" aria-label="DEPTH"></div><b class="val sq-depthv"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>SLEW</span><div class="row"><div class="mknob" data-m="slew" aria-label="SLEW"></div><b class="val sq-slewv"></b></div></div>
     <div class="f dim" style="grid-column:span 2"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>
-    <div class="sq-main" style="grid-column:1/-1">
-      <div class="sq-grid dim"></div>
-      <div class="sq-mods">
-        <div class="f sq-lane"><span>ENV</span><div class="row"><button class="sb sm sym sq-eon" aria-label="Envelope to this knob on or off">●</button><div class="mknob" data-m="eDepth" aria-label="ENV depth"></div><b class="val sq-envv"></b></div></div>
-        <div class="f sq-lane"><span>LFO</span><div class="row"><button class="sb sm sym sq-lon" aria-label="LFO to this knob on or off">●</button><div class="mknob" data-m="lDepth" aria-label="LFO depth"></div><b class="val sq-lfov"></b></div></div>
-      </div>
-    </div>
+    <div class="sq-main" style="grid-column:1/-1"><div class="sq-grid dim"></div></div>
     <div class="f dim nolab" style="grid-column:span 6"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
-  </div>`);
+  </div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="LFO to this knob"><h2>MOD</h2>
+    <div class="f nolab sq-lane vlane"><span>MOD</span><button class="sb sm sym sq-lon" aria-label="LFO to this knob on or off">●</button><input type="range" class="vert sq-lfo" min="-100" max="100" aria-label="LFO to this knob depth"><b class="val sq-lfov"></b></div>
+  </div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="Filter envelope to this knob"><h2>ENV</h2>
+    <div class="f nolab sq-lane vlane"><span>ENV</span><button class="sb sm sym sq-eon" aria-label="Filter envelope to this knob on or off">●</button><input type="range" class="vert sq-env" min="-100" max="100" aria-label="Filter envelope to this knob depth"><b class="val sq-envv"></b></div>
+  </div>
+`);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
 // PLAY: note keys for a phone with no keyboard: press to sound, release to stop, through the same on/off as the computer keys and MIDI
 ed.querySelectorAll('[data-note]').forEach((b) => {
@@ -2058,6 +2063,7 @@ function drawSeq() {
   ed.classList.toggle('idle', !s.on);
   const pc = (v) => (v > 0 ? '+' : '') + Math.round(v * 100) + '%';
   q('.sq-envv').textContent = pc(s.eDepth); q('.sq-lfov').textContent = pc(s.lDepth);
+  q('.sq-env').value = Math.round(s.eDepth * 100); q('.sq-lfo').value = Math.round(s.lDepth * 100);
   for (const id in pickO) pickO[id].textContent = (seqAct(seqs[id]) ? '● ' : '') + pickO[id].dataset.n;
   knobSel.value = edC.id;
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
@@ -2088,6 +2094,8 @@ const MK = {
   eDepth: { bip: true, get: (s) => s.eDepth, set: (s, v) => { s.eDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.eOn = true; } },
   lDepth: { bip: true, get: (s) => s.lDepth, set: (s, v) => { s.lDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.lOn = true; } },
 };
+// MOD and ENV depth: vertical sliders, centre = 0 (snaps within 2 %); moving one switches that source on
+for (const [cl, k, onK] of [['.sq-lfo', 'lDepth', 'lOn'], ['.sq-env', 'eDepth', 'eOn']]) q(cl).oninput = (e) => change((s) => { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; s[k] = v; s[onK] = true; });
 const seqMods = [...ed.querySelectorAll('.mknob')].map((el) => {
   const m = MK[el.dataset.m];
   return { id: 'seq-' + el.dataset.m, kind: 'knob', scale: m.bip ? 'bip' : 'u', def: m.bip ? 0 : m.get(SEQ_DEF()), el,
