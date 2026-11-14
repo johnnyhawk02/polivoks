@@ -62,12 +62,15 @@ scene.environmentIntensity = 0.25;
 const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // soft white light from the front, then two coloured lamps low at the sides,
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
-const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 0.36); scene.add(amb);
-const front = new THREE.DirectionalLight(0xffffff, 0.32); front.position.set(0, 300, 2000); scene.add(front);
+const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 1.0); scene.add(amb);
+const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
 // The ambient light's colour is the two VCOs' wave shapes, mixed by their
-// MIXER levels: triangle soft pink, sawtooth icy blue, pulse gold.
-const WAVE_COL = [new THREE.Color(0xff6ec8), new THREE.Color(0x4f9cff), new THREE.Color(0xffbf3a)];
-const ambCol = new THREE.Color(0xffffff), ambWant = new THREE.Color();
+// MIXER levels: triangle hot magenta, sawtooth electric blue, pulse amber.
+// Strong, saturated colours: they wash the panel and the room behind it.
+const WAVE_COL = [new THREE.Color(0xff1fa8), new THREE.Color(0x1f6bff), new THREE.Color(0xffa000)];
+const ambCol = new THREE.Color(0xffffff), ambWant = new THREE.Color(); let bgHex = '';
+// the pink faces are dyed by the same colour (light alone cannot shift a pink that is already at full brightness)
+const tintMats = [], WHITE = new THREE.Color(0xffffff), dye = new THREE.Color();
 const byId = (id) => A.S.find((c) => c.id === id);
 const AMB = { w1: byId('o1wave'), w2: byId('o2wave'), m1: byId('mix1'), m2: byId('mix2') };
 function driveAmbient() {
@@ -75,8 +78,13 @@ function driveAmbient() {
   if (a + b < 0.02) a = b = 0.5;                 // both off: an even blend
   const c1 = WAVE_COL[Math.min(2, AMB.w1 ? AMB.w1.v | 0 : 1)], c2 = WAVE_COL[Math.min(2, AMB.w2 ? AMB.w2.v | 0 : 2)];
   ambWant.setRGB((c1.r * a + c2.r * b) / (a + b), (c1.g * a + c2.g * b) / (a + b), (c1.b * a + c2.b * b) / (a + b));
-  ambCol.lerp(ambWant, 0.15);                    // a short fade when a wave changes
-  amb.color.copy(ambCol); front.color.copy(ambCol);
+  ambCol.lerp(ambWant, 0.2);                    // a short fade when a wave changes
+  amb.color.copy(ambCol); amb.groundColor.copy(ambCol).multiplyScalar(0.25); front.color.copy(ambCol);
+  // the room behind the panel takes the same colour
+  const hex = ambCol.getHexString();
+  if (hex !== bgHex) { bgHex = hex; const c = ambCol.clone().multiplyScalar(0.8);
+    document.body.style.background = `radial-gradient(120% 90% at 50% 40%, #${c.getHexString()} 0%, #0b0b0b 75%)`;
+    dye.copy(WHITE).lerp(ambCol, 0.6); for (const m of tintMats) m.color.copy(dye); }
 }
 const side = (color, x) => {
   const l = new THREE.SpotLight(color, 0.6, 0, 0.62, 1, 0);
@@ -118,7 +126,7 @@ const mat = {
 function slab(w, h, paint) {
   const [c, ctx] = canvas(w, h);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 });
+  const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }); tintMats.push(face);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, DEPTH), [mat.edge, mat.edge, mat.edge, mat.edge, face, mat.edge]);
   m.position.set(w / 2, -h / 2, -DEPTH / 2); m.receiveShadow = true; m.castShadow = true;
   m.userData.repaint = () => { ctx.fillStyle = PINK; ctx.fillRect(0, 0, w, h); paint(ctx); tex.needsUpdate = true; };
@@ -129,6 +137,7 @@ function plate(w, h, d, draw, opts = {}) {
   const [c, ctx] = canvas(w, h);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const top = opts.bg === PINK ? new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }) : new THREE.MeshLambertMaterial({ map: tex });
+  if (opts.bg === PINK) tintMats.push(top);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
   m.geometry.translate(w / 2, -h / 2, d / 2); m.castShadow = true; m.receiveShadow = true;
   m.userData.redraw = (f) => { ctx.fillStyle = opts.bg || INK; ctx.fillRect(0, 0, w, h); f(ctx, w, h); tex.needsUpdate = true; };
@@ -399,7 +408,7 @@ if (gridEl) {
   })();
   const bars = barEls.map((be) => {
     const b = rel(be, low);
-    const fm = new THREE.MeshStandardMaterial({ map: tex.on, roughness: 0.78 });
+    const fm = new THREE.MeshStandardMaterial({ map: tex.on, roughness: 0.78 }); tintMats.push(fm);
     const frame = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.h), fm); frame.position.copy(pos(b.x + b.w / 2, b.y + b.h / 2, 0.3)); lower.add(frame);
     const bm = new THREE.MeshLambertMaterial({ color: 0x050505, transparent: true });
     const blk = new THREE.Mesh(new THREE.BoxGeometry(b.w - 4, 1, 10), bm); blk.castShadow = true; lower.add(blk);
