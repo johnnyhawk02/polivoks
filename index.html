@@ -144,6 +144,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   @media (max-height: 520px) { #opts .val { width: 58px !important; } #opts .sq-bpmv { width: 84px !important; } #opts .win { padding: 22px 18px 4px; width: min(1100px, 96vw) !important; display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; } #opts .f > span { width: 118px; } #opts .f { margin-bottom: 0; } #opts .row { height: 32px; } #opts .f > span, #opts .val { font-size: 12px; } #opts .row.cells .sb { height: 26px; font-size: 13px; } #opts input[type=color] { height: 24px; } }
   #opts .row.cells .sb { flex: 1; height: 30px; }
   #opts .val { flex: none; width: 82px; text-align: right; font-size: 14px; }
+  #opts #opt-ver { width: auto !important; flex: 1; text-align: left; }
   #opts input[type=color] { flex: none; width: 46px; height: 30px; padding: 0; border: 2px solid var(--ink); background: none; cursor: pointer; }
   /* one line per setting: name on the left, controls on the right */
   #opts .win { width: min(640px, 94vw); padding-top: 24px; }
@@ -1642,7 +1643,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.62.0';
+const VERSION = '1.63.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2026,7 +2027,8 @@ optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTI
   <div class="f"><span>LENS (3D)</span><div class="row"><input type="range" min="0" max="100" id="opt-par" aria-label="Lens: long to wide"><b class="val" id="opt-parv"></b></div></div>
   <div class="f"><span>TEXT (3D)</span><div class="row"><input type="range" min="0" max="100" id="opt-text" aria-label="Text: lit by the lights or lit up"><b class="val" id="opt-textv"></b></div></div>
   <div class="f"><span>FINISH (3D)</span><div class="row cells" id="opt-finish"><button class="sb" data-f="matt">MATT</button><button class="sb" data-f="plastic">PLASTIC</button><button class="sb" data-f="metal">METALLIC</button></div></div>
-  ${[['left', 'LEFT LIGHT'], ['right', 'RIGHT LIGHT'], ['amb', 'AMBIENT LIGHT']].map(([k, t]) => `<div class="f"><span>${t}</span><div class="row"><input type="color" data-l="${k}" aria-label="${t} colour"><input type="range" min="0" max="200" data-li="${k}" aria-label="${t} brightness"><b class="val" data-lv="${k}"></b></div></div>`).join('')}</div>`;
+  ${[['left', 'LEFT LIGHT'], ['right', 'RIGHT LIGHT'], ['amb', 'AMBIENT LIGHT']].map(([k, t]) => `<div class="f"><span>${t}</span><div class="row"><input type="color" data-l="${k}" aria-label="${t} colour"><input type="range" min="0" max="200" data-li="${k}" aria-label="${t} brightness"><b class="val" data-lv="${k}"></b></div></div>`).join('')}
+  <div class="f"><span>UPDATE</span><div class="row"><button class="btn" id="opt-reload" style="flex:none;width:120px">RELOAD</button><b class="val" id="opt-ver" style="text-align:left;width:auto;flex:1"></b></div></div></div>`;
 document.body.appendChild(optsEl);
 { const tf = q('.sq-bpm').closest('.f'); optsEl.querySelector('#opt-tempo').append(...tf.querySelector('.row').childNodes); tf.remove(); }
 const optAngle2 = optsEl.querySelector('#opt-angle2'), optPar = optsEl.querySelector('#opt-par'), optAngle = optsEl.querySelector('#opt-angle'), optText = optsEl.querySelector('#opt-text'), optHue = optsEl.querySelector('#opt-hue'), optSat = optsEl.querySelector('#opt-sat'), optLit = optsEl.querySelector('#opt-lit');
@@ -2060,6 +2062,17 @@ optsEl.querySelectorAll('[data-li]').forEach((e) => { e.oninput = () => { look.l
 function openOptions() { drawOpts(); optsEl.classList.add('open'); }
 function closeOptions() { optsEl.classList.remove('open'); }
 optsEl.querySelector('.x').onclick = closeOptions;
+// RELOAD: a phone has no hard refresh, so this throws away the stored copy
+// (service worker and its cache) and loads the latest release from the site
+optsEl.querySelector('#opt-ver').textContent = 'NOW v' + VERSION;
+optsEl.querySelector('#opt-reload').onclick = async () => {
+  optsEl.querySelector('#opt-ver').textContent = 'LOADING…';
+  try {
+    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    for (const k of await caches.keys()) if (k.startsWith('filth-') && k !== 'filth-lib-1') await caches.delete(k);
+  } catch (e) {}
+  location.replace(location.pathname + '?r=' + Date.now());
+};
 optsEl.addEventListener('pointerdown', (e) => { if (e.target === optsEl) closeOptions(); });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') closeOptions(); });
 document.querySelector('.ttl').addEventListener('click', openOptions);
