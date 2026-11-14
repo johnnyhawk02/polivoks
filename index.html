@@ -184,8 +184,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"><h2>MASTER</h2></div>
     <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:6;--m:1"><h2>VCO I</h2></div>
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
-    <div class="box" id="g-mix" style="grid-area:3/13/4/16;--n:3;--m:1"><h2>MIXER</h2></div>
-    <div class="box" id="g-echo" style="grid-area:3/4/4/13;--n:9;--m:1"><h2>ECHO</h2></div>
+    <div class="box" id="g-mix" style="grid-area:3/10/4/16;--n:3;--m:1"><h2>MIXER</h2></div>
+    <div class="box" id="g-echo" style="grid-area:3/4/4/10;--n:6;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/10/2/16;--n:6;--m:1"><h2>FILTER</h2></div>
     <div class="box" id="g-fe" style="grid-area:2/10/3/16;--n:6;--m:1"><h2>FILTER ENVELOPE</h2></div>
     <div class="ttl" style="grid-area:1/16/2/20"><span id="ttlw">FILTH</span></div>
@@ -1575,7 +1575,7 @@ const L = {
   'g-a': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ'), gap,
     knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
-  // packed to the left; the cells after them stay empty
+  // six controls in six cells, the same width as VCO I and II above
   'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35),
     knob('eTone', 'TONE', '06', .45), knob('eSpread', 'SPREAD', '06', .8), knob('eMix', 'MIX', '06', .25)],
 };
@@ -1645,7 +1645,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.64.0';
+const VERSION = '1.64.1';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
