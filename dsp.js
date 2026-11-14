@@ -362,6 +362,12 @@ class EG {
 //  into the filter (≈1 k to ground there): an 18 Hz high-pass.
 //  Pot taper: linear (group А) EST.
 // ============================================================================
+// DRIVE (added, not on the original panel): a 150k log pot in series with
+// A2's feedback resistor R10 22k.  The mixer's gain rises with the feedback
+// resistance, (22k + Rd) / 22k, up to about ×7.8, so A2 runs into its rails
+// (±11 V, rail() above) and the filter's input pair is driven harder: the
+// overdrive comes from the circuit's own stages.  At 0 it is the original.
+function driveGain(t) { return 1 + potA(t, 0, 150e3) / 22e3; }
 function mixGain(t, Rs) {
   const Ra = 100e3 * (1 - t) + 1, Rb = 100e3 * t + 1, G = 1 / Rb + 1 / 22e3;
   return 1 / (1 + (Ra + Rs) * G);
@@ -596,11 +602,11 @@ const PARAM_DEFAULTS = {
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
   o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o1pw: 0,
   o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0, o2pw: 0,
-  mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0,
+  mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0, drive: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','mixE','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','mixE','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -708,7 +714,7 @@ class PolivoksEngine {
       this.vca.control(ps.aMod * lfo, 100e3 * ps.aMod * (1 - ps.aMod), venv);
       // mixer (sheet 9): per-channel gain into A2's virtual earth
       const g1 = mixGain(ps.mix1, vco1.Rout[w1]), g2 = mixGain(ps.mix2, vco2.Rout[w2]);
-      const gn = mixGain(ps.mixN, 0), ge = mixGain(ps.mixE, 0);
+      const gn = mixGain(ps.mixN, 0), ge = mixGain(ps.mixE, 0), dg = driveGain(ps.drive);
       let ext = 0;
       if (this.ext && ge > 0.001) { ext = this.ext[this.extPos]; if (++this.extPos >= this.ext.length) this.extPos = 0; }   // 1 V peak line level EST
 
@@ -723,7 +729,7 @@ class PolivoksEngine {
         const o1 = vco1.out(w1);
         this.noiseLP += (rng.g() * 0.25 * Math.sqrt(1 / (nk * 0.5)) - this.noiseLP) * nk;
         nzs += this.noiseLP;
-        const a2 = rail(-(g1 * o1 + g2 * o2 + gn * this.noiseLP + ge * ext), 11);
+        const a2 = rail(-(g1 * o1 + g2 * o2 + gn * this.noiseLP + ge * ext) * dg, 11);
         this.mixHp += (a2 - this.mixHp) * kmix;
         vcf.step(a2 - this.mixHp, Iset, VTf);
         const vf = lp ? -vcf.y2 : -vcf.y1;          // both outputs invert
@@ -739,7 +745,8 @@ class PolivoksEngine {
       // jack voltage to the digital full scale (not a circuit value)
       this.hpY = acc;
       const lvl = p.outSel >= 0.5 ? ps.phones : ps.volume;
-      let y = this.hpY * OUT_SCALE * lvl * lvl * 1.3 * this.powerLevel;
+      // part of DRIVE's extra level is taken back here (output scaling, not circuit), so it adds grit more than loudness
+      let y = this.hpY * OUT_SCALE * lvl * lvl * 1.3 * this.powerLevel / Math.sqrt(dg);
       y = y / Math.sqrt(1 + y * y);
       out[s] = y;
       this.scope[this.scopeI] = this.hpY; this.scopeI = (this.scopeI + 1) & 511;
@@ -747,4 +754,4 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, driveGain, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
