@@ -22,7 +22,7 @@ function rel(el, root) {
   return { x: (r.left - R.left) / k, y: (r.top - R.top) / k, w: r.width / k, h: r.height / k };
 }
 const UW = panel.offsetWidth, UH = panel.offsetHeight, LH = low.offsetHeight;
-const GAPY = rel(low, panel).y - UH, TOTALH = UH + GAPY + LH;
+const TOTALH = UH + LH;   // the two panels meet: no gap between them in 3D
 
 // ---------------------------------------------------------------- drawing helpers
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = Math.ceil(w * S2); c.height = Math.ceil(h * S2); const x = c.getContext('2d'); x.scale(S2, S2); return [c, x]; }
@@ -130,8 +130,15 @@ function driveLamps() {
 
 const rig = new THREE.Group(); scene.add(rig);
 const upper = new THREE.Group(), lower = new THREE.Group();
-upper.position.set(-UW / 2, TOTALH / 2, 0); lower.position.set(-UW / 2, TOTALH / 2 - UH - GAPY, 0);
-rig.add(upper, lower); front.target = rig;
+// the top panel sits on a hinge along the join, so ANGLE (OPTIONS) tips it up toward you
+const hinge = new THREE.Group(); hinge.position.set(-UW / 2, TOTALH / 2 - UH, 0);
+upper.position.set(0, UH, 0); hinge.add(upper);
+lower.position.set(-UW / 2, TOTALH / 2 - UH, 0);
+rig.add(hinge, lower); front.target = rig;
+{ // the join: a dark rounded spine along the seam, seen as the top panel tips up
+  const spine = new THREE.Mesh(new THREE.CylinderGeometry(DEPTH / 2, DEPTH / 2, UW, 32), new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.6 }));
+  spine.rotation.z = Math.PI / 2; spine.position.set(0, TOTALH / 2 - UH, -DEPTH / 2); spine.castShadow = true; rig.add(spine);
+}
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(6000, 4000), new THREE.ShadowMaterial({ opacity: 0.45 }));
 floor.position.z = -DEPTH - 30; floor.receiveShadow = true; rig.add(floor);
 
@@ -346,7 +353,7 @@ for (const c of CTL) {
 let title = null, titleU = null;
 {
   const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0;   // flat, raised plate
-  const p = plate(w, h, 18, () => {});
+  const p = plate(w, h, 8, () => {});   // a thin plate, so tipping the top panel up never lets it cover the AMPLIFIER name
   const layer = (blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
     text(ctx, 'FILTH', w / 2, h / 2 + 4, `400 86px ${DISPLAY}`, PAPER, 'center', .9);
@@ -370,7 +377,7 @@ let title = null, titleU = null;
         gl_FragColor = vec4(vec3(.74 + .26 * lvl) * t + vec3(1., .62, .95) * g * lvl * 1.2, 1.);
       }`,
   });
-  const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 18.15);
+  const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 8.15);
   p.add(new THREE.Mesh(fg, sm));
   const hinge = new THREE.Group(); hinge.position.copy(pos(r.x, r.y + h, 0)); hinge.rotation.x = TILT;
   p.position.set(0, h, 0); hinge.add(p); upper.add(hinge);
@@ -534,11 +541,13 @@ function fit() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
   rig.updateMatrixWorld(true);
-  const pts = [];
-  for (const x of [-UW / 2, UW / 2]) for (const y of [TOTALH / 2, -TOTALH / 2]) for (const z of [0, -DEPTH]) pts.push(new THREE.Vector3(x, y, z).applyMatrix4(rig.matrixWorld));
-  for (dist = 2000; dist < 200000; dist *= 1.02) {
+  // the corners of both panels as they sit now (the top one may be tipped up), framed snugly
+  const box = new THREE.Box3().setFromObject(upSlab).union(new THREE.Box3().setFromObject(lowSlab)), pts = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) pts.push(new THREE.Vector3(x, y, z));
+  box.getCenter(target); target.z = 0;
+  for (dist = 2000; dist < 200000; dist *= 1.01) {
     camera.position.set(target.x, target.y, target.z + dist); camera.lookAt(target); camera.updateMatrixWorld();
-    if (pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.96 && Math.abs(q.y) < 0.93; })) break;
+    if (pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.985 && Math.abs(q.y) < 0.975; })) break;
   }
 }
 addEventListener('resize', fit); fit();
@@ -597,7 +606,13 @@ cv.addEventListener('dblclick', (e) => { const o = pick(e); if (o && o.userData.
 
 // ---------------------------------------------------------------- frame
 renderer.shadowMap.needsUpdate = true;
+let angleNow = null;
+function driveAngle() {
+  const a = A.look.angle || 0; if (a === angleNow) return; angleNow = a;
+  hinge.rotation.x = a * Math.PI / 180; renderer.shadowMap.needsUpdate = true; fit();
+}
 function frame() {
+  driveAngle();
   for (const t of ticks) t();
   for (const lev of levers) {
     const d = lev.userData.target - lev.userData.y; lev.userData.y += d * 0.35;
