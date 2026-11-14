@@ -1101,7 +1101,22 @@ class FxRack {
   render(out, n) { this.e.render(out, n); }
 }
 
-if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
+// Output level for the page (not circuit): RMS of both channels over the
+// last 0.2 s, kept as twelve 1/60 s slices so it is a true moving window.
+class Level {
+  constructor(sr) { this.chunk = Math.round(sr / 60); this.slices = new Float64Array(12); this.counts = new Float64Array(12); this.k = 0; this.acc = 0; this.n = 0; this.rms = 0; }
+  // returns true each time a slice completes (about 60 times a second)
+  add(L, R, n) {
+    let a = 0; for (let i = 0; i < n; i++) a += L[i] * L[i] + R[i] * R[i];
+    this.acc += a / 2; this.n += n;
+    if (this.n < this.chunk) return false;
+    this.slices[this.k] = this.acc; this.counts[this.k] = this.n; this.k = (this.k + 1) % 12; this.acc = 0; this.n = 0;
+    let s = 0, c = 0; for (let j = 0; j < 12; j++) { s += this.slices[j]; c += this.counts[j]; }
+    this.rms = Math.sqrt(s / Math.max(c, 1)); return true;
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
 </script>
 <script type="text/plain" id="tone-src">// ============================================================================
 // TONE: a random patch that is meant to be PLAYABLE, for the RANDOM row.
@@ -1461,16 +1476,16 @@ noNarrow(saved);
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-let lfoV = 0;   // the modulator's output in volts, posted by the engine ~60 times a second
+let lfoV = 0, outRms = 0;   // the modulator's output in volts, posted by the engine ~60 times a second
 
 // ---------------------------------------------------------------- title wobble
 // The letters of FILTH are pushed about by a fixed noise whose depth is the
-// modulator's output right now: plain at 0 V, warped one way at the top of
+// modulator's output right now times how loud the synth is (RMS over 0.2 s): plain at 0 V, warped one way at the top of
 // the triangle and the other way at the bottom, so it moves with RATE, RANGE
 // (SLOW too) and MODE.  Only the title's filter changes, once per frame and
 // only when the value has moved; near 0 V the filter is dropped so the
 // letters are crisp.
-const WOB = { on: true, A: 9, vmax: 1.43, last: NaN };
+const WOB = { on: true, A: 9, vmax: 1.43, ref: 0.4, last: NaN };
 try { const w = localStorage.getItem('polivoks-wobble'); WOB.on = w ? w === '1' : !matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
 const wobW = document.getElementById('ttlw'), wobD = document.getElementById('wobd');
 function wobDraw(v) {
@@ -1480,7 +1495,8 @@ function wobDraw(v) {
 }
 function wobFrame() {
   if (!WOB.on) return;
-  const v = Math.max(-1, Math.min(1, lfoV / WOB.vmax));
+  // depth = output RMS over the last 0.2 s; a held note at the default VOLUME is ≈0.45, so 0.4 and up is full depth
+  const v = Math.max(-1, Math.min(1, lfoV / WOB.vmax)) * Math.min(1, outRms / WOB.ref);
   if (!(Math.abs(v - WOB.last) < 0.01)) { WOB.last = v; wobDraw(v); }
   requestAnimationFrame(wobFrame);
 }
@@ -1491,8 +1507,8 @@ function wobSet(on) {
 }
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
-window.filthTest = { lfo: () => lfoV, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.25.0';
+window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
+const VERSION = '1.26.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1887,11 +1903,11 @@ async function powerOn() {
 class PolivoksProc extends AudioWorkletProcessor {
   constructor() { super(); this.e = new PolivoksEngine(sampleRate); this.fx = new TapeEcho(sampleRate);
     this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx), (m) => this.port.postMessage(m));
-    this.port.onmessage = (m) => this.q.msg(m.data); this.lfoN = 0; }
+    this.port.onmessage = (m) => this.q.msg(m.data); this.lev = new Level(sampleRate); }
   process(i, o) { const out = o[0], L = out[0], R = out[1] || new Float32Array(L.length);
     this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length);
     // the modulator's output for the panel edges, about 60 times a second
-    if ((this.lfoN += L.length) >= sampleRate / 60) { this.lfoN = 0; this.port.postMessage({ t: 'lfo', v: this.e.lfoV }); }
+    if (this.lev.add(L, R, L.length)) this.port.postMessage({ t: 'lfo', v: this.e.lfoV, a: this.lev.rms });
     return true; }
 }
 registerProcessor('polivoks', PolivoksProc);`;
@@ -1903,16 +1919,16 @@ registerProcessor('polivoks', PolivoksProc);`;
     }
     if (ok) {
       node = new AudioWorkletNode(ctx, 'polivoks', { numberOfInputs: 0, outputChannelCount: [2] });
-      node.port.onmessage = (m) => { if (m.data.t === 'lfo') lfoV = m.data.v; else onSeqPos(m.data); };
+      node.port.onmessage = (m) => { if (m.data.t === 'lfo') { lfoV = m.data.v; outRms = m.data.a; } else onSeqPos(m.data); };
       node.connect(analyser);
       engineMode = 'AudioWorklet';
     } else {
       // Fallback for sandboxed frames that refuse worklet modules: run the same
       // engine on the main thread through a ScriptProcessorNode.
-      const [Eng, KS, Echo, Rack] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack];')();
+      const [Eng, KS, Echo, Rack, Lev] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, Level];')(), lev = new Lev(ctx.sampleRate);
       const fx = new Echo(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx), onSeqPos);
       const sp = ctx.createScriptProcessor(1024, 0, 2);
-      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); lfoV = eng.lfoV; };
+      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); lfoV = eng.lfoV; if (lev.add(L0, R0, L0.length)) outRms = lev.rms; };
       node = { port: { postMessage: (d) => qs.msg(d) } };
       sp.connect(analyser);
       engineMode = 'main thread';
