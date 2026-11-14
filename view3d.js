@@ -62,8 +62,22 @@ scene.environmentIntensity = 0.25;
 const camera = new THREE.PerspectiveCamera(5, 1, 1000, 200000);
 // soft white light from the front, then two coloured lamps low at the sides,
 // each throwing its own soft shadow: left (blue) follows VCO I, right (amber) VCO II
-scene.add(new THREE.HemisphereLight(0xffffff, 0x220011, 0.36));
+const amb = new THREE.HemisphereLight(0xffffff, 0x220011, 0.36); scene.add(amb);
 const front = new THREE.DirectionalLight(0xffffff, 0.32); front.position.set(0, 300, 2000); scene.add(front);
+// The ambient light's colour is the two VCOs' wave shapes, mixed by their
+// MIXER levels: triangle soft pink, sawtooth icy blue, pulse gold.
+const WAVE_COL = [new THREE.Color(0xff6ec8), new THREE.Color(0x4f9cff), new THREE.Color(0xffbf3a)];
+const ambCol = new THREE.Color(0xffffff), ambWant = new THREE.Color();
+const byId = (id) => A.S.find((c) => c.id === id);
+const AMB = { w1: byId('o1wave'), w2: byId('o2wave'), m1: byId('mix1'), m2: byId('mix2') };
+function driveAmbient() {
+  let a = AMB.m1 ? AMB.m1.v : 0.5, b = AMB.m2 ? AMB.m2.v : 0.5;
+  if (a + b < 0.02) a = b = 0.5;                 // both off: an even blend
+  const c1 = WAVE_COL[Math.min(2, AMB.w1 ? AMB.w1.v | 0 : 1)], c2 = WAVE_COL[Math.min(2, AMB.w2 ? AMB.w2.v | 0 : 2)];
+  ambWant.setRGB((c1.r * a + c2.r * b) / (a + b), (c1.g * a + c2.g * b) / (a + b), (c1.b * a + c2.b * b) / (a + b));
+  ambCol.lerp(ambWant, 0.15);                    // a short fade when a wave changes
+  amb.color.copy(ambCol); front.color.copy(ambCol);
+}
 const side = (color, x) => {
   const l = new THREE.SpotLight(color, 0.6, 0, 0.62, 1, 0);
   l.position.set(x, 160, 700); l.castShadow = true;
@@ -481,7 +495,7 @@ function frame() {
     if (Math.abs(d) < 0.2) { lev.userData.y = lev.userData.target; levers.delete(lev); }
     lev.userData.place(); renderer.shadowMap.needsUpdate = true;
   }
-  driveLamps(); driveTitle();
+  driveLamps(); driveTitle(); driveAmbient();
   renderer.render(scene, camera);
 }
 renderer.setAnimationLoop(frame);
@@ -493,5 +507,6 @@ window.filth3d = {
   // centre of a lower-panel element (button, list, slider, bars) on screen
   el(sel) { const e = low.querySelector(sel), r = rel(e, low); const v = pos(r.x + r.w / 2, r.y + r.h / 2, 3).applyMatrix4(lower.matrixWorld).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
   lamps: () => lamps.map((l) => +l.intensity.toFixed(2)),
+  ambient: () => '#' + amb.color.getHexString(),
   probe(x, y) { const lp = onLower({ clientX: x, clientY: y }); const o = pick({ clientX: x, clientY: y }); return [lp && lp.x, lp && lp.y, o && Object.keys(o.userData)]; },
 };
