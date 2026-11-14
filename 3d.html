@@ -118,11 +118,11 @@ scene.environmentIntensity = 0.25;
 const camera = new THREE.PerspectiveCamera(26, 1, 50, 20000);
 // even white light from the front (no shadows), then two coloured lamps low
 // at the sides: each throws its own soft shadow across the panel
-scene.add(new THREE.HemisphereLight(0xffffff, 0x220011, 0.45));
-const front = new THREE.DirectionalLight(0xffffff, 0.4); front.position.set(0, 300, 2000); scene.add(front);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x220011, 0.36));
+const front = new THREE.DirectionalLight(0xffffff, 0.32); front.position.set(0, 300, 2000); scene.add(front);
 const side = (color, x) => {
   // a spot aimed at its own half of the panel, so its colour fades out toward the far side
-  const l = new THREE.SpotLight(color, 0.35, 0, 0.62, 1, 0);
+  const l = new THREE.SpotLight(color, 0.6, 0, 0.62, 1, 0);
   l.position.set(x, 160, 700); l.castShadow = true;
   l.shadow.mapSize.set(2048, 2048); l.shadow.bias = -0.0004; l.shadow.normalBias = 0.6; l.shadow.radius = 6;
   l.shadow.camera.near = 200; l.shadow.camera.far = 5000;
@@ -132,12 +132,12 @@ const lamps = [side(0x3d8bff, -1300), side(0xffa020, 1300)];   // cool blue from
 // Left lamp = VCO I, right lamp = VCO II.  Brightness follows how loud each
 // oscillator is in the output (mixer level × amplifier envelope × volume) and
 // rises a little with its pitch; the colour pales toward white as it goes up.
-const LAMP = [{ base: new THREE.Color(0x2f7dff), hi: new THREE.Color(0xbfe4ff), i: 0, oct: 0, b: 0.35, t: 0 },
-              { base: new THREE.Color(0xff9a10), hi: new THREE.Color(0xfff0b0), i: 0, oct: 0, b: 0.35, t: 0 }];
+const LAMP = [{ base: new THREE.Color(0x2f7dff), hi: new THREE.Color(0xbfe4ff), i: 0, oct: 0, b: 0.6, t: 0 },
+              { base: new THREE.Color(0xff9a10), hi: new THREE.Color(0xfff0b0), i: 0, oct: 0, b: 0.6, t: 0 }];
 function driveLamps() {
   LAMP.forEach((L, k) => {
     const t = Math.max(0, Math.min(1, (L.oct + 4) / 7));          // 32' low notes .. 2' high notes
-    const want = 0.3 + 5 * L.i * (0.55 + 0.45 * t);
+    const want = 2 * (0.3 + 5 * L.i * (0.55 + 0.45 * t));
     L.b += (want - L.b) * (want > L.b ? 0.5 : 0.1); L.t += (t - L.t) * 0.2;
     lamps[k].intensity = L.b; lamps[k].color.copy(L.base).lerp(L.hi, L.t * 0.6);
   });
