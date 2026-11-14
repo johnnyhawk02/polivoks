@@ -149,30 +149,21 @@
   </div>
   <div class="panel low" id="low">
     <div class="torn"></div>
-    <div class="box" id="seqpanel" style="grid-area:1/1/2/16;--n:15" aria-label="Knob sequencer"><h2>SEQUENCER</h2></div>
-    <div class="box" id="g-clock" style="grid-area:1/16/2/20;--n:4"><h2>CLOCK / MIDI</h2>
-      <div class="f" style="grid-column:span 4"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
-      <div class="f" style="grid-column:span 4"><span>SYNC</span><div class="row"><b class="val sq-src" style="text-align:left">INTERNAL</b></div></div>
-      <div class="f" style="grid-column:span 4"><span>MIDI IN</span><div class="row"><b class="val" id="midi" style="text-align:left">—</b></div></div>
-      <div class="f" style="grid-column:span 4"><span>COMPUTER KEYS</span><div class="row"><b class="val" style="text-align:left">A–P · OCTAVE Z/X (<span id="octv">4</span>)</b></div></div>
-    </div>
-    <div class="box" id="g-pre" style="grid-area:2/1/3/11;--n:10"><h2>PRESETS</h2>
-      <div class="f" style="grid-column:span 6"><span>PRESET</span><div class="row"><button class="sb sm" id="pre-prev" aria-label="Previous preset">◀</button><div class="pre-name" id="pre-name"><i></i><b id="pre-n"></b></div><button class="sb sm" id="pre-next" aria-label="Next preset">▶</button></div></div>
+    <div class="box" id="seqpanel" style="grid-area:1/1/2/20;--n:19" aria-label="Knob sequencer"><h2>SEQUENCER</h2></div>
+    <div class="box" id="g-pre" style="grid-area:2/1/3/15;--n:14"><h2>PRESETS</h2>
+      <div class="f" style="grid-column:span 10"><span>PRESET</span><div class="row"><button class="sb sm" id="pre-prev" aria-label="Previous preset">◀</button><div class="pre-name" id="pre-name"><i></i><b id="pre-n"></b></div><button class="sb sm" id="pre-next" aria-label="Next preset">▶</button></div></div>
       <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><select id="pre-list" aria-label="Saved presets"></select></div></div>
       <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-roll" aria-label="New name">NEW</button></div></div>
       <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-save">SAVE</button></div></div>
       <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-del">DELETE</button></div></div>
     </div>
-    <div class="box" id="g-rnd" style="grid-area:2/11/3/16;--n:5"><h2>RANDOMISE</h2>
+    <div class="box" id="g-rnd" style="grid-area:2/15/3/20;--n:5"><h2>RANDOMISE</h2>
       <div class="f" style="grid-column:span 3"><span>SOUND</span><div class="row cells"><button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-nudge">NUDGE</button></div></div>
       <div class="f" style="grid-column:span 2"><span>SEQUENCES</span><div class="row cells"><button class="btn" id="rnd-groove">GROOVE</button><button class="btn" id="rnd-mess">MESS</button></div></div>
     </div>
-    <div class="box" id="g-panel" style="grid-area:2/16/3/20;--n:4"><h2>INPUT / RESET</h2>
-      <div class="f" style="grid-column:span 2"><span id="extname">EXT. INPUT</span><div class="row"><button class="btn" id="extbtn">LOAD FILE</button><input type="file" id="extfile" accept="audio/*" hidden></div></div>
-      <div class="f" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="resetbtn">RESET</button></div></div>
-      <div class="f" style="grid-column:span 1"><span>WOBBLE</span><div class="row"><button class="sb" id="wobbtn" aria-pressed="true">ON</button></div></div>
-    </div>
   </div>
+  <!-- no longer on the panel (clock/MIDI read-outs, external input, reset, wobble switch): kept unseen so their code still runs -->
+  <div id="spare" hidden><b class="val sq-src" style="text-align:left">INTERNAL</b><b class="val" id="midi">—</b><span id="octv">4</span><span id="extname">EXT. INPUT</span><button class="btn" id="extbtn">LOAD FILE</button><input type="file" id="extfile" accept="audio/*" hidden><button class="btn" id="resetbtn">RESET</button><button class="sb" id="wobbtn" aria-pressed="true">ON</button></div>
   <div class="foot">
     <span>Engine: <b id="emode">off</b></span>
     <span style="margin-left:auto"><a href="?view=3d">3D VIEW</a></span>
@@ -1540,7 +1531,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.34.0';
+const VERSION = '1.35.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1780,6 +1771,7 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f dim" style="grid-column:span 2"><span>RATE</span><div class="row"><button class="sb sm" data-a="div-">−</button><b class="val sq-div"></b><button class="sb sm" data-a="div+">+</button></div></div>
   <div class="f dim" style="grid-column:span 3"><span>DEPTH</span><div class="row"><input type="range" class="sq-depth" min="0" max="100"><b class="val sq-depthv" style="flex:none;width:56px"></b></div></div>
   <div class="f dim" style="grid-column:span 3"><span>SLEW</span><div class="row"><input type="range" class="sq-slew" min="0" max="100"><b class="val sq-slewv" style="flex:none;width:56px"></b></div></div>
+  <div class="f" style="grid-column:span 4"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="sq-grid dim"></div>
   <div class="f" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>`);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
