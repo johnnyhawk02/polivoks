@@ -157,6 +157,9 @@ floor.position.z = -DEPTH - 30; floor.receiveShadow = true; rig.add(floor);
 const pos = (px, py, z = 0) => new THREE.Vector3(px, -py, z);   // panel px -> group local
 const mat = {
   ink: new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.38, metalness: 0.15 }),
+  // knobs: matt black body, only the bevelled top edge is polished and catches the lamps
+  knobMatt: new THREE.MeshStandardMaterial({ color: 0x060606, roughness: 0.97, metalness: 0, envMapIntensity: 0.15 }),
+  knobRim: new THREE.MeshStandardMaterial({ color: 0xb4b4b4, roughness: 0.33, metalness: 1, envMapIntensity: 0.06 }),
   inkMatte: new THREE.MeshLambertMaterial({ color: 0x050505 }),
   edge: new THREE.MeshStandardMaterial({ color: 0xb30a8c, roughness: 0.6 }),
   lit: new THREE.MeshBasicMaterial({ color: 0xffffff }),        // pointers: unlit white, so they glow
@@ -183,6 +186,11 @@ function plate(w, h, d, draw, opts = {}) {
   return m;
 }
 // knob body: a turned profile, skirt then cap
+// the bevel band between the knob's side and its cap, laid just over the body
+const rimGeo = (() => {
+  const p = [[KR + 0.06, 11.4], [KR - 0.2, 13.4], [KR - 1.5, 15.6], [KR - 3.0, 16.5], [KR - 3.6, 16.56]].map(([r, y]) => new THREE.Vector2(r, y));
+  const g = new THREE.LatheGeometry(p, 64); g.rotateX(Math.PI / 2); return g;
+})();
 const knobGeo = (() => {
   const p = [[0, 0], [KR + 2.5, 0], [KR + 2.5, 2.5], [KR + 0.6, 4.5], [KR, 12], [KR - 1.6, 15.5], [KR - 3.5, 16.5], [0, 16.5]].map(([r, y]) => new THREE.Vector2(r, y));
   const g = new THREE.LatheGeometry(p, 48); g.rotateX(Math.PI / 2); return g;
@@ -330,7 +338,7 @@ function addControl(parent, c, x, y) {
   const cx = x + CW / 2, cy = y + TOP + CY;
   if (c.kind === 'knob' || c.kind === 'sel') {
     const g = new THREE.Group(); g.position.copy(pos(cx, cy, 0));
-    const body = new THREE.Mesh(knobGeo, mat.ink); body.castShadow = true; g.add(body);
+    const body = new THREE.Mesh(knobGeo, mat.knobMatt); body.castShadow = true; g.add(body, new THREE.Mesh(rimGeo, mat.knobRim));
     if (c.kind === 'knob') g.add(new THREE.Mesh(pointerGeo, mat.lit));
     else { g.add(new THREE.Mesh(selBarGeo, mat.lit)); g.add(new THREE.Mesh(selInGeo, mat.ink)); }
     parent.add(g);
