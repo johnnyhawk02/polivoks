@@ -47,8 +47,10 @@
   .torn { position: absolute; inset: 0; z-index: -1; background: var(--pink); pointer-events: none; }
   .box { box-shadow: inset 0 0 0 2px var(--ink); position: relative; display: grid; grid-template-columns: repeat(var(--n), var(--cw)); grid-template-rows: repeat(var(--m, 1), var(--rh)); gap: var(--g); grid-auto-flow: row; }
   .box.down { grid-auto-flow: column; }
-  .box.own { display: flex; flex-direction: column; gap: var(--g); }
-  .box.own > .orow { height: var(--rh); display: flex; justify-content: space-evenly; }
+  /* rows packed close together from the top (spare space falls to the bottom) */
+  .box.own { display: flex; flex-direction: column; gap: 0; }
+  .box.own > .orow { display: flex; justify-content: space-evenly; }
+  .box.own .ctl, .box.own .sw, .box.own .resp { height: auto; padding-bottom: 2px; }
   /* section names: white letters on a plain black slab over the top edge */
   .box h2 {
     position: absolute; top: -10px; left: 10px; margin: 0;
@@ -1591,7 +1593,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.52.0';
+const VERSION = '1.53.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
