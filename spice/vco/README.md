@@ -66,7 +66,7 @@ give a saw of a few volts. **EST**
 - КР140УД8Б: GBW 1 MHz, slew 2 V/µs, output limit 20 mA (`ud8.lib`)
 - V1 leakage 10 nA (the latch's seed current)
 - КД521Б diode model, КТ315/КТ361 models (from `../models.lib`)
-- In the JS: A10 slew 3 V/µs, the narrow-pulse level (13 % duty), C9's load
+- In the JS: A10 slew 3 V/µs, the narrow-pulse level (13 % duty at 450 Hz), C9's load
   (100k), and the КР198НТ1А RE 1 Ω, rbb' 100 Ω, β 150
 
 ## Results

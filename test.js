@@ -70,6 +70,23 @@ console.log('--- pitch knobs (±1 octave, an addition) ---');
 console.log('pitchOct -1/-0.5/0/0.5/1:', [-1, -0.5, 0, 0.5, 1].map(d => pitchOct(d).toFixed(4)).join(' '));
 for (const [id, mix] of [['o1pitch', { mix1: 0.6, mix2: 0 }], ['o2pitch', { mix1: 0, mix2: 0.6, o2wave: 1 }]])
   for (const v of [-1, 1]) { const { out } = run(Object.assign({}, open, mix, { [id]: v }), 1, [57]); console.log(id, v, 'note', (69 + 12 * Math.log2(freqOf(out, SR) / 440)).toFixed(2)); }
+console.log('--- pulse width knobs (an addition; SPICE in spice/vco/pw.txt) ---');
+{
+  // duty of VCO I's pulse in the running engine (A10 output > 0), note 57 (220 Hz) and 81 (880 Hz)
+  const duty = (pw, note, extra) => {
+    const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
+    const s0 = Object.assign({}, open, { o1wave: 2 }, extra || {}); if (pw !== undefined) s0.o1pw = pw;
+    for (const k in s0) { e.setParam(k, s0[k]); e.ps[k] = s0[k]; }
+    e.noteOn(note); const out = new Float32Array(128);
+    for (let i = 0; i < SR * 1.5; i += 128) e.render(out, 128);
+    let hi = 0, n = 0; for (let i = 0; i < SR / 2; i += 128) { e.render(out, 128); for (let j = 0; j < 128; j++) { hi += e.vco1.pulse > 0 ? 1 : 0; n++; } }
+    return (hi / n * 100).toFixed(1);
+  };
+  for (const note of [57, 81]) console.log('note', note, 'PW 0/0.25/0.5/0.75/1 duty %:', [0, 0.25, 0.5, 0.75, 1].map((v) => duty(v, note)).join(' '));
+  console.log('old preset (no PW saved) duty %:', duty(undefined, 57), ' narrow switch duty %:', duty(undefined, 57, { o1wave: 3 }));
+  const f = (pw) => { const { out } = run(Object.assign({}, open, { o1wave: 2, o1pw: pw }), 1, [57]); return freqOf(out, SR); };
+  console.log('pitch PW 0 vs 1:', (1200 * Math.log2(f(1) / f(0))).toFixed(2), 'cents');
+}
 console.log('--- modulator rate (sheet 10; SLOW range is an addition) ---');
 {
   // the engine's own wiring: one 48 kHz sample steps the modulator once

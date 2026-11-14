@@ -1,0 +1,54 @@
+* Polivoks VCO, sheet 5: core + saw coupling (C8/R29) + A10 pulse comparator
+* with an added PULSE WIDTH pot on A10's (+) input (an addition, not on the
+* original panel).
+*
+* Sheet 5: A10 (−) takes S through R33 20k, A10 (+) has R34 20k to ground and
+* the pulse-switch line (X2 pin 10).  The addition: a 100k linear pot from
+* 0 V to −12.5 V, wiper through RPW 56k onto that line (switch on "square").
+* At the 0 V end the wiper sits at ground, so A10 (+) = 0 V: the original
+* square.  Turning it pulls A10 (+) negative, the comparator trips nearer the
+* bottom of the ramp, and the pulse narrows.
+.include ../models.lib
+.include ud8.lib
+.param iexp=20u tstop=1m tstep=0.1u pw=0 c8ic=4.6
+VP vp 0 12.5
+VN vn 0 -12.5
+R15 vp a6p 2.21k
+R16 a6p 0 10k
+XA6 a6p a6m vp vn vref UD8S sr=2 isc=20m
+R17 vref a6m 3.3k
+C5 vref x 5600p
+I1 x vn {iexp}
+Q1 c1 b1 vref KT361B
+IL1 b1 c1 10n
+D2 c1 y D521
+Q5 b1 y x KT315G
+Q6 y y z KT315G
+R18 vref z 6.19k
+R19 z 0 6.19k
+Q7 z b7 0 KT315G
+R20 x p3 22k
+XA7 p3 o vp vn o UD8S sr=2
+R21 o b7 3.3k
+* saw coupling: C8 30 uF, R29 6.8k; S = saw node
+C8 o s 30u ic={c8ic}
+R29 s 0 6.8k
+* A8 rectifier's input load on S (R28 100k via V3, V4 into R27 100k): EST as 100k
+R28L s 0 100k
+* A10 comparator (КР140УД8Б, open loop, slew 3 V/us EST)
+R33 s a10m 20k
+R34 a10p 0 20k
+XA10 a10p a10m vp vn a10 UD8S sr=3 r1=3.2g kc=0.1
+* added PW pot: 100k from 0 V (bottom) to -12.5 V (top), wiper -> RPW 56k -> A10(+)
+RPa 0 w {max(pw*100k, 1)}
+RPb w vn {max((1-pw)*100k, 1)}
+RPW w a10p 56k
+.model D521 D(IS=2n N=1.9 RS=5 CJO=1p TT=4n)
+.ic v(x)=9 v(o)=9
+.options reltol=1e-4 abstol=1e-12 vntol=1e-7
+.tran {tstep} {tstop} 0 {tstep} uic
+.control
+run
+wrdata out.txt v(o) v(s) v(a10) v(a10p)
+.endc
+.end
