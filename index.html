@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FILTH — Polivoks circuit model</title>
 <meta name="theme-color" content="#fc0fc0">
+<script>
+// two views of the same synth: the flat 2D panel or the 3D panel (view3d.js).
+// ?view=3d / ?view=2d picks one and is remembered.
+(() => { let v = new URLSearchParams(location.search).get('view');
+  try { if (v) localStorage.setItem('polivoks-view', v); else v = localStorage.getItem('polivoks-view'); } catch (e) {}
+  if (v === '3d') document.documentElement.classList.add('v3d'); })();
+</script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700&family=Archivo+Black&family=Rubik:wght@900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -97,6 +107,10 @@
   .foot { margin: 12px -26px 0; padding: 8px 44px 9px; background: var(--paper); color: var(--ink); display: flex; gap: 24px;
     font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; }
   .foot b { font-weight: 600; }
+  .foot a { color: inherit; }
+  /* 3D view: the 2D panel keeps working underneath, unseen; view3d.js draws it in 3D and drives its controls */
+  .v3d body { height: 100vh !important; overflow: hidden; }
+  .v3d #stage { visibility: hidden; position: fixed; left: 0; top: 0; pointer-events: none; z-index: -1; }
 </style>
 </head>
 <body>
@@ -144,7 +158,8 @@
   </div>
   <div class="foot">
     <span>Engine: <b id="emode">off</b></span>
-    <span style="margin-left:auto">FILTH v<b id="ver"></b></span>
+    <span style="margin-left:auto"><a href="?view=3d">3D VIEW</a></span>
+    <span>FILTH v<b id="ver"></b></span>
   </div>
 </div>
 
@@ -1476,7 +1491,7 @@ noNarrow(saved);
 const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false, extData = null;
-let lfoV = 0, outRms = 0;   // the modulator's output in volts, posted by the engine ~60 times a second
+let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
 // ---------------------------------------------------------------- title wobble
 // The letters of FILTH are pushed about by a fixed noise whose depth is the
@@ -1508,7 +1523,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.26.0';
+const VERSION = '1.27.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1528,7 +1543,7 @@ const ang = (u) => (-135 + 270 * u) * Math.PI / 180;
 // every knob and selector: the same cell, the same centre, the same diameter
 const CW = 78, CH = 62, CY = 34, KR = 17;
 function makeKnob(c) {
-  const wrap = document.createElement('div'); wrap.className = c.added ? 'ctl added' : 'ctl';
+  const wrap = document.createElement('div'); wrap.className = c.added ? 'ctl added' : 'ctl'; c.el = wrap;
   const W = CW, H = CH, cx = W / 2, cy = CY, R = KR;
   const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}` }, wrap);
   const bip = c.scale === 'bip';
@@ -1573,7 +1588,7 @@ function makeKnob(c) {
   return wrap;
 }
 function makeSel(c) {
-  const wrap = document.createElement('div'); wrap.className = 'ctl';
+  const wrap = document.createElement('div'); wrap.className = 'ctl'; c.el = wrap;
   const W = CW, H = CH, cx = W / 2, cy = CY, R = KR, n = c.opts.length;
   const span = n === 5 ? 140 : 130;
   const posA = (i) => (-span / 2 + span * i / (n - 1)) * Math.PI / 180;
@@ -1597,7 +1612,7 @@ function makeSel(c) {
   return wrap;
 }
 function makeSwitch(c) {
-  const wrap = document.createElement('div'); wrap.className = 'sw';
+  const wrap = document.createElement('div'); wrap.className = 'sw'; c.el = wrap;
   const top = document.createElement('div'); top.className = 't'; mark(top, c.top);
   const slot = document.createElement('div'); slot.className = 'slot';
   const lev = document.createElement('div'); lev.className = 'lev'; slot.appendChild(lev);
@@ -1893,11 +1908,22 @@ drawPre();
 // otherwise on the first such gesture; a MIDI note before then is held and
 // sounds once audio starts.
 let starting = null;
+// each VCO's loudness in the output (mixer level × amplifier envelope × volume)
+// and pitch in octaves from A4, worked out from the engine's state once a block
+const VCO_INFO = `
+function vcoInfo(e) {
+  const p = e.p, ps = e.ps, R = [-2, -1, 0, 1, 2], lfo = e.lfoV || 0, kb = e.kb, tune = ps.tune * 2 / 12;
+  const o1 = (53 - 69) / 12 - kb.cv1 / 1.5 + R[p.o1range | 0] + tune + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch);
+  const o2 = (53 - 69) / 12 - kb.cv2 / 1.5 + R[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch);
+  const env = p.vcaHold >= 0.5 ? 1 : Math.max(0, e.egA.v / e.egA.Vpk);
+  const vol = Math.min(1, (p.outSel >= 0.5 ? ps.phones : ps.volume) * 1.3) * (e.powerLevel || 0);
+  return [ps.mix1 * env * vol, ps.mix2 * env * vol, o1, o2];
+}`;
 async function powerOn() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     ctx.onstatechange = () => { powered = ctx.state === 'running'; document.getElementById('emode').textContent = powered ? engineMode : 'waiting for a click or key'; };
-    const lib = ['dsp-src', 'seq-src', 'fx-src'].map((id) => document.getElementById(id).textContent).join('\n');
+    const lib = ['dsp-src', 'seq-src', 'fx-src'].map((id) => document.getElementById(id).textContent).join('\n') + VCO_INFO;
     // synth -> knob sequencer -> stereo echo (the echo is an added effect, not circuit)
     const src = lib + `
 class PolivoksProc extends AudioWorkletProcessor {
@@ -1907,7 +1933,7 @@ class PolivoksProc extends AudioWorkletProcessor {
   process(i, o) { const out = o[0], L = out[0], R = out[1] || new Float32Array(L.length);
     this.q.render(L, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length);
     // the modulator's output for the panel edges, about 60 times a second
-    if (this.lev.add(L, R, L.length)) this.port.postMessage({ t: 'lfo', v: this.e.lfoV, a: this.lev.rms });
+    if (this.lev.add(L, R, L.length)) this.port.postMessage({ t: 'lfo', v: this.e.lfoV, a: this.lev.rms, vco: vcoInfo(this.e) });
     return true; }
 }
 registerProcessor('polivoks', PolivoksProc);`;
@@ -1919,16 +1945,16 @@ registerProcessor('polivoks', PolivoksProc);`;
     }
     if (ok) {
       node = new AudioWorkletNode(ctx, 'polivoks', { numberOfInputs: 0, outputChannelCount: [2] });
-      node.port.onmessage = (m) => { if (m.data.t === 'lfo') { lfoV = m.data.v; outRms = m.data.a; } else onSeqPos(m.data); };
+      node.port.onmessage = (m) => { if (m.data.t === 'lfo') { lfoV = m.data.v; outRms = m.data.a; vcoI = m.data.vco; } else onSeqPos(m.data); };
       node.connect(analyser);
       engineMode = 'AudioWorklet';
     } else {
       // Fallback for sandboxed frames that refuse worklet modules: run the same
       // engine on the main thread through a ScriptProcessorNode.
-      const [Eng, KS, Echo, Rack, Lev] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, Level];')(), lev = new Lev(ctx.sampleRate);
+      const [Eng, KS, Echo, Rack, Lev, vInfo] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, Level, vcoInfo];')(), lev = new Lev(ctx.sampleRate);
       const fx = new Echo(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx), onSeqPos);
       const sp = ctx.createScriptProcessor(1024, 0, 2);
-      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); lfoV = eng.lfoV; if (lev.add(L0, R0, L0.length)) outRms = lev.rms; };
+      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); lfoV = eng.lfoV; if (lev.add(L0, R0, L0.length)) { outRms = lev.rms; vcoI = vInfo(eng); } };
       node = { port: { postMessage: (d) => qs.msg(d) } };
       sp.connect(analyser);
       engineMode = 'main thread';
@@ -2056,6 +2082,16 @@ function fit() {
   document.body.style.height = (stage.offsetHeight * s) + 'px';
 }
 addEventListener('resize', fit); fit();
+
+// ---------------------------------------------------------------- 3D view
+// view3d.js only reads this app's state and works its controls (c.set, the
+// buttons' own clicks), so both views share every feature and setting.
+window.filthApp = {
+  S, KNOBS, seqOf, change, pickSeq, on, off, WOB, VERSION,
+  get edC() { return edC; }, get lastPos() { return lastPos; },
+  get lfoV() { return lfoV; }, get outRms() { return outRms; }, get vco() { return vcoI; },
+};
+if (document.documentElement.classList.contains('v3d')) import('./view3d.js');
 })();
 </script>
 </body>
