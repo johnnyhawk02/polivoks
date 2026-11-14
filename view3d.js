@@ -625,6 +625,41 @@ function driveParallax() {
   camera.position.set(target.x + dist * Math.sin(yaw) * Math.cos(pitch), target.y + dist * Math.sin(pitch), target.z + dist * Math.cos(yaw) * Math.cos(pitch));
   camera.lookAt(target);
 }
+// ---------------------------------------------------------------- the projector
+// When the sound is really distorting (the soft clipper is being pushed hard),
+// an old projector from the front throws a flickering FILTH across the whole
+// synth: a spotlight whose beam carries the word, projected onto every surface.
+const projector = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 1024; const x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, 1024, 1024);
+  x.font = `400 300px ${DISPLAY}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = '#fff';
+  if ('letterSpacing' in x) x.letterSpacing = '10px';
+  x.fillText('FILTH', 512, 530);
+  // a little projector grit: dust specks and faint scratches in the gate
+  for (let i = 0; i < 260; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.8})`; x.beginPath(); x.arc(Math.random() * 1024, Math.random() * 1024, Math.random() * 3, 0, 7); x.fill(); }
+  for (let i = 0; i < 6; i++) { x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(Math.random() * 1024, 0, 1.5, 1024); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const l = new THREE.SpotLight(0xfff1d6, 0, 0, Math.atan((UW * 0.58) / 1600), 0.35, 0);
+  l.position.set(0, 0, 1600); l.map = t; l.castShadow = true;
+  l.shadow.mapSize.set(1024, 1024); l.shadow.camera.near = 500; l.shadow.camera.far = 4000;
+  l.target.position.set(0, 0, 0); scene.add(l, l.target);
+  return { l, level: 0 };
+})();
+function driveProjector() {
+  // follows the CLIP LED: nothing below a light touch on the clipper, full when it is slammed
+  const want = Math.max(0, Math.min(1, ((A.clip || 0) - 0.2) / 0.4));
+  projector.level = want > projector.level ? projector.level + (want - projector.level) * 0.3 : projector.level * 0.95;
+  const v = projector.level, L = A.look.lights;
+  // the room lights dim as the projector comes up, so the word stands out
+  const dim = 1 - 0.7 * v;
+  amb.intensity = 0.45 * L.amb.i * dim; front.intensity = 0.35 * L.amb.i * dim;
+  lamps[0].intensity = 1.6 * L.left.i * dim; lamps[1].intensity = 1.6 * L.right.i * dim;
+  if (v < 0.01) { if (projector.l.intensity) projector.l.intensity = 0; return; }
+  // flicker: an uneven lamp, the odd dropped frame, a jittering gate
+  const drop = Math.random() < 0.06 ? 0.15 : 1, f = 0.75 + 0.25 * Math.random();
+  projector.l.intensity = 14 * v * f * drop;
+  projector.l.position.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 1600);
+}
 function frame() {
   driveAngle(); driveParallax();
   for (const t of ticks) t();
@@ -633,7 +668,7 @@ function frame() {
     if (Math.abs(d) < 0.2) { lev.userData.y = lev.userData.target; levers.delete(lev); }
     lev.userData.place(); renderer.shadowMap.needsUpdate = true;
   }
-  driveLamps(); driveTitle(); driveAmbient();
+  driveLamps(); driveTitle(); driveAmbient(); driveProjector();
   renderer.render(scene, camera);
 }
 renderer.setAnimationLoop(frame);
