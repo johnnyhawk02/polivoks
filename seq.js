@@ -89,7 +89,6 @@ class KnobSeq {
     else if (d.t === 'on') this.e.noteOn(d.n);
     else if (d.t === 'off') this.e.noteOff(d.n);
     else if (d.t === 'all') this.e.allOff();
-    else if (d.t === 'ext') this.e.setExt(d.data);
   }
 }
 

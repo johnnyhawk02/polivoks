@@ -361,6 +361,8 @@ class EG {
 //  ngspice in spice/mixer/.  A2's output goes through C2 0.22 µF and R85 39k
 //  into the filter (≈1 k to ground there): an 18 Hz high-pass.
 //  Pot taper: linear (group А) EST.
+//  The original's fourth channel, R106 Внеш. (external input), is left out
+//  of FILTH: the mixer here sums the two VCOs and the noise only.
 // ============================================================================
 // DRIVE (added, not on the original panel): a 150k log pot in series with
 // A2's feedback resistor R10 22k.  The mixer's gain rises with the feedback
@@ -602,11 +604,11 @@ const PARAM_DEFAULTS = {
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
   o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o1pw: 0,
   o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0, o2pw: 0,
-  mix1: 0.65, mix2: 0.5, mixN: 0, mixE: 0, drive: 0,
+  mix1: 0.65, mix2: 0.5, mixN: 0, drive: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','mixE','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -627,7 +629,6 @@ class PolivoksEngine {
     this.T1 = 303; this.T2 = 303; this.drift1 = 0; this.drift2 = 0;
     this.noiseLP = 0;
     this.hpX = 0; this.hpY = 0; this.vcaHpX = 0; this.vcaHpY = 0;
-    this.ext = null; this.extPos = 0;
     this.lastVal = 0;
     this.powerLevel = 0;
     // decimation FIR (Blackman windowed sinc)
@@ -645,7 +646,6 @@ class PolivoksEngine {
   }
 
   setParam(id, v) { if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
-  setExt(data) { this.ext = data; this.extPos = 0; }
 
   // keys go to the keyboard board; the envelopes follow its gate
   noteOn(n) { this.kb.press(n); }
@@ -714,9 +714,7 @@ class PolivoksEngine {
       this.vca.control(ps.aMod * lfo, 100e3 * ps.aMod * (1 - ps.aMod), venv);
       // mixer (sheet 9): per-channel gain into A2's virtual earth
       const g1 = mixGain(ps.mix1, vco1.Rout[w1]), g2 = mixGain(ps.mix2, vco2.Rout[w2]);
-      const gn = mixGain(ps.mixN, 0), ge = mixGain(ps.mixE, 0), dg = driveGain(ps.drive);
-      let ext = 0;
-      if (this.ext && ge > 0.001) { ext = this.ext[this.extPos]; if (++this.extPos >= this.ext.length) this.extPos = 0; }   // 1 V peak line level EST
+      const gn = mixGain(ps.mixN, 0), dg = driveGain(ps.drive);
 
       // modulator noise: A2 bandwidth ≈15 kHz (КР140УД8Б GBW / 101), 0.25 V rms EST
       const nk = 1 - Math.exp(-ho * 2 * Math.PI * 15000);
@@ -729,7 +727,7 @@ class PolivoksEngine {
         const o1 = vco1.out(w1);
         this.noiseLP += (rng.g() * 0.25 * Math.sqrt(1 / (nk * 0.5)) - this.noiseLP) * nk;
         nzs += this.noiseLP;
-        const a2 = rail(-(g1 * o1 + g2 * o2 + gn * this.noiseLP + ge * ext) * dg, 11);
+        const a2 = rail(-(g1 * o1 + g2 * o2 + gn * this.noiseLP) * dg, 11);
         this.mixHp += (a2 - this.mixHp) * kmix;
         vcf.step(a2 - this.mixHp, Iset, VTf);
         const vf = lp ? -vcf.y2 : -vcf.y1;          // both outputs invert
