@@ -2,7 +2,7 @@
 // TONE: a random patch that is meant to be PLAYABLE, for the RANDOM row.
 // Not part of the Polivoks circuit; it only picks knob and switch settings.
 // Unlike PATCH (every control anywhere) it first picks a kind of sound
-// (pluck, bass, lead, keys or pad), then sets each control from a range
+// (pluck, sustain, pad, bass, lead or keys; the TYPE buttons force one), then sets each control from a range
 // that suits that kind, using the knob laws of dsp.js:
 //   - draws lean to the middle of each range (average of three throws) and
 //     about one control in seven gets a bolder pick from a wider range
@@ -23,9 +23,10 @@
 const TONE_PITCH = { 0: 0, 3: 0.257, 4: 0.34216, 5: 0.42689, 7: 0.59465, 12: 1, '-5': -0.42689, '-7': -0.59465, '-12': -1 };
 const TONE_CENT = 0.001025;     // DETUNE knob travel for one cent (detuneOct is linear here)
 // LFO RATE knob for a few rates: 0 = 1.8 Hz (slowest), 0.2 = 4.7 Hz, 0.27 ≈ 6.3 Hz
-const TONE_KINDS = ['pluck', 'bass', 'lead', 'keys', 'pad'];
+const TONE_KINDS = ['pluck', 'sustain', 'pad', 'bass', 'lead', 'keys'];
 
-function makeTone(rand, amount) {
+// kind: one of TONE_KINDS to force that kind of sound (the RANDOMISE TYPE buttons); left out, TONE picks one
+function makeTone(rand, amount, want) {
   const R = rand || Math.random;
   // AMOUNT 0..1 scales every random modulation: 0.5 is the very subtle setting
   // (factor 1), 0 is virtually nothing (a tenth) and 1 is moderate (2.5 times)
@@ -36,7 +37,7 @@ function makeTone(rand, amount) {
   const rng = (a, b, lo, hi) => (bold() ? mid(lo, hi) : mid(a, b));
   const pick = (a) => a[Math.floor(R() * a.length)];
   const wpick = (o) => { let t = 0; for (const k in o) t += o[k]; let r = R() * t; for (const k in o) if ((r -= o[k]) < 0) return k; return Object.keys(o)[0]; };
-  const kind = wpick({ pluck: 3, bass: 3, lead: 3, keys: 2, pad: 2 });
+  const kind = TONE_KINDS.includes(want) ? want : wpick({ pluck: 3, bass: 3, lead: 3, keys: 2, pad: 2, sustain: 2 });
   const k = {
     tune: 0, glide: 0, voice: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o2mod: 0, o2detune: 0, o2pitch: 0, o1fine: 0, o2fine: 0,
     mixN: 0, fEgMode: 0, fMode: 0, fMod: 0, aEgMode: 0, aMod: 0, vcaHold: 0, lfoMode: 0, lfoRate: 0.2,
@@ -48,7 +49,7 @@ function makeTone(rand, amount) {
   const w1 = wave(), w2 = R() < 0.5 ? w1 : wave();
   k.o1wave = w1 === 'p' ? 2 : +w1; k.o1pw = w1 === 'p' ? mid(0.75, 0.93) : 0;
   k.o2wave = w2 === 'p' ? 2 : +w2; k.o2pw = w2 === 'p' ? (w1 === 'p' ? k.o1pw : mid(0.75, 0.93)) : 0;
-  k.o1range = kind === 'bass' ? +wpick({ 1: 3, 0: 1 }) : kind === 'lead' ? +wpick({ 2: 3, 3: 1 }) : +wpick({ 2: 3, 1: 1 });
+  k.o1range = kind === 'bass' ? +wpick({ 1: 3, 0: 1 }) : kind === 'lead' ? +wpick({ 2: 3, 3: 1 }) : kind === 'pluck' ? +wpick({ 2: 3, 3: 1, 1: 1 }) : +wpick({ 2: 3, 1: 1 });
   let iv = wpick({ uni: 6, octUp: 2, octDown: kind === 'bass' ? 0 : 1, fifth: 2, fourth: bold() ? 1 : 0, twelfth: bold() ? 1 : 0 });
   k.o2range = k.o1range;
   if (iv === 'octUp') { if (k.o1range < 4) k.o2range++; else iv = 'uni'; }
@@ -68,29 +69,34 @@ function makeTone(rand, amount) {
 
   // ---- envelopes (knob → time: ATTACK 0.25 ≈ 40 ms, 0.5 ≈ 250 ms; DECAY 0.3 ≈ 0.25 s, 0.5 ≈ 0.75 s time constant)
   const env = {
-    pluck: { aA: [0, 0.04], aD: [0.3, 0.45], aS: [0, 0.2], aR: [0.25, 0.4] },
+    // PLUCK: instant attack, a short fall to (nearly) nothing, so a held key still dies away
+    pluck: { aA: [0, 0.03], aD: [0.26, 0.42], aS: [0, 0.06], aR: [0.25, 0.38] },
     bass: { aA: [0, 0.04], aD: [0.3, 0.5], aS: [0.5, 0.85], aR: [0.15, 0.3] },
     lead: { aA: [0, 0.1], aD: [0.35, 0.55], aS: [0.65, 0.95], aR: [0.25, 0.4] },
     keys: { aA: [0.02, 0.15], aD: [0.4, 0.55], aS: [0.35, 0.65], aR: [0.3, 0.42] },
-    pad: { aA: [0.4, 0.6], aD: [0.45, 0.6], aS: [0.65, 0.9], aR: [0.36, 0.47] },
+    // PAD: a slow swell in, full while held, a long (but not droning) fade out
+    pad: { aA: [0.45, 0.62], aD: [0.45, 0.6], aS: [0.75, 0.95], aR: [0.4, 0.48] },
+    // SUSTAIN: organ-like, on at once and level for as long as the key is held, a short clean release
+    sustain: { aA: [0, 0.05], aD: [0.4, 0.55], aS: [0.9, 1], aR: [0.2, 0.34] },
   }[kind];
   k.aA = mid(...env.aA); k.aD = mid(...env.aD); k.aS = mid(...env.aS); k.aR = mid(...env.aR);
   // filter envelope: snappier than the VCA for plucks and basses, slower for pads
-  k.fA = kind === 'pad' ? mid(0.3, 0.55) : kind === 'keys' ? mid(0.02, 0.2) : mid(0, 0.08);
-  k.fD = kind === 'pluck' || kind === 'bass' ? mid(0.25, 0.42) : mid(0.35, 0.55);
-  k.fS = kind === 'pad' || kind === 'lead' ? mid(0.3, 0.7) : mid(0.05, 0.4);
+  // (PAD: the filter opens slowly with the swell; SUSTAIN: the filter barely moves, so the held tone stays put)
+  k.fA = kind === 'pad' ? mid(0.4, 0.6) : kind === 'keys' ? mid(0.02, 0.2) : mid(0, 0.08);
+  k.fD = kind === 'pluck' ? mid(0.22, 0.38) : kind === 'bass' ? mid(0.25, 0.42) : mid(0.35, 0.55);
+  k.fS = kind === 'sustain' ? mid(0.7, 0.95) : kind === 'pad' || kind === 'lead' ? mid(0.3, 0.7) : kind === 'pluck' ? mid(0, 0.2) : mid(0.05, 0.4);
   k.fR = Math.min(k.aR + 0.05, mid(0.2, 0.45));
 
   // ---- filter: low-pass (band-pass swings from silent to shrill); cutoff and envelope amount trade off so the note speaks
-  k.fEnv = kind === 'pluck' || kind === 'bass' ? rng(0.35, 0.6, 0.2, 0.75) : rng(0.15, 0.45, 0.05, 0.6);
-  const cBase = { pluck: [0.47, 0.6], bass: [0.44, 0.56], lead: [0.56, 0.7], keys: [0.53, 0.66], pad: [0.53, 0.66] }[kind];
+  k.fEnv = kind === 'pluck' ? rng(0.42, 0.65, 0.3, 0.75) : kind === 'bass' ? rng(0.35, 0.6, 0.2, 0.75) : kind === 'sustain' ? mid(0.05, 0.2) : rng(0.15, 0.45, 0.05, 0.6);
+  const cBase = { pluck: [0.47, 0.6], bass: [0.44, 0.56], lead: [0.56, 0.7], keys: [0.53, 0.66], pad: [0.53, 0.66], sustain: [0.55, 0.68] }[kind];
   k.cutoff = rng(cBase[0], cBase[1], cBase[0] - 0.04, cBase[1] + 0.15);
   // resonance: moderate, lower when the cutoff is low
   k.res = rng(0.15, 0.55, 0.05, 0.8);
   if (k.cutoff < 0.5) k.res = Math.min(k.res, 0.45);
 
   // ---- one gentle modulation job for the shared LFO (or none)
-  const job = wpick({ none: 3, vibrato: kind === 'lead' || kind === 'pad' ? 4 : 2, sway: kind === 'pad' || kind === 'keys' ? 3 : 2, tremolo: 1, sparkle: 1 });
+  const job = wpick({ none: 3, vibrato: kind === 'lead' || kind === 'pad' || kind === 'sustain' ? 4 : kind === 'pluck' ? 1 : 2, sway: kind === 'pad' || kind === 'keys' ? 3 : 2, tremolo: kind === 'sustain' ? 2 : 1, sparkle: 1 });
   if (job === 'vibrato') {
     k.lfoMode = 0; k.lfoRate = mid(0.17, 0.27);
     k.o1mod = k.o2mod = mid(4, 12) * 0.000428 * fac;                  // ≈ cents of vibrato (modOct ≈ 2335 cents per unit at 1.43 V)
@@ -145,9 +151,9 @@ function makeTone(rand, amount) {
   if (R() < 0.5) mods.cutoff = { vOn: true, vDepth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
   if (R() < 0.25) mods.res = { eOn: true, eDepth: r2(Math.min(0.2, mid(0.03, 0.08) * fac)) };
   for (const n of ['o1', 'o2']) if (k[n + 'wave'] === 2 && R() < 0.33) mods[n + 'pw'] = { e2On: true, e2Depth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
-  // ---- now and then (1 in 20) a mono glide lead: VCO I up, VCO II off, MONO, a clear glide
+  // ---- now and then (1 in 20, on TONE or LEAD only) a mono glide lead: VCO I up, VCO II off, MONO, a clear glide
   let mono = false;
-  if (R() < 0.05) { mono = true; k.mix1 = mid(0.78, 0.92); k.mix2 = 0; k.glide = mid(0.3, 0.5); }
+  if (R() < 0.05 && (!want || kind === 'lead')) { mono = true; k.mix1 = mid(0.78, 0.92); k.mix2 = 0; k.glide = mid(0.3, 0.5); }
   for (const id in k) k[id] = Math.round(k[id] * 1e5) / 1e5;
   return { kind, k, seqs, mods, mono };
 }
