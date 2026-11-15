@@ -441,27 +441,26 @@ let title = null, titleU = null;
     const frame = new THREE.Mesh(fg2, new THREE.MeshStandardMaterial({ color: 0x242424, roughness: 0.32, metalness: 0.65, envMapIntensity: 1.2 }));
     frame.castShadow = true; frame.receiveShadow = true; p.add(frame);
   }
-  // the CRT shows the current preset's name as a marquee: one big line scrolling right to left round and
-  // round (a gap of half a screen between passes), through the same phosphor, bloom and LFO wobble.  The
-  // line is drawn once on a strip that repeats sideways; the shader slides along it.  Redrawn when the name changes.
-  const strip = (blur, name) => {
-    const PADY = h * 0.14, txt = (name || 'FILTH').toUpperCase();
-    const mc = document.createElement('canvas').getContext('2d'); mc.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in mc) mc.letterSpacing = '2px';
-    const m = mc.measureText(txt), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
-    const k = (h - 2 * PADY) / ih, SW = iw * k * 1.15 + w * 0.5;            // letters a touch wide, like FILTH was
-    const px = Math.min(S2, 4096 / SW), c = document.createElement('canvas'); c.width = Math.ceil(SW * px); c.height = Math.ceil(h * px);
-    const ctx = c.getContext('2d'); ctx.scale(px, px); if (blur) ctx.filter = `blur(${blur}px)`;
-    ctx.font = mc.font; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = PAPER;
-    ctx.save(); ctx.translate(w * 0.25, h / 2); ctx.scale(k * 1.15, k); ctx.fillText(txt, m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
-    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; t.userData = { SW }; return t;
+  // the CRT shows the current preset's name, still: one word per line, all caps in the FILTH lettering, each
+  // line squashed or stretched to the full width of the screen and the lines sharing its height, edge to edge.
+  // Redrawn when the name changes.
+  const nameLayer = (blur, name) => {
+    const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
+    const words = (name || 'FILTH').toUpperCase().split(/\s+/).filter(Boolean).slice(0, 4);
+    const PADX = w * 0.045, PADY = h * 0.07, gap = h * 0.035, lh = (h - 2 * PADY - gap * (words.length - 1)) / words.length;
+    ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = PAPER;
+    words.forEach((wd, i) => {
+      const m = ctx.measureText(wd), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+      ctx.save(); ctx.translate(w / 2, PADY + lh * (i + 0.5) + gap * i); ctx.scale((w - 2 * PADX) / iw, lh / ih);
+      ctx.fillText(wd, -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
+    });
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
-  let nameNow = null, scrollPx = 0, scrollT = performance.now(); ticks.push(() => {
-    const n = A.preName || 'FILTH';
-    if (n !== nameNow) { nameNow = n; scrollPx = 0; for (const [k, b] of [['tText', 0], ['tGlow', 9]]) { const old = titleU[k].value; titleU[k].value = strip(b, n); if (old) old.dispose(); } }
-    const now = performance.now(), SW = titleU.tText.value.userData.SW; scrollPx = (scrollPx + (now - scrollT) / 1000 * h * 0.9) % SW; scrollT = now;   // about a screen height a second
-    titleU.strip.value.set(w / SW, scrollPx / SW);
+  let nameNow = null; ticks.push(() => {
+    const n = A.preName || 'FILTH'; if (n === nameNow) return; nameNow = n;
+    for (const [k, b] of [['tText', 0], ['tGlow', 9]]) { const old = titleU[k].value; titleU[k].value = nameLayer(b, n); if (old) old.dispose(); }
   });
-  titleU = { tText: { value: strip(0, A.preName) }, tGlow: { value: strip(9, A.preName) }, strip: { value: new THREE.Vector2(1, 0) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
+  titleU = { tText: { value: nameLayer(0, A.preName) }, tGlow: { value: nameLayer(9, A.preName) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
     ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
     scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
@@ -469,7 +468,7 @@ let title = null, titleU = null;
     uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tText, tGlow; uniform vec2 strip; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
+      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -490,8 +489,7 @@ let title = null, titleU = null;
         vec2 px = uv0 * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
         vec2 uv = uv0 + d * amt / size;
-        vec2 tuv = vec2(uv.x * strip.x + strip.y, uv.y);       // the marquee: across the repeating strip of the name
-        float t = texture2D(tText, tuv).a, g = texture2D(tGlow, tuv).a;
+        float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
         float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
         float vig = smoothstep(1.35, .35, length(cuv));
         vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
