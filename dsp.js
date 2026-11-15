@@ -610,8 +610,16 @@ class Keyboard {
 //  3.35 V p-p triangle (an FM index of ≈0.3 with both VCOs at one pitch).
 //  FM MOD (OPTIONS, an addition): R64 jumpered, R63* 47k: 1.42 oct/V at full,
 //  ≈ −2.8 … +2.0 octaves.
-//  Pot tapers linear EST; which way the detune turns is EST (kept sharp to
-//  the right).
+//  FM on VCO II (v2.10.0, an addition: the Polivoks has no VCO I → VCO II
+//  FM; Johnny asked for one): the same path mirrored, VCO I's triangle into
+//  a 100k pot (through R64's twin as drawn, jumpered with FM MOD), wiper
+//  through 100k (47k with FM MOD) into VCO II's summer, so the same
+//  fmOctPerVolt.  It takes the place of "Расстройка" on the panel (PITCH and
+//  FINE cover its ±10 semitones; old presets are mapped by migrateDetune).
+//  With both FM pots up the VCOs modulate each other; each reads the other's
+//  triangle from the previous oversampled step (5.7 µs at 44.1k), which is
+//  bounded (±1.7 V triangle) so it cannot run away.
+//  Pot tapers linear EST.
 // ============================================================================
 const I_OCT = 1.5 / 100e3;
 // wiper at a (0…1 from the ground end) of a 100k pot with v on top, then rs
@@ -648,6 +656,49 @@ function wheelOct(a, v) { return -(a * v) / (470e3 + 100e3 * a * (1 - a)) / I_OC
 const FINE_R = 12.5 / (I_OCT / 12);
 function fineOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (FINE_R + rth) / I_OCT; }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
+// Presets and panels saved before v2.10.0 had "Расстройка" (o2detune, ±10 st,
+// detuneOct above) where VCO II's FM is now.  Its pitch offset moves to FINE
+// when it fits there (±1 st, all the subtle detunes), else to PITCH (FINE
+// kept), with anything past PITCH's end put on FINE, or past both (±13 st)
+// an octave moved onto RANGE.  An active o2detune
+// sequence moves to PITCH's lane, its depth scaled 10/12 (one knob unit of
+// DETUNE is ≈10 st, of PITCH 12 st), unless PITCH already has one on.
+// k: knob values, s: sequences (either may be null); both changed in place.
+function invOct(f, oct) {   // knob in −1…1 with f(knob) = oct (f rises with the knob), clamped at the ends
+  if (oct <= f(-1)) return -1; if (oct >= f(1)) return 1;
+  let a = -1, b = 1; for (let i = 0; i < 60; i++) { const m = (a + b) / 2; if (f(m) < oct) a = m; else b = m; }
+  return (a + b) / 2;
+}
+function migrateDetune(k, s) {
+  if (k && 'o2detune' in k) {
+    const d = +k.o2detune || 0; delete k.o2detune;
+    if (!('o2fm' in k)) k.o2fm = 0;
+    if (d) {
+      const f = +k.o2fine || 0, p = +k.o2pitch || 0, off = detuneOct(d);
+      const want = fineOct(f) + off;
+      if (Math.abs(want) <= fineOct(1)) k.o2fine = invOct(fineOct, want);
+      else {
+        let tgt = pitchOct(p) + off;
+        // past PITCH + FINE's ends (±13 st): an octave on RANGE, where there is one
+        const r = k.o2range == null ? 2 : k.o2range | 0;
+        if (tgt < -1 - 1e-9 && Math.abs(tgt) > pitchOct(1) + fineOct(1) - fineOct(f) && r > 0) { k.o2range = r - 1; tgt += 1; }
+        else if (tgt > 1 + 1e-9 && tgt > pitchOct(1) + fineOct(1) - fineOct(f) && r < 4) { k.o2range = r + 1; tgt -= 1; }
+        const np = invOct(pitchOct, tgt), rest = tgt - pitchOct(np);
+        k.o2pitch = np; if (Math.abs(rest) > 1e-9) k.o2fine = invOct(fineOct, fineOct(f) + rest);
+      }
+    }
+  }
+  if (s && s.o2detune) {
+    const q = s.o2detune; delete s.o2detune;
+    const act = (x) => !!(x && (x.on || x.eOn || x.lOn || x.e2On || x.vOn || x.kOn));
+    if (act(q) && !act(s.o2pitch)) {
+      const r = Object.assign({}, q, { steps: (q.steps || []).slice() });
+      for (const k2 of ['depth', 'eDepth', 'lDepth', 'e2Depth', 'vDepth', 'kDepth']) if (typeof r[k2] === 'number') r[k2] *= 10 / 12;
+      s.o2pitch = r;
+    }
+  }
+  return k;
+}
 
 // ============================================================================
 //  Engine
@@ -658,12 +709,12 @@ const PARAM_DEFAULTS = {
   lfoRate: 0.45, lfoMode: 0, lfoRange: 0,
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
   o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o1pw: 0, o1fine: 0,
-  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0, o2pw: 0, o2fine: 0,
+  o2range: 2, o2wave: 2, o2mod: 0, o2fm: 0, o2pitch: 0, o2pw: 0, o2fine: 0,
   mix1: 0.65, mix2: 0.5, mixN: 0, drive: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1fine','o2fine','o1pw','o2pw','mix1','mix2','mixN','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2fm','o1pitch','o2pitch','o1fine','o2fine','o1pw','o2pw','mix1','mix2','mixN','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -744,8 +795,8 @@ class PolivoksEngine {
       if (this.kd !== false) { const K = this.K || (this.K = {});
         K.lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3); K.rg = potA(ps.glide, 0, 1e6);
         K.fA = potA(p.fA, 200, 1e6); K.fD = potA(p.fD, 1e3, 2e6); K.fR = potA(p.fR, 1e3, 2e6); K.aA = potA(p.aA, 200, 1e6); K.aD = potA(p.aD, 1e3, 2e6); K.aR = potA(p.aR, 1e3, 2e6);
-        K.tune = ps.tune * 2 / 12; K.p1 = pitchOct(ps.o1pitch) + fineOct(ps.o1fine); K.d2 = detuneOct(ps.o2detune); K.p2 = pitchOct(ps.o2pitch) + fineOct(ps.o2fine); K.pw1 = vpwOf(ps.o1pw); K.pw2 = vpwOf(ps.o2pw);
-        K.fmk = fmOctPerVolt(ps.o1fm, this.fmMod) * LN2; K.tc = (Math.exp(5 * ps.cutoff) - 1) / (Math.exp(5) - 1); K.dg = driveGain(ps.drive); K.gn = mixGain(ps.mixN, 0);
+        K.tune = ps.tune * 2 / 12; K.p1 = pitchOct(ps.o1pitch) + fineOct(ps.o1fine); K.p2 = pitchOct(ps.o2pitch) + fineOct(ps.o2fine); K.pw1 = vpwOf(ps.o1pw); K.pw2 = vpwOf(ps.o2pw);
+        K.fmk = fmOctPerVolt(ps.o1fm, this.fmMod) * LN2; K.fmk2 = fmOctPerVolt(ps.o2fm, this.fmMod) * LN2; K.tc = (Math.exp(5 * ps.cutoff) - 1) / (Math.exp(5) - 1); K.dg = driveGain(ps.drive); K.gn = mixGain(ps.mixN, 0);
         this.vcf.setRes(ps.res); this.kd = false; }
       const K = this.K;
       const lfoR = K.lfoR;
@@ -774,11 +825,11 @@ class PolivoksEngine {
       const wheel = bendOct(this.bendS, this.bendSt) + wheelOct(this.modwS, lfo);
       //   key CV −1.5 V/oct (key 53 − 69 = −16 semitones at 0 V), summer inputs
       const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + wheel + modOct(ps.o1mod, lfo) + K.p1 + vco1.mismatch;
-      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + wheel + modOct(ps.o2mod, lfo) + K.d2 + K.p2 + vco2.mismatch;
+      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + wheel + modOct(ps.o2mod, lfo) + K.p2 + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
       vco1.vpw = K.pw1; vco2.vpw = K.pw2;
       const w1 = Math.min(2, p.o1wave | 0), w2 = Math.min(2, p.o2wave | 0);   // 0 tri, 1 saw, 2 pulse
-      const fmk = K.fmk;      // nepers per volt of VCO II triangle
+      const fmk = K.fmk, fmk2 = K.fmk2;      // nepers per volt of the other VCO's triangle
 
       // filter Iset: currents into A1's summing node (sheet 7 + panel, sheet 11)
       //   cutoff pot log taper EST; amount pots linear EST; modulation bus
@@ -805,7 +856,7 @@ class PolivoksEngine {
       const kmix = ho / (0.22e-6 * 39.96e3);      // C2 into R85 + filter input
       let nzs = 0;
       for (let o = 0; o < OS; o++) {
-        vco2.step(I2);
+        vco2.step(fmk2 === 0 ? I2 : I2 * Math.exp(fmk2 * vco1.tri));   // VCO I's triangle from the step before
         const o2 = vco2.out(w2);
         vco1.step(I1b * Math.exp(fmk * vco2.tri));
         const o1 = vco1.out(w1);
@@ -836,4 +887,4 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, bendOct, wheelOct, driveGain, Keyboard, modOct, fmOctPerVolt, detuneOct, fineOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, bendOct, wheelOct, driveGain, Keyboard, modOct, fmOctPerVolt, detuneOct, migrateDetune, fineOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
