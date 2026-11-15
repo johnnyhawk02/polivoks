@@ -1752,7 +1752,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.94.0';
+const VERSION = '1.95.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2537,7 +2537,7 @@ window.filthApp = {
   S, KNOBS, seqOf, stepOf, change, pickSeq, on, off, WOB, VERSION, seqMods,
   get edC() { return edC; }, get lastPos() { return lastPos; },
   look, openOptions,
-  get lfoV() { return lfoV; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },
+  get lfoV() { return lfoV; }, get preName() { return preName; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },
 };
 // the version in the address, so a new release is never served from the browser's cache
 import('./view3d.js?v=' + VERSION);
