@@ -47,7 +47,8 @@ class ExpoPair {
     let x = this.x;
     for (let i = 0; i < 3; i++) {
       const e = Math.exp(x);
-      x -= (VT * x + k * (e - 1) - dv) / (VT + k * e);
+      const dx = (VT * x + k * (e - 1) - dv) / (VT + k * e); x -= dx;
+      if (dx < 1e-12 && dx > -1e-12) break;      // converged (warm start: usually 1 step)
     }
     this.x = x;
     return this.Iref * Math.exp(x);
@@ -178,7 +179,7 @@ class VCO {
     this.saw = S;
     // A8 precision rectifier: −(|S| − Vf) with a soft knee, then C9
     const a = S < 0 ? -S : S, u = (a - this.Vf) / this.wf;
-    const y = -this.wf * (u > 30 ? u : Math.log1p(Math.exp(u)));
+    const y = -this.wf * (u > 30 ? u : u < -20 ? 0 : Math.log1p(Math.exp(u)));   // below u = −20 the knee term is < 1e-10 V
     this.tdc += (y - this.tdc) * (h / this.tC9);
     this.tri = y - this.tdc;
     // A10 comparator: КР140УД8Б open loop, S on (−) and V+ on (+).  Its
@@ -275,6 +276,7 @@ class K140VCF {
       const d1 = (r1 - j12 * r2) / det, d2 = (j11 * r2 - j21 * r1) / det;
       z1 -= d1 > 2 ? 2 : d1 < -2 ? -2 : d1;
       z2 -= d2 > 2 ? 2 : d2 < -2 ? -2 : d2;
+      if (d1 < 1e-7 && d1 > -1e-7 && d2 < 1e-7 && d2 > -1e-7) break;   // converged to 0.1 µV
     }
     const Vs = this.Vs;
     this.y1 = z1 > Vs ? Vs : z1 < -Vs ? -Vs : z1;
@@ -300,12 +302,15 @@ class FilterCV {
   // pot wiper source: fraction t of Vsrc with Thevenin 100k·t(1−t), into Rs
   static wiper(t, V, Rs) { return t * V / (Rs + 100e3 * t * (1 - t)); }
   // returns Iset per op-amp
-  iset(Iin, T) {
+  // (the same input current as last sample gives the same Iset: not solved again)
+  iset(Iin, T) { if (Iin === this.lIin && T === this.lT) return this.lOut; this.lIin = Iin; this.lT = T; return (this.lOut = this.solve(Iin, T)); }
+  solve(Iin, T) {
     const VT = VT_OF(T), R2 = this.R2, k = R2 * this.Is / this.beta;
     let v = this.x;
     for (let i = 0; i < 6; i++) {
       const e = Math.exp(Math.min(v / VT, 60));
-      v -= (v - R2 * Iin + k * e) / (1 + k * e / VT);
+      const dvv = (v - R2 * Iin + k * e) / (1 + k * e / VT); v -= dvv;
+      if (dvv < 1e-9 && dvv > -1e-9) break;     // converged to 1 nV
     }
     this.x = v;
     const Ic = this.Is * Math.exp(Math.min(v / VT, 60)), Imax = 224e-6;
@@ -330,8 +335,9 @@ class EG {
     let I = this.Iw[w]; if (!(I > 0)) I = vd / R;
     for (let i = 0; i < 4; i++) {
       const f = I * R + this.nVT * Math.log(1 + I / this.Is) - vd;
-      I -= f / (R + this.nVT / (this.Is + I));
+      const dI = f / (R + this.nVT / (this.Is + I)); I -= dI;
       if (I < 1e-15) I = 1e-15;
+      if (dI < 1e-12 * I && dI > -1e-12 * I) break;   // converged to 1 part in 1e12
     }
     this.Iw[w] = I; return I;
   }
