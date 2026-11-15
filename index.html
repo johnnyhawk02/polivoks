@@ -233,9 +233,10 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
       <div class="f nolab" style="grid-column:span 1"><span>&nbsp;</span><div class="row"><button class="btn" id="pre-del">DELETE</button></div></div>
     </div>
     <div class="box" id="g-rnd" style="grid-area:2/14/3/20;--n:6"><h2>RANDOMISE</h2>
-      <div class="f" style="grid-column:span 3"><span>SOUND</span><div class="row cells"><button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-nudge">NUDGE</button></div></div>
-      <div class="f" style="grid-column:span 2"><span>SEQUENCES</span><div class="row cells"><button class="btn" id="rnd-groove">GROOVE</button><button class="btn" id="rnd-mess">MESS</button></div></div>
-      <div class="f" style="grid-column:span 1"><span>TONE MOD</span><div class="row"><input type="range" id="rnd-tdepth" min="0" max="100" aria-label="How deep the randomised modulations go, from virtually nothing to moderate"></div></div>
+      <!-- two families: TONE (playable) with its gentle NUDGE and GROOVE; PATCH (anything goes) with its wilder NUDGE and MESS -->
+      <div class="f" style="grid-column:span 3"><span>TONE</span><div class="row cells"><button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-nudge">NUDGE</button><button class="btn" id="rnd-groove">GROOVE</button></div></div>
+      <div class="f" style="grid-column:span 3"><span>TONE MOD</span><div class="row"><input type="range" id="rnd-tdepth" min="0" max="100" aria-label="How deep the randomised modulations go, from virtually nothing to moderate"></div></div>
+      <div class="f" style="grid-column:span 3"><span>PATCH</span><div class="row cells"><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-pnudge">NUDGE</button><button class="btn" id="rnd-mess">MESS</button></div></div>
     </div>
   </div>
   <!-- no longer on the panel (clock/MIDI read-outs, external input, reset, wobble switch): kept unseen so their code still runs -->
@@ -1760,7 +1761,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.99.6';
+const VERSION = '1.99.7';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2029,12 +2030,21 @@ const dice = {
       else if (c.kind === 'sw' && c.id !== 'outSel') c.set(Math.random() < .5 ? 0 : 1);
     }
     if (state.mix1 < .3 && state.mix2 < .3) knobById('mix1').set(.6);
+    S.find((c) => c.id === 'vcaHold').set(1);   // PATCH always leaves the VCA on HOLD, so a patch always sounds
     // mod sources: all off (sequences stay), then one to three panel knobs (not the echo levels) get one source each (LFO, ENV 1, ENV 2 or VEL), ± 10…40 %
     for (const id in seqs) { const s = seqs[id]; if (MODS.some(([on]) => s[on])) { for (const [on] of MODS) s[on] = false; pushSeq(knobById(id)); } }
     for (const c of VIS().filter((c) => c.id !== 'eFb' && c.id !== 'eMix').sort(() => Math.random() - .5).slice(0, 1 + Math.floor(rnd(0, 3)))) {
       const [on, d] = pick(MODS); const s = seqOf(c.id); if (CIRC[c.id] && ((on === 'eOn' && CIRC[c.id].e) || (on === 'lOn' && CIRC[c.id].l))) continue;
       s[on] = true; s[d] = q2((Math.random() < .5 ? -1 : 1) * rnd(.1, .4)); pushSeq(c);
     }
+  },
+  // PATCH's own NUDGE: bigger steps on every knob (up to ±20 %), now and then a selector or switch moved one
+  // place (never the output switch; the VCA stays on HOLD), and every mod source that is on moved by up to ±15 %
+  pnudge() {
+    for (const c of KNOBS) if (SAFE(c)) c.set(c.v + rnd(-.2, .2) * (c.scale === 'bip' ? .5 : 1));
+    for (const c of S) if (Math.random() < .12) { if (c.kind === 'sel') c.set(Math.max(0, Math.min(c.opts.length - 1, c.v + (Math.random() < .5 ? -1 : 1)))); else if (c.kind === 'sw' && c.id !== 'outSel' && c.id !== 'vcaHold') c.set(c.v ? 0 : 1); }
+    for (const id in seqs) { const s = seqs[id]; let t = false; for (const [on, d] of MODS) if (s[on]) { s[d] = q2(s[d] + rnd(-.15, .15)); t = true; } if (t) pushSeq(knobById(id)); }
+    if (state.mix1 < .3 && state.mix2 < .3) knobById('mix1').set(.6);
   },
   // a playable new sound (tone.js): a pluck, bass, lead, keys or pad from
   // musical ranges with gentle modulation plus a few very subtle filter
