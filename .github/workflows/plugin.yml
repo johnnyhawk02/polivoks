@@ -1,0 +1,146 @@
+# FILTH plugin: builds the VST3 (and AU on macOS) and the standalone app on
+# macOS (universal), Windows and Linux, checks the engine against the web app
+# (bit-identical null tests), and on main publishes them as a GitHub release
+# (tag filth-vX.Y.Z, the web app's version).  Builds are unsigned.
+name: FILTH plugin
+
+on:
+  push:
+    branches: [main]
+    paths: ['plugin/**', 'index.html', 'view3d.js', 'factory.json', 'dsp.js', 'seq.js', 'fx.js', 'icons/**', '.github/workflows/plugin.yml']
+  pull_request:
+    paths: ['plugin/**', 'index.html', 'view3d.js', 'factory.json', 'dsp.js', 'seq.js', 'fx.js', 'icons/**', '.github/workflows/plugin.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            name: macOS
+          - os: windows-2022
+            name: Windows
+          - os: ubuntu-22.04
+            name: Linux
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev xvfb ninja-build
+
+      - name: WebView2 SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory "$env:RUNNER_TEMP\nuget"
+          "WEBVIEW2_DIR=$env:RUNNER_TEMP\nuget" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure
+        shell: bash
+        run: |
+          ARGS="-DCMAKE_BUILD_TYPE=Release -DFILTH_TESTS=ON"
+          if [ "$RUNNER_OS" = "macOS" ]; then ARGS="$ARGS -G Xcode -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then ARGS="$ARGS -G Ninja"; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then ARGS="$ARGS -DJUCE_WEBVIEW2_PACKAGE_LOCATION=$(cygpath -m "$WEBVIEW2_DIR")"; fi
+          cmake -S plugin -B build $ARGS
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Find the binaries
+        id: bin
+        shell: bash
+        run: |
+          VER=$(grep -o "const VERSION = '[0-9.]*'" index.html | grep -o "[0-9][0-9.]*")
+          echo "ver=$VER" >> $GITHUB_OUTPUT
+          A=build/FILTH_artefacts/Release
+          RENDER=$(find build -type f \( -name filth-render -o -name filth-render.exe \) | head -1)
+          HOST=$(find build -type f \( -path "*filth-host_artefacts*" \) \( -name filth-host -o -name filth-host.exe \) | head -1)
+          echo "render=$RENDER" >> $GITHUB_OUTPUT
+          echo "host=$HOST" >> $GITHUB_OUTPUT
+          echo "art=$A" >> $GITHUB_OUTPUT
+          ls -R $A | head -50
+
+      - name: Null test, engine (C++ against the web app's JavaScript)
+        run: node plugin/test/null.js ${{ steps.bin.outputs.render }}
+
+      - name: Null test, the built VST3 in a host
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then RUN="xvfb-run -a"; fi
+          $RUN node plugin/test/null-plugin.js "${{ steps.bin.outputs.host }}" "${{ steps.bin.outputs.art }}/VST3/FILTH.vst3"
+
+      - name: Sign ad hoc and check the AU (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          A=${{ steps.bin.outputs.art }}
+          codesign --force --deep -s - "$A/VST3/FILTH.vst3" "$A/AU/FILTH.component" "$A/Standalone/FILTH.app"
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "$A/AU/FILTH.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          sleep 3
+          auval -v aumu Flth Jhwk
+
+      - name: Package
+        shell: bash
+        run: |
+          A=${{ steps.bin.outputs.art }}; N=${{ matrix.name }}; V=${{ steps.bin.outputs.ver }}
+          mkdir -p dist
+          zipit() { if [ "$RUNNER_OS" = "Windows" ]; then (cd "$1" && 7z a -tzip -r "$2" $3 >/dev/null); else (cd "$1" && zip -qry "$2" $3); fi; }
+          zipit "$A/VST3" "$PWD/dist/FILTH-VST3-$N.zip" FILTH.vst3
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            zipit "$A/AU" "$PWD/dist/FILTH-AU-macOS.zip" FILTH.component
+            zipit "$A/Standalone" "$PWD/dist/FILTH-App-macOS.zip" FILTH.app
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            zipit "$A/Standalone" "$PWD/dist/FILTH-App-Windows.zip" FILTH.exe
+          else
+            zipit "$A/Standalone" "$PWD/dist/FILTH-App-Linux.zip" FILTH
+          fi
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FILTH-${{ matrix.name }}
+          path: dist/*.zip
+
+  release:
+    needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -o "const VERSION = '[0-9.]*'" index.html | grep -o "[0-9][0-9.]*")
+          TAG=filth-v$VER
+          cat > notes.md <<EOF
+          FILTH $VER as a plugin: VST3 for macOS (Apple Silicon and Intel), Windows and Linux, AU for macOS, and a standalone app.
+          Same engine and same panel as https://johnnyhawk02.github.io/polivoks/ (the engine is a C++ port that gives the web app's samples bit for bit).
+
+          Unsigned builds: on macOS run \`xattr -dr com.apple.quarantine\` on the plugin after copying it; on Windows, SmartScreen may warn about the app.
+          Install: VST3 into ~/Library/Audio/Plug-Ins/VST3 (macOS), C:\\Program Files\\Common Files\\VST3 (Windows) or ~/.vst3 (Linux); AU into ~/Library/Audio/Plug-Ins/Components.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip --clobber
+          else
+            gh release create "$TAG" dist/*.zip --title "FILTH $VER plugin" --notes-file notes.md --latest
+          fi

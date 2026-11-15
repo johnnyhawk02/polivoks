@@ -17,7 +17,11 @@
 // FILTH is the 3D panel (view3d.js).  The flat panel below is still built,
 // unseen: the 3D view takes its layout from it and works its controls.
 document.documentElement.classList.add('v3d');
-try { localStorage.removeItem('polivoks-view'); } catch (e) {}
+// where settings and presets are kept: the browser's localStorage, or inside
+// the FILTH plugin (window.filthPlugin, set by plugin/web/bridge.js) the
+// plugin's own store, saved with the DAW project
+window.filthStore = window.filthPlugin ? window.filthPlugin.store : (() => { try { return window.localStorage; } catch (e) { return null; } })();
+try { filthStore.removeItem('polivoks-view'); } catch (e) {}
 </script>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
@@ -2156,7 +2160,7 @@ function applyLang() {
 // ---------------------------------------------------------------- state
 const STORE = 'polivoks-model-v1';
 const state = {};
-let saved = {}; try { saved = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) {}
+let saved = {}; try { saved = JSON.parse(filthStore.getItem(STORE) || '{}'); } catch (e) {}
 // The wave selector's fourth position (the original fixed narrow pulse, ≈13 %)
 // is gone (a departure from the original panel): panels and presets saved
 // with it come back as the pulse with PULSE W. at 0.93, about the same duty.
@@ -2166,13 +2170,13 @@ noNarrow(saved);
 // are mapped onto FINE / PITCH (migrateDetune in dsp.js)
 const { migrateDetune } = new Function(document.getElementById('dsp-src').textContent + '\nreturn { migrateDetune };')();
 migrateDetune(saved, null);
-const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
+const save = () => { try { filthStore.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
 
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false;
 let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m) };   // for headless checks
-const VERSION = '2.15.0';
+const VERSION = '2.16.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2355,7 +2359,7 @@ const SEQ_STORE = 'polivoks-seq-v1';
 const circNeg = (id, q) => { const o = {}; for (const k in (CIRC_IDS[id] || {})) if (!(q && q[k + 'On'] && q[k + 'Depth'] < 0)) o[k + 'On'] = false; return o; };
 const CIRC_IDS = { cutoff: { e: 1, l: 1 }, o1pitch: { l: 1 }, o2pitch: { l: 1 } };
 const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, rt: false, steps: new Array(16).fill(0), eOn: false, eDepth: 0.3, lOn: false, lDepth: 0.2, e2On: false, e2Depth: 0.3, vOn: false, vDepth: 0.3, kOn: false, kDepth: 0.3 });
-let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
+let seqSaved = {}; try { seqSaved = JSON.parse(filthStore.getItem(SEQ_STORE) || '{}'); } catch (e) {}
 if (seqSaved.k) migrateDetune(null, seqSaved.k);
 const seqs = {};
 let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
@@ -2364,7 +2368,7 @@ const DIVS = [1, 2, 4, 8, 16, 32, 64, 128], DIVN = ['1/16', '1/8', '1/4', '1/2',
 const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id], circNeg(id, (seqSaved.k || {})[id])));
 // a knob is moved when any of its three lanes is on: ENV, STEP (the sequence) or LFO
 const seqAct = (s) => !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn || s.kOn));
-const saveSeq = () => { try { localStorage.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
+const saveSeq = () => { try { filthStore.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
 const KNOBS = S.filter((c) => c.kind === 'knob');
 const seqMsg = (c) => { const s = seqOf(c.id); return { t: 'seq', id: c.id, s: Object.assign({}, s, { steps: s.steps.slice() }), range: c.scale === 'bip' ? [-1, 1] : [0, 1] }; };
 // with CUTOFF picked, its ENV 2 and LFO sources are the circuit's own ENV 2 AMOUNT (fEnv) and filter MOD (fMod)
@@ -2559,7 +2563,7 @@ ed.querySelectorAll('[data-k]').forEach((b) => b.onclick = () => { const i = ORD
 const bars = [];
 for (let i = 0; i < 16; i++) { const b = document.createElement('div'); b.className = 'bar'; const f = document.createElement('i'); b.appendChild(f); grid.appendChild(b); bars.push(b); }
 let edC = null, nowStep = -1;
-function selSeq(c) { edC = c; nowStep = -1; bars.forEach((b) => b.classList.remove('now')); try { localStorage.setItem('polivoks-seq-sel', c.id); } catch (e) {} drawSeq(); if (lastPos) onSeqPos(lastPos); }
+function selSeq(c) { edC = c; nowStep = -1; bars.forEach((b) => b.classList.remove('now')); try { filthStore.setItem('polivoks-seq-sel', c.id); } catch (e) {} drawSeq(); if (lastPos) onSeqPos(lastPos); }
 // touching a knob picks it here; a tap also brings the sequencer into view
 function pickSeq(c) { if (edC !== c && pickO[c.id]) selSeq(c); }
 function openSeq(c) { pickSeq(c); ed.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
@@ -2655,7 +2659,7 @@ const paintTo = (e) => change((s) => {
 grid.addEventListener('pointerdown', (e) => { paint = stepAt(e); grid.setPointerCapture(e.pointerId); paintTo(e); e.preventDefault(); });
 grid.addEventListener('pointermove', (e) => { if (paint && e.buttons) paintTo(e); });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addEventListener(ev, () => { paint = null; });
-{ let id = 'cutoff'; try { id = localStorage.getItem('polivoks-seq-sel') || id; } catch (e) {} selSeq(knobById(id) || knobById('cutoff')); }
+{ let id = 'cutoff'; try { id = filthStore.getItem('polivoks-seq-sel') || id; } catch (e) {} selSeq(knobById(id) || knobById('cutoff')); }
 
 // ---------------------------------------------------------------- options
 // Tapping FILTH opens OPTIONS: TEMPO (its slider moves in here from the
@@ -2663,23 +2667,23 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addE
 // ambient), each a colour and a brightness.
 const LOOK_STORE = 'polivoks-look';
 const look = { hue: 87 / 360, sat: 1, lit: 0.9, finish: 'plastic', text: 0.81, lens: 0, lights: { left: { c: '#ffffff', i: 2 }, right: { c: '#d6d6d6', i: 1.91 }, amb: { c: '#ffffff', i: 2 } } };   // Johnny's defaults, 14 Nov (late); saved settings still win
-try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'lens']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
+try { const s = JSON.parse(filthStore.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'lens']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
 const lookCss = () => `hsl(${Math.round(look.hue * 360)} ${Math.round(look.sat * 100)}% ${Math.round(look.lit * 100)}%)`;
 function applyLook() {
   document.documentElement.style.setProperty('--pink', lookCss());
-  try { localStorage.setItem(LOOK_STORE, JSON.stringify(look)); } catch (e) {}
+  try { filthStore.setItem(LOOK_STORE, JSON.stringify(look)); } catch (e) {}
 }
 // KEY PRIORITY: LOW is the original keyboard (lowest key on VCO I, highest on
 // VCO II in DUO); LAST plays the newest key, or the two newest in DUO
 const PRIO_STORE = 'polivoks-prio';
-let keyPrio = 'last'; try { if (localStorage.getItem(PRIO_STORE) === 'low') keyPrio = 'low'; } catch (e) {}
+let keyPrio = 'last'; try { if (filthStore.getItem(PRIO_STORE) === 'low') keyPrio = 'low'; } catch (e) {}
 // FM MOD: ORIGINAL is the circuit as drawn (gentle FM, ±4.5 semitones at
 // full); MOD is a hardware mod (R64 jumpered, R63* 47k), about ±2.5 octaves
 const FMMOD_STORE = 'polivoks-fmmod';
-let fmMod = true; try { const v = localStorage.getItem(FMMOD_STORE); if (v) fmMod = v === 'mod'; } catch (e) {}   // default MOD
+let fmMod = true; try { const v = filthStore.getItem(FMMOD_STORE); if (v) fmMod = v === 'mod'; } catch (e) {}   // default MOD
 // BEND RANGE: semitones at full MIDI pitch bend (the bend resistor, see dsp.js)
 const BEND_STORE = 'polivoks-bend', BENDS = [1, 2, 3, 5, 7, 12];
-let bendSt = 12; try { const b = +localStorage.getItem(BEND_STORE); if (BENDS.includes(b)) bendSt = b; } catch (e) {}
+let bendSt = 12; try { const b = +filthStore.getItem(BEND_STORE); if (BENDS.includes(b)) bendSt = b; } catch (e) {}
 const optsEl = document.createElement('div'); optsEl.id = 'opts';
 optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTIONS</h2><button class="btn x" aria-label="Close">✕</button>
   <div class="f"><span>TEMPO</span><div class="row" id="opt-tempo"></div></div>
@@ -2721,9 +2725,9 @@ optPar.oninput = () => { look.lens = optPar.value / 100; applyLook(); drawOpts()
 optText.oninput = () => { look.text = optText.value / 100; applyLook(); drawOpts(); };
 optSat.oninput = () => { look.sat = optSat.value / 100; applyLook(); drawOpts(); };
 optLit.oninput = () => { look.lit = optLit.value / 100; applyLook(); drawOpts(); };
-optsEl.querySelectorAll('[data-k]').forEach((b) => { b.onclick = () => { keyPrio = b.dataset.k; try { localStorage.setItem(PRIO_STORE, keyPrio); } catch (e) {} send({ t: 'prio', v: keyPrio === 'last' }); drawOpts(); }; });
-optsEl.querySelectorAll('[data-m]').forEach((b) => { b.onclick = () => { fmMod = b.dataset.m === 'mod'; try { localStorage.setItem(FMMOD_STORE, fmMod ? 'mod' : 'orig'); } catch (e) {} send({ t: 'fmmod', v: fmMod }); drawOpts(); }; });
-optsEl.querySelectorAll('[data-b]').forEach((b) => { b.onclick = () => { bendSt = +b.dataset.b; try { localStorage.setItem(BEND_STORE, bendSt); } catch (e) {} send({ t: 'bendst', v: bendSt }); drawOpts(); }; });
+optsEl.querySelectorAll('[data-k]').forEach((b) => { b.onclick = () => { keyPrio = b.dataset.k; try { filthStore.setItem(PRIO_STORE, keyPrio); } catch (e) {} send({ t: 'prio', v: keyPrio === 'last' }); drawOpts(); }; });
+optsEl.querySelectorAll('[data-m]').forEach((b) => { b.onclick = () => { fmMod = b.dataset.m === 'mod'; try { filthStore.setItem(FMMOD_STORE, fmMod ? 'mod' : 'orig'); } catch (e) {} send({ t: 'fmmod', v: fmMod }); drawOpts(); }; });
+optsEl.querySelectorAll('[data-b]').forEach((b) => { b.onclick = () => { bendSt = +b.dataset.b; try { filthStore.setItem(BEND_STORE, bendSt); } catch (e) {} send({ t: 'bendst', v: bendSt }); drawOpts(); }; });
 optsEl.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { look.finish = b.dataset.f; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-l]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.l].c = e.value; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-li]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.li].i = e.value / 100; applyLook(); drawOpts(); }; });
@@ -2757,15 +2761,15 @@ const { makeTone } = new Function(document.getElementById('tone-src').textConten
 const makeName = new Function(document.getElementById('names-src').textContent + '\nreturn makeName;')();
 const PRE_STORE = 'polivoks-presets-v1', PRE_CUR = 'polivoks-preset-cur';
 let ppEl = null;   // the PRESETS window, made below
-let presets = []; try { presets = JSON.parse(localStorage.getItem(PRE_STORE) || '[]'); } catch (e) {}
+let presets = []; try { presets = JSON.parse(filthStore.getItem(PRE_STORE) || '[]'); } catch (e) {}
 for (const p of presets) if (p && p.k) migrateDetune(p.k, p.s);
 if (!Array.isArray(presets)) presets = [];
 let preI = -1, preName = '';
-try { const c = JSON.parse(localStorage.getItem(PRE_CUR) || 'null'); if (c) { preI = c.i; preName = c.name; } } catch (e) {}
+try { const c = JSON.parse(filthStore.getItem(PRE_CUR) || 'null'); if (c) { preI = c.i; preName = c.name; } } catch (e) {}
 if (!(presets[preI] && presets[preI].name === preName)) preI = -1;
 const freshName = () => { let n = makeName(); for (let t = 0; t < 20 && presets.some((p) => p.name === n); t++) n = makeName(); return n; };
 if (!preName) preName = freshName();
-const savePre = () => { try { localStorage.setItem(PRE_STORE, JSON.stringify(presets)); localStorage.setItem(PRE_CUR, JSON.stringify({ i: preI, name: preName })); } catch (e) {} };
+const savePre = () => { try { filthStore.setItem(PRE_STORE, JSON.stringify(presets)); filthStore.setItem(PRE_CUR, JSON.stringify({ i: preI, name: preName })); } catch (e) {} };
 const preEl = { name: document.getElementById('pre-name'), txt: document.querySelector('#pre-name i'), n: document.getElementById('pre-n'), list: document.getElementById('pre-list'), del: document.getElementById('pre-del') };
 function drawPre() {
   preEl.txt.textContent = preName; preEl.name.classList.toggle('kept', preI >= 0);
@@ -2806,8 +2810,8 @@ document.getElementById('pre-save').onclick = () => {
 // favourites: kept by name (names are unique in the list), so SAVE over a
 // preset keeps its star, and the exported file stays the same format
 const FAV_STORE = 'polivoks-preset-favs';
-let favs = new Set(); try { const f = JSON.parse(localStorage.getItem(FAV_STORE) || '[]'); if (Array.isArray(f)) favs = new Set(f); } catch (e) {}
-const saveFavs = () => { try { localStorage.setItem(FAV_STORE, JSON.stringify([...favs])); } catch (e) {} };
+let favs = new Set(); try { const f = JSON.parse(filthStore.getItem(FAV_STORE) || '[]'); if (Array.isArray(f)) favs = new Set(f); } catch (e) {}
+const saveFavs = () => { try { filthStore.setItem(FAV_STORE, JSON.stringify([...favs])); } catch (e) {} };
 let delT = null;
 preEl.del.onclick = () => {
   if (preI < 0) return;
@@ -2867,7 +2871,7 @@ ppEl.innerHTML = `<div class="win" role="dialog" aria-label="Presets"><h2>PRESET
   <div class="pp-list" role="listbox" aria-label="Presets"></div>
   <div class="f"><span>EXPORT</span><div class="row"><button class="btn" id="pp-exfav" style="flex:none;width:120px">★ ONLY</button><button class="btn" id="pp-exall" style="flex:none;width:120px">ALL</button><button class="btn" id="pp-import" style="flex:none;width:120px">IMPORT</button><b class="val" id="pp-msg" style="text-align:left;width:auto;flex:1"></b></div></div></div>`;
 document.body.appendChild(ppEl);
-let ppShow = 'all'; try { if (localStorage.getItem('polivoks-preset-show') === 'fav') ppShow = 'fav'; } catch (e) {}
+let ppShow = 'all'; try { if (filthStore.getItem('polivoks-preset-show') === 'fav') ppShow = 'fav'; } catch (e) {}
 const ppList = ppEl.querySelector('.pp-list');
 const ppMsg = (t) => { ppEl.querySelector('#pp-msg').textContent = t; };
 const ppShown = () => presets.map((p, i) => i).filter((i) => ppShow === 'all' || favs.has(presets[i].name));
@@ -2889,7 +2893,7 @@ ppList.addEventListener('click', (e) => {
   if (e.target.closest('.star')) { if (favs.has(p.name)) favs.delete(p.name); else favs.add(p.name); saveFavs(); drawPP(); return; }
   loadPre(i);
 });
-ppEl.querySelectorAll('[data-pp]').forEach((b) => { b.onclick = () => { ppShow = b.dataset.pp; try { localStorage.setItem('polivoks-preset-show', ppShow); } catch (e) {} drawPP(); ppScroll(); }; });
+ppEl.querySelectorAll('[data-pp]').forEach((b) => { b.onclick = () => { ppShow = b.dataset.pp; try { filthStore.setItem('polivoks-preset-show', ppShow); } catch (e) {} drawPP(); ppScroll(); }; });
 ppEl.querySelector('#pp-exfav').onclick = () => exportPresets(favList(), 'favourites', ppMsg);
 ppEl.querySelector('#pp-exall').onclick = () => exportPresets(presets, 'presets', ppMsg);
 ppEl.querySelector('#pp-import').onclick = () => { preIn.value = ''; preIn.click(); };
@@ -2909,12 +2913,12 @@ addEventListener('keydown', (e) => {
 drawPP();
 const FAC_SEEN = 'polivoks-factory-seen';
 fetch('factory.json?v=' + VERSION).then((r) => (r.ok ? r.json() : null)).then((j) => {
-  let seen = []; try { seen = JSON.parse(localStorage.getItem(FAC_SEEN) || '[]'); } catch (e) {}
+  let seen = []; try { seen = JSON.parse(filthStore.getItem(FAC_SEEN) || '[]'); } catch (e) {}
   if (!Array.isArray(seen)) seen = [];
   const fresh = listOf(j).filter((p) => p && !seen.includes(p.name));
   if (!fresh.length) return;
   addPresets(fresh);
-  try { localStorage.setItem(FAC_SEEN, JSON.stringify(seen.concat(fresh.map((p) => p.name)))); } catch (e) {}
+  try { filthStore.setItem(FAC_SEEN, JSON.stringify(seen.concat(fresh.map((p) => p.name)))); } catch (e) {}
 }).catch(() => {});
 
 // ---------------------------------------------------------------- audio
@@ -2934,7 +2938,25 @@ function vcoInfo(e) {
   const vol = Math.min(1, (p.outSel >= 0.5 ? ps.phones : ps.volume) * 1.3) * (e.powerLevel || 0);
   return [ps.mix1 * env * vol, ps.mix2 * env * vol, o1, o2, e.fcHz, ps.res];   // + the filter's corner (Hz) and resonance for the curve
 }`;
+// what the page tells a freshly started engine: every control, the tempo, the sequences and the options
+function engineInit() {
+  for (const c of S) send({ t: 'p', id: c.id, v: c.v });
+  send({ t: 'bpm', v: bpm });
+  for (const c of KNOBS) if (seqs[c.id]) send(seqMsg(c));
+  send({ t: 'prio', v: keyPrio === 'last' });
+  send({ t: 'fmmod', v: fmMod });
+  send({ t: 'bendst', v: bendSt });
+  send({ t: 'p', id: 'power', v: 1 });
+  for (const m of early.splice(0)) send(m);
+}
+// messages from the engine: the modulator, meter, VCO info and CLIP LED; or the sequencer's positions
+function fromEngine(d) { if (d.t === 'lfo') { lfoV = d.v; outRms = d.a; vcoI = d.vco; clipIn = Math.max(clipIn, d.clip || 0); } else onSeqPos(d); }
 async function powerOn() {
+  // inside the FILTH plugin the C++ engine is the audio (the same engine, ported): no AudioContext
+  if (window.filthPlugin) {
+    if (!node) { node = window.filthPlugin.connect(fromEngine); engineMode = 'plugin'; powered = true; document.getElementById('emode').textContent = engineMode; engineInit(); }
+    return;
+  }
   // iOS 17+: play through the silent switch, like a music app, not like a web page's beeps
   try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
   if (!ctx) {
@@ -2962,7 +2984,7 @@ registerProcessor('polivoks', PolivoksProc);`;
     }
     if (ok) {
       node = new AudioWorkletNode(ctx, 'polivoks', { numberOfInputs: 0, outputChannelCount: [2] });
-      node.port.onmessage = (m) => { if (m.data.t === 'lfo') { lfoV = m.data.v; outRms = m.data.a; vcoI = m.data.vco; clipIn = Math.max(clipIn, m.data.clip || 0); } else onSeqPos(m.data); };
+      node.port.onmessage = (m) => fromEngine(m.data);
       node.connect(analyser);
       engineMode = 'AudioWorklet';
     } else {
@@ -2977,14 +2999,7 @@ registerProcessor('polivoks', PolivoksProc);`;
       engineMode = 'main thread';
     }
     analyser.connect(ctx.destination);
-    for (const c of S) send({ t: 'p', id: c.id, v: c.v });
-    send({ t: 'bpm', v: bpm });
-    for (const c of KNOBS) if (seqs[c.id]) send(seqMsg(c));
-    send({ t: 'prio', v: keyPrio === 'last' });
-    send({ t: 'fmmod', v: fmMod });
-    send({ t: 'bendst', v: bendSt });
-    send({ t: 'p', id: 'power', v: 1 });
-    for (const m of early.splice(0)) send(m);
+    engineInit();
   }
   ctx.onstatechange();
   ctx.resume();
@@ -3068,6 +3083,7 @@ function midiMsg(m, bsii) {
   else if (ty === 0xb0 && (d1 === 120 || d1 === 123)) { pedal = false; sustained.clear(); for (const n of [...down.keys()]) off(n, 'midi'); }
 }
 function midiInit() {
+  if (window.filthPlugin) { midiEl.textContent = 'from the host'; return; }   // the plugin gets MIDI from the DAW
   if (!navigator.requestMIDIAccess) { midiEl.textContent = window.isSecureContext ? 'not supported' : 'needs https'; return; }
   midiEl.textContent = '…';
   navigator.requestMIDIAccess().then((acc) => {
@@ -3106,7 +3122,7 @@ window.filthApp = {
 import('./view3d.js?v=' + VERSION);
 // offline copy for the installed app (sw.js); a new version means a new
 // worker and a fresh cache, so an old release is never kept
-if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js?v=' + VERSION).catch(() => {});
+if ('serviceWorker' in navigator && window.isSecureContext && !window.filthPlugin) navigator.serviceWorker.register('./sw.js?v=' + VERSION).catch(() => {});
 })();
 </script>
 </body>

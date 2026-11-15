@@ -7,6 +7,7 @@
 //  then run plugin/test/null.js.
 // ============================================================================
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <string>
