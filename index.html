@@ -219,10 +219,13 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
      above SEQ's name; RANDOMISE's lettering a size down so SUSTAIN and GROOVE don't fill their keys */
   /* CHORUS: its two keys, I and II, side by side like the Juno's; DELAY's SYNC key on its top edge, just after the box's name */
   .ctl.key { justify-content: flex-start; }
-  .ctl.key .btn { width: 62px; height: 62px; margin-top: 4px; font-size: 22px; }
-  .v3d .ctl.key .btn { width: 70px; height: 70px; margin-top: 14px; font-size: 26px; }
-  .ctl.edge { position: absolute; top: -11px; left: 104px; width: auto; height: auto; padding: 0; }
-  .v3d .ctl.edge .btn { width: 72px; height: 26px; }
+  .ctl.key .btn { width: 62px; height: 30px; margin-top: 18px; padding-left: 14px; }   /* one key per cell, level with the knobs' centres; room for its LED */
+  .v3d .ctl.key .btn { width: 72px; height: 36px; margin-top: 28px; font-size: 16px; }
+  /* an on key on a box's top edge, right after its name and the same height as the name's slab */
+  .ctl.edge { position: absolute; top: -10px; left: var(--edge, 100px); width: auto; height: auto; padding: 0; }
+  .ctl.edge .btn { margin: 0; width: 70px; height: 22px; }
+  .v3d .ctl.edge .btn { width: 76px; height: 24px; font-size: 14px; margin: 0; }
+  .v3d #g-rv .ctl.edge .btn { width: 92px; }
   .v3d #seqpanel { grid-template-columns: repeat(13, calc(var(--cw) - 20px / 13)); padding-left: 10px; padding-right: 10px; }
   .v3d #seqpanel > .f:first-of-type { grid-column: span 8 !important; margin: 0; }
   .v3d #seqpanel .box.sub { grid-template-columns: repeat(var(--n), calc(var(--cw) - 20px / 13)); }
@@ -243,10 +246,11 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTHER</h2></div>
     <div class="box" id="g-a" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>ENV 1</h2></div>
     <div class="box" id="g-fe" style="grid-area:3/10/4/15;--n:5;--m:1"><h2>ENV 2</h2></div>
-    <!-- the effects (added, after the VCA): CHORUS and DELAY where the CRT was, the bottom row kept free for a third -->
+    <!-- the effects (added, after the VCA): CHORUS, DELAY and REVERB down the right, where the CRT was -->
     <div class="box" id="g-ch" style="grid-area:1/15/2/17;--n:2;--m:1"><h2>CHORUS</h2></div>
     <div class="ttl" style="grid-area:1/17/2/20"><span>FILTH</span></div>
-    <div class="box" id="g-dl" style="grid-area:2/15/3/20;--n:5;--m:1"><h2>DELAY</h2></div>
+    <div class="box" id="g-dl" style="grid-area:2/15/3/20;--n:5;--m:1;--edge:96px"><h2>DELAY</h2></div>
+    <div class="box" id="g-rv" style="grid-area:3/15/4/20;--n:5;--m:1;--edge:116px"><h2>REVERB</h2></div>
     <div class="box" id="g-vca" style="grid-area:3/8/4/10;--n:2;--m:1"><h2>VCA</h2></div>
   </div>
   <div id="g-hide" hidden></div>
@@ -1500,11 +1504,133 @@ class JunoChorus {
   }
 }
 
+// ============================================================================
+// Reverb: an EFFECT ADDED AFTER THE ECHO (the Polivoks had none).  A huge,
+// dark, slowly moving space in the Blackhole style; it models no unit and copies
+// no one's code.  A feedback delay network (Jot / Stautner-Puckette):
+//   - 30 ms pre-delay, then four allpass diffusers on each side, so a hit
+//     enters the tank already a cloud
+//   - eight delay lines (57 … 200 ms, times SIZE: up to about 1 s) mixed by
+//     an 8x8 Hadamard matrix, which loses no energy, and fed back
+//   - each line's gain is set from DECAY's RT60 (0.5 s … 60 s); a one-pole
+//     crossover in each loop gives the highs a shorter RT60 (DARK), so long
+//     tails turn into a warm wash
+//   - each line's length drifts slowly (its own sine, 0.07 … 0.3 Hz, about
+//     1.6 ms), which smears the pitch a little and stops metallic ringing
+//   - GRAVITY: each new note restarts a swell on the wet output: it starts 24 dB
+//     down and is lifted against the tail's own decay, so the tail blooms up over
+//     0.4 … 3 s instead of dying away, then drops back in 60 ms: a reversed tail
+//   - FREEZE: the loop gain goes to exactly 1, damping and input go out, and the
+//     tail holds for as long as it stays on (a soft limit in the loop bounds it)
+//   - MIX at 0 skips it altogether: the sound is bit-identical to no reverb
+// Voicing choices (line lengths, diffusion 0.62, mod depth, 110 Hz low cut on
+// the wet, input level) are by ear and by the tests in test.js (EST).
+// ============================================================================
+const REV_DEFAULTS = { rSize: 0.6, rDecay: 0.5, rGrav: 0, rDark: 0.6, rMix: 0, rFreeze: 0 };
+const REV_LINES = [57.3, 71.1, 89.7, 103.9, 131.3, 149.1, 173.9, 199.7];   // ms at SIZE 1/5
+const REV_DIFF = [[4.71, 3.59, 12.73, 9.31], [5.27, 3.11, 13.69, 8.43]];    // ms, left and right diffusers
+const REV_RATES = [0.071, 0.093, 0.117, 0.139, 0.163, 0.199, 0.241, 0.297]; // Hz, the lines' drift
+// input signs per line (even lines take the left, odd the right) and the output taps: a hit reaches the
+// outputs at once instead of cancelling in the first pass
+const REV_IN_G = 3;   // input level into the tank (EST, set by test.js's level check)
+const REV_IN = [1, 1, -1, 1, 1, -1, 1, -1];
+const REV_TL = [1, 0.3, -1, 0.3, 1, -0.3, 1, 0.3].map((v) => v / 2), REV_TR = [0.3, 1, -0.3, 1, 0.3, -1, -0.3, -1].map((v) => v / 2);
+const REV_RT = (u) => 0.5 * Math.pow(120, Math.max(0, Math.min(1, u)));    // DECAY → RT60, s
+const REV_SCALE = (u) => 0.35 + 4.65 * Math.pow(Math.max(0, Math.min(1, u)), 1.5);   // SIZE → line length factor
+class BlackHole {
+  constructor(sr) {
+    this.sr = sr; this.p = Object.assign({}, REV_DEFAULTS); this.ps = Object.assign({}, REV_DEFAULTS);
+    this.len = 1 << Math.ceil(Math.log2(sr * 1.08)); this.mask = this.len - 1;
+    this.buf = REV_LINES.map(() => new Float32Array(this.len)); this.w = 0;
+    this.preL = new Float32Array(1 << Math.ceil(Math.log2(sr * 0.04))); this.preR = new Float32Array(this.preL.length); this.pw = 0; this.pd = Math.round(0.03 * sr);
+    this.ap = REV_DIFF.map((side) => side.map((ms) => ({ b: new Float32Array(Math.ceil(ms * sr / 1000) + 1), i: 0 })));
+    this.lp = new Float64Array(8); this.dc = new Float64Array(8); this.y = new Float64Array(8); this.raw = new Float64Array(8); this.g = new Float64Array(16);
+    this.c = REV_RATES.map((_, i) => Math.cos(i * 0.9)); this.s = REV_RATES.map((_, i) => Math.sin(i * 0.9));
+    this.scale = REV_SCALE(this.p.rSize); this.wet = 0; this.frz = 0; this.idle = true;
+    this.hpL = 0; this.hpR = 0; this.envF = 0; this.envS = 0; this.swell = 1; this.ref = 0; this.swDb = 0;
+  }
+  set(id, v) { if (id in this.p) this.p[id] = v; }
+  reset() { for (const b of this.buf) b.fill(0); this.preL.fill(0); this.preR.fill(0); for (const s of this.ap) for (const a of s) a.b.fill(0); this.lp.fill(0); this.dc.fill(0); this.hpL = this.hpR = 0; this.envF = this.envS = 0; this.swell = 1; this.swDb = 0; }
+  read(b, d) {
+    const pos = this.w - d, i = Math.floor(pos), f = pos - i, m = this.mask;
+    const y0 = b[(i - 1) & m], y1 = b[i & m], y2 = b[(i + 1) & m], y3 = b[(i + 2) & m];
+    const c1 = 0.5 * (y2 - y0), c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3, c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
+    return ((c3 * f + c2) * f + c1) * f + y1;
+  }
+  process(L, R, n) {
+    const p = this.p, ps = this.ps, sr = this.sr;
+    const on = p.rMix > 0 || p.rFreeze >= 0.5;
+    if (!on && this.wet === 0) { this.idle = true; return; }   // off: untouched, no cost
+    if (this.idle) { this.reset(); this.idle = false; }
+    const sm = 1 - Math.exp(-1 / (0.02 * sr)), slow = 1 - Math.exp(-1 / (0.6 * sr));
+    const mix = Math.max(0, Math.min(1, p.rMix)), frzT = p.rFreeze >= 0.5 ? 1 : 0, fk = 1 / (0.05 * sr);
+    // per block: the loop gains from DECAY and DARK at the current size
+    ps.rDecay += (p.rDecay - ps.rDecay) * Math.min(1, sm * n); ps.rDark += (p.rDark - ps.rDark) * Math.min(1, sm * n); ps.rGrav += (p.rGrav - ps.rGrav) * Math.min(1, sm * n);
+    const rt = REV_RT(ps.rDecay), dark = Math.max(0, Math.min(1, ps.rDark)), rtH = rt * (1 - 0.9 * dark);
+    const xk = 1 - Math.exp(-2 * Math.PI * 8000 * Math.pow(0.1, dark) / sr), dck = 2 * Math.PI * 12 / sr, hk = 1 - Math.exp(-2 * Math.PI * 110 / sr);
+    const tgtScale = REV_SCALE(p.rSize), g = this.g;
+    for (let i = 0; i < 8; i++) { const Ls = REV_LINES[i] * 1e-3 * this.scale * sr; g[i] = Math.pow(10, -3 * Ls / (rt * sr)); g[8 + i] = Math.pow(10, -3 * Ls / (rtH * sr)); }
+    const rtE = Math.sqrt(rt * rtH), grav = Math.max(0, Math.min(1, ps.rGrav)), swT = (0.4 + 2.6 * grav) * sr, swk = 1 - Math.exp(-1 / (0.005 * sr)), cutk = 1 - Math.exp(-1 / (0.06 * sr)), ink = REV_IN_G / Math.sqrt(1 + rt / 4);
+    const MOD = 0.0016 * sr, raw = this.raw, ap = this.ap, buf = this.buf, y = this.y, lp = this.lp, dc = this.dc, msk = this.mask;
+    const rot = REV_RATES.map((r) => [Math.cos(2 * Math.PI * r / sr), Math.sin(2 * Math.PI * r / sr)]);
+    for (let s = 0; s < n; s++) {
+      this.wet += (mix - this.wet) * sm; if (!on && this.wet < 1e-5) this.wet = 0;
+      this.frz += frzT > this.frz ? Math.min(fk, frzT - this.frz) : -Math.min(fk, this.frz - frzT);
+      this.scale += (tgtScale - this.scale) * slow;
+      const xL = L[s], xR = R[s], fz = this.frz, inG = ink * (1 - fz);
+      // GRAVITY: a new note (the input's fast envelope jumping over its slow one) restarts the swell
+      const a = Math.abs(xL) + Math.abs(xR);
+      this.envF += (a - this.envF) * 0.01; this.envS += (a - this.envS) * 0.0004;
+      if (this.envF > 2 * this.envS + 0.02 && this.ref <= 0) { this.swell = 0; this.ref = 0.08 * sr; }
+      this.ref--; if (this.swell < 1) this.swell = Math.min(1, this.swell + 1 / swT);
+      // pre-delay, then the diffusers
+      const preM = this.preL.length - 1; this.preL[this.pw] = xL; this.preR[this.pw] = xR;
+      let dL = this.preL[(this.pw - this.pd) & preM], dR = this.preR[(this.pw - this.pd) & preM];
+      this.pw = (this.pw + 1) & preM;
+      for (let k = 0; k < 4; k++) {
+        let q = ap[0][k], o = q.b[q.i], v = dL + 0.62 * o; q.b[q.i] = v; dL = o - 0.62 * v; q.i = q.i + 1 === q.b.length ? 0 : q.i + 1;
+        q = ap[1][k]; o = q.b[q.i]; v = dR + 0.62 * o; q.b[q.i] = v; dR = o - 0.62 * v; q.i = q.i + 1 === q.b.length ? 0 : q.i + 1;
+      }
+      // read the eight lines (each drifting), damp them, mix by Hadamard, write back
+      for (let i = 0; i < 8; i++) {
+        const c = this.c[i], sn = this.s[i]; this.c[i] = c * rot[i][0] - sn * rot[i][1]; this.s[i] = sn * rot[i][0] + c * rot[i][1];
+        const d = REV_LINES[i] * 1e-3 * this.scale * sr + MOD * (1 + sn);
+        const v = this.read(buf[i], d); raw[i] = v;
+        lp[i] += (v - lp[i]) * xk; const hi = v - lp[i];
+        const gl = g[i] + (1 - g[i]) * fz, gh = g[8 + i] + (1 - g[8 + i]) * fz;
+        y[i] = gl * lp[i] + gh * hi;
+      }
+      if ((s & 255) === 0) for (let i = 0; i < 8; i++) { const r = 1 / Math.hypot(this.c[i], this.s[i]); this.c[i] *= r; this.s[i] *= r; }
+      // fast 8-point Walsh-Hadamard, scaled to keep energy
+      let a0 = y[0] + y[1], a1 = y[0] - y[1], a2 = y[2] + y[3], a3 = y[2] - y[3], a4 = y[4] + y[5], a5 = y[4] - y[5], a6 = y[6] + y[7], a7 = y[6] - y[7];
+      let b0 = a0 + a2, b1 = a1 + a3, b2 = a0 - a2, b3 = a1 - a3, b4 = a4 + a6, b5 = a5 + a7, b6 = a4 - a6, b7 = a5 - a7;
+      const H = 0.35355339059327373, h = [b0 + b4, b1 + b5, b2 + b6, b3 + b7, b0 - b4, b1 - b5, b2 - b6, b3 - b7];
+      const w = this.w;
+      for (let i = 0; i < 8; i++) {
+        let v = h[i] * H + (i & 1 ? dR : dL) * inG * REV_IN[i];
+        dc[i] += (v - dc[i]) * dck * (1 - fz); v -= dc[i];                  // keeps DC out of the loop
+        const av = v < 0 ? -v : v; if (av > 2) v = (v < 0 ? -1 : 1) * (2 + Math.tanh(av - 2));   // only if something is wrong
+        buf[i][w] = v;
+      }
+      this.w = (w + 1) & msk;
+      // out: each side taps all eight lines with its own signs (mostly its own input's lines); low cut on the wet
+      let oL = 0, oR = 0; for (let i = 0; i < 8; i++) { oL += REV_TL[i] * raw[i]; oR += REV_TR[i] * raw[i]; }   // taken before the loop gain, so the first pass is heard whatever DECAY
+      this.hpL += (oL - this.hpL) * hk; this.hpR += (oR - this.hpR) * hk; oL -= this.hpL; oR -= this.hpR;
+      // GRAVITY: during the swell the wet is lifted against the tail's own decay and starts 24 dB down, so it
+      // rises; at the end it drops back over about 60 ms, like a reversed tail cut off
+      const sT = this.swell < 1 ? grav * Math.min(12, 60 / rtE * this.swell * swT / sr - 24 * (1 - this.swell)) : 0;
+      this.swDb += (sT - this.swDb) * (this.swell < 1 ? swk : cutk);
+      const sw = this.swDb === 0 ? 1 : Math.pow(10, this.swDb / 20), m = this.wet, dg = Math.min(1, 2 - 2 * m), wg = Math.min(1, 2 * m) * 0.7 * sw;
+      L[s] = xL * dg + oL * wg; R[s] = xR * dg + oR * wg;
+    }
+  }
+}
+
 // Passes knob values to the synth engine , the chorus or the echo, so the knob
 // sequencer can drive both through the one setParam it knows.
 class FxRack {
-  constructor(engine, fx, ch) { this.e = engine; this.fx = fx; this.ch = ch; }
-  setParam(id, v) { if (id in this.fx.p) this.fx.set(id, v); else if (this.ch && id in this.ch.p) this.ch.set(id, v); else this.e.setParam(id, v); }
+  constructor(engine, fx, ch, rv) { this.e = engine; this.fx = fx; this.ch = ch; this.rv = rv; }
+  setParam(id, v) { if (id in this.fx.p) this.fx.set(id, v); else if (this.ch && id in this.ch.p) this.ch.set(id, v); else if (this.rv && id in this.rv.p) this.rv.set(id, v); else this.e.setParam(id, v); }
   noteOn(n, vel) { this.e.noteOn(n, vel); }
   // the mod sources KnobSeq reads (it holds this rack, not the engine)
   get envN() { return this.e.envN; } get env2N() { return this.e.env2N; } get lfoV() { return this.e.lfoV; } get vel() { return this.e.vel; } get key() { return this.e.key; }
@@ -1533,7 +1659,7 @@ class Level {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { JunoChorus, CH_LFO, CH_DEPTH, CH_DMIN, CH_DMAX, CH_TRIM, TapeEcho, FxRack, Level, SoftClip, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
+if (typeof module !== 'undefined') module.exports = { JunoChorus, CH_LFO, CH_DEPTH, CH_DMIN, CH_DMAX, CH_TRIM, TapeEcho, FxRack, Level, SoftClip, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX, BlackHole, REV_DEFAULTS, REV_RT };
 </script>
 <script type="text/plain" id="tone-src">// ============================================================================
 // TONE: a random patch that is meant to be PLAYABLE, for the RANDOM row.
@@ -1985,7 +2111,7 @@ const L = {
   // likewise each VCO's MOD (LFO to pitch): set from MODULATE with that VCO's PITCH picked (its LFO source)
   'g-hide': [knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0),
     // the chorus's mode and the delay's FREE/SYNC: worked by keys on the panel (kind 'key' below)
-    Object.assign(sel('chorus', 'CHORUS', [{t:'OFF'},{t:'I'},{t:'II'},{t:'I+II'}], 0), { span: 130 }), sw('eSync', 'FREE', 'SYNC', 1)],
+    Object.assign(sel('chorus', 'CHORUS', [{t:'OFF'},{t:'I'},{t:'II'},{t:'I+II'}], 0), { span: 130 }), sw('eSync', 'FREE', 'SYNC', 1), sw('rFreeze', 'OFF', 'FREEZE', 0)],
   'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', 'ЦИКЛ.', 'ОДНОКР.', 0)],
   // ENV 1 is the amplifier's envelope (hardwired to the VCA), ENV 2 the filter's (its depth is ENV 2 AMOUNT);
   // the VCA's own MOD and HOLD sit in a small box of their own
@@ -1997,6 +2123,10 @@ const L = {
   'g-ch': [key('chorus', 'I', 1), key('chorus', 'II', 2)],
   'g-dl': [knob('eTime', 'TIME', '06', .5), knob('eFb', 'FEEDBACK', '06', .35), knob('eMix', 'MIX', '06', .25),
     knob('eTone', 'TONE', '06', .45), knob('eSpread', 'SPREAD', '06', .8), Object.assign(key('eSync', 'SYNC', 1), { edge: true })],
+  // the reverb (a Blackhole-style space, fx.js BlackHole): SIZE, DECAY (0.5 s … 60 s), GRAVITY (the tail swells up),
+  // DARK, MIX (0 = off, and the sound is untouched) and the FREEZE key on its edge
+  'g-rv': [knob('rSize', 'SIZE', '06', .6), knob('rDecay', 'DECAY', '06', .5), knob('rGrav', 'GRAVITY', '06', 0),
+    knob('rDark', 'DARK', '06', .6), knob('rMix', 'MIX', '06', 0), Object.assign(key('rFreeze', 'FREEZE', 1), { edge: true })],
 };
 // fMode switch: top = ПФ (band-pass, value 1), bottom = ФНЧ (low-pass, 0) → invert mapping
 const INVERT = { fMode: true, voice: false, fEgMode: true, aEgMode: true };   // LOOP up = 1 (the original's ⋀⋀)
@@ -2039,7 +2169,7 @@ let engineMode = '', node = null, ctx = null, analyser = null, powered = false;
 let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m) };   // for headless checks
-const VERSION = '2.12.0';
+const VERSION = '2.13.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2203,6 +2333,8 @@ for (const k of keys) {
   if (!c.keyed) { const set = c.set; c.set = (v, quiet) => { set(v, quiet); lit(); }; c.keyed = true; }
   k.b.onclick = () => c.set((c.v | 0) ^ k.bit); lit();
 }
+// an edge key sits just after its box's name, a set gap from it
+for (const k of keys) if (k.edge) { const h = k.b.closest('.box').querySelector('h2'); const e = k.b.parentElement; e.style.left = (h.offsetLeft + h.offsetWidth + 10) + 'px'; e.style.top = (h.offsetTop + (h.offsetHeight - k.b.offsetHeight) / 2) + 'px'; }
 applyLang();
 pwActive();
 document.getElementById('resetbtn').onclick = () => {
@@ -2279,7 +2411,9 @@ const RND = {
     s.drift = Math.random() < .9 ? Math.round((Math.random() < .5 ? -1 : 1) * rnd(6, 40)) : 0; },
 };
 const knobById = (id) => KNOBS.find((c) => c.id === id);
-const SAFE = (c) => c.id !== 'volume' && c.id !== 'phones' && c.id !== 'drive';   // never throw the level around
+const SAFE = (c) => c.id !== 'volume' && c.id !== 'phones' && c.id !== 'drive' && !REV(c);   // never throw the level around
+// the reverb (added in v2.13.0) is left as it is by every RANDOMISE key
+const REV = (c) => /^r[A-Z]/.test(c.id);
 // echo level knobs: PATCH keeps them in a tame range and MESS leaves them alone
 const ECHO_RANGE = { eFb: [.1, .55], eMix: [0, .4], eTone: [.2, .85] };
 // seqsOff: every step sequence stops (GROOVE, MESS); with mods too, every mod source as well (TONE, PATCH)
@@ -2310,6 +2444,7 @@ const dice = {
   // a new sound: every knob and selector at random (level knobs kept)
   patch() {
     for (const c of S) {
+      if (REV(c)) continue;
       if (ECHO_RANGE[c.id]) c.set(rnd(...ECHO_RANGE[c.id]));
       else if (c.kind === 'knob' && SAFE(c)) c.set(c.scale === 'bip' ? (c.id === 'tune' ? rnd(-.15, .15) : c.id.endsWith('pitch') ? pick([0, 0, 0, 7 / 12, -5 / 12, 1, -1]) : rnd(-.3, .3)) : Math.random() ** (c.id.startsWith('mix') || c.id === 'cutoff' ? .6 : 1));
       else if (c.kind === 'sel') c.set(Math.floor(rnd(0, c.opts.length)));
@@ -2334,7 +2469,7 @@ const dice = {
   // place (never the output switch; the VCA stays on HOLD), and every mod source that is on moved by up to ±15 %
   pnudge() {
     for (const c of KNOBS) if (SAFE(c)) c.set(c.v + rnd(-.2, .2) * (c.scale === 'bip' ? .5 : 1));
-    for (const c of S) if (Math.random() < .12) { if (c.kind === 'sel') c.set(Math.max(0, Math.min(c.opts.length - 1, c.v + (Math.random() < .5 ? -1 : 1)))); else if (c.kind === 'sw' && c.id !== 'outSel' && c.id !== 'vcaHold') c.set(c.v ? 0 : 1); }
+    for (const c of S) if (Math.random() < .12) { if (c.kind === 'sel') c.set(Math.max(0, Math.min(c.opts.length - 1, c.v + (Math.random() < .5 ? -1 : 1)))); else if (c.kind === 'sw' && c.id !== 'outSel' && c.id !== 'vcaHold' && !REV(c)) c.set(c.v ? 0 : 1); }
     for (const id in seqs) { const s = seqs[id]; let t = false; for (const [on, d] of MODS) if (s[on]) { s[d] = q2(s[d] + rnd(-.15, .15)); t = true; } if (t) pushSeq(knobById(id)); }
     if (state.mix1 < .3 && state.mix2 < .3) knobById('mix1').set(.6);
   },
@@ -2404,9 +2539,10 @@ ed.querySelectorAll('[data-note]').forEach((b) => {
 // touching a knob on the panel picks it too
 const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2fm: 'VCO II FM', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', o1fine: 'VCO I FINE', o2fine: 'VCO II FINE', o1pw: 'VCO I PULSE W.', o2pw: 'VCO II PULSE W.', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE',
   fA: 'ENV 2 ATTACK', fD: 'ENV 2 DECAY', fS: 'ENV 2 SUSTAIN', fR: 'ENV 2 RELEASE', fMod: 'VCF MOD', fEnv: 'ENV 2 AMOUNT', aA: 'ENV 1 ATTACK', aD: 'ENV 1 DECAY', aS: 'ENV 1 SUSTAIN', aR: 'ENV 1 RELEASE', aMod: 'VCA MOD',
-  eTime: 'DELAY TIME', eFb: 'DELAY FEEDBACK', eTone: 'DELAY TONE', eSpread: 'DELAY SPREAD', eMix: 'DELAY MIX' };
+  eTime: 'DELAY TIME', eFb: 'DELAY FEEDBACK', eTone: 'DELAY TONE', eSpread: 'DELAY SPREAD', eMix: 'DELAY MIX',
+  rSize: 'REVERB SIZE', rDecay: 'REVERB DECAY', rGrav: 'REVERB GRAVITY', rDark: 'REVERB DARK', rMix: 'REVERB MIX' };
 const knobSel = q('.sq-knob'), pickO = {}, ORDER = [];
-for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-a', 'g-fe', 'g-vca', 'g-dl']) {
+for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-a', 'g-fe', 'g-vca', 'g-dl', 'g-rv']) {
   const h = document.querySelector('#' + gid + ' h2'), og = document.createElement('optgroup');
   og.label = h ? h.textContent : 'PERFORMANCE';
   for (const c of L[gid]) if (c.kind === 'knob') {
@@ -2808,14 +2944,14 @@ async function powerOn() {
     ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     ctx.onstatechange = () => { powered = ctx.state === 'running'; document.getElementById('emode').textContent = powered ? engineMode : 'waiting for a click or key'; };
     const lib = ['dsp-src', 'seq-src', 'fx-src'].map((id) => document.getElementById(id).textContent).join('\n') + VCO_INFO;
-    // synth -> knob sequencer -> stereo chorus -> stereo echo (both added effects, not circuit)
+    // synth -> knob sequencer -> stereo chorus -> stereo echo -> reverb (all added effects, not circuit)
     const src = lib + `
 class PolivoksProc extends AudioWorkletProcessor {
-  constructor() { super(); this.e = new PolivoksEngine(sampleRate); this.fx = new TapeEcho(sampleRate); this.ch = new JunoChorus(sampleRate);
-    this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx, this.ch), (m) => this.port.postMessage(m));
+  constructor() { super(); this.e = new PolivoksEngine(sampleRate); this.fx = new TapeEcho(sampleRate); this.ch = new JunoChorus(sampleRate); this.rv = new BlackHole(sampleRate);
+    this.q = new KnobSeq(sampleRate, new FxRack(this.e, this.fx, this.ch, this.rv), (m) => this.port.postMessage(m));
     this.port.onmessage = (m) => this.q.msg(m.data); this.lev = new Level(sampleRate); this.clip = new SoftClip(); }
   process(i, o) { const out = o[0], L = out[0], R = out[1] || new Float32Array(L.length);
-    this.q.render(L, L.length); this.ch.process(L, R, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length); this.clip.process(L, R, L.length);
+    this.q.render(L, L.length); this.ch.process(L, R, L.length); this.fx.bpm = this.q.tempo(); this.fx.process(L, R, L.length); this.rv.process(L, R, L.length); this.clip.process(L, R, L.length);
     // the modulator's output for the panel edges, about 60 times a second
     if (this.lev.add(L, R, L.length)) this.port.postMessage({ t: 'lfo', v: this.e.lfoV, a: this.lev.rms, vco: vcoInfo(this.e), clip: this.clip.read() });
     return true; }
@@ -2835,10 +2971,10 @@ registerProcessor('polivoks', PolivoksProc);`;
     } else {
       // Fallback for sandboxed frames that refuse worklet modules: run the same
       // engine on the main thread through a ScriptProcessorNode.
-      const [Eng, KS, Echo, Rack, Lev, vInfo, Clip, Cho] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, Level, vcoInfo, SoftClip, JunoChorus];')(), lev = new Lev(ctx.sampleRate);
-      const sclip = new Clip(), fx = new Echo(ctx.sampleRate), cho = new Cho(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx, cho), onSeqPos);
+      const [Eng, KS, Echo, Rack, Lev, vInfo, Clip, Cho, Rev] = new Function(lib + '; return [PolivoksEngine, KnobSeq, TapeEcho, FxRack, Level, vcoInfo, SoftClip, JunoChorus, BlackHole];')(), lev = new Lev(ctx.sampleRate);
+      const sclip = new Clip(), fx = new Echo(ctx.sampleRate), cho = new Cho(ctx.sampleRate), rev = new Rev(ctx.sampleRate), eng = new Eng(ctx.sampleRate), qs = new KS(ctx.sampleRate, new Rack(eng, fx, cho, rev), onSeqPos);
       const sp = ctx.createScriptProcessor(1024, 0, 2);
-      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); cho.process(L0, R0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); sclip.process(L0, R0, L0.length); clipIn = Math.max(clipIn, sclip.read()); lfoV = eng.lfoV; if (lev.add(L0, R0, L0.length)) { outRms = lev.rms; vcoI = vInfo(eng); } };
+      sp.onaudioprocess = (ev) => { const L0 = ev.outputBuffer.getChannelData(0), R0 = ev.outputBuffer.getChannelData(1); qs.render(L0, L0.length); cho.process(L0, R0, L0.length); fx.bpm = qs.tempo(); fx.process(L0, R0, L0.length); rev.process(L0, R0, L0.length); sclip.process(L0, R0, L0.length); clipIn = Math.max(clipIn, sclip.read()); lfoV = eng.lfoV; if (lev.add(L0, R0, L0.length)) { outRms = lev.rms; vcoI = vInfo(eng); } };
       node = { port: { postMessage: (d) => qs.msg(d) } };
       sp.connect(analyser);
       engineMode = 'main thread';
