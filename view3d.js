@@ -247,7 +247,7 @@ function paintCtl(ctx, c) {
   } else if (c.kind === 'sel') {
     const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 40;
     c.opts.forEach((o, i) => {
-      ctx.font = `600 12px ${MONO}`; const out = o.t && c.span > 160 ? Math.abs(Math.sin(selA(c, i))) * (ctx.measureText(o.t).width / 2 + 2) : 0;   // wide words clear the knob
+      ctx.font = `600 12px ${MONO}`; const out = o.t && c.span >= 130 ? Math.abs(Math.sin(selA(c, i))) * (ctx.measureText(o.t).width / 2 + 2) : 0;   // wide words clear the knob
       const a = selA(c, i), px = cx + Math.sin(a) * (KR + 11 + out), py = cy - Math.cos(a) * (KR + 12);
       if (o.t) text(ctx, o.t, px, py, `600 12px ${MONO}`);
       else { ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); IC[o.i].forEach(([u, v], k) => ctx[k ? 'lineTo' : 'moveTo'](px - 8 + u, py - 6 + v)); ctx.stroke(); }
@@ -303,7 +303,7 @@ sectionNames(panel, upper);
 // at the filter's corner now (the engine reports it, envelope and LFO included) with a peak that
 // grows with RESONANCE; a flat face of its own, redrawn when the corner, resonance or type change
 if (respEl) {
-  const r0 = rel(respEl, panel), r = { x: r0.x + 6, y: r0.y + 14, w: r0.w - 12, h: r0.h - 28 };
+  const r0 = rel(respEl, panel), r = { x: r0.x + 8, y: r0.y + 14, w: r0.w - 24, h: r0.h - 28 };   // clear of the box's right edge
   const [c, ctx] = canvas(r.w, r.h), tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const m = tintable(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }));
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.h), m); mesh.position.copy(pos(r.x + r.w / 2, r.y + r.h / 2, 0.15)); upper.add(mesh);
