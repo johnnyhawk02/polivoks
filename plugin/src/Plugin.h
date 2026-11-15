@@ -127,7 +127,7 @@ public:
   explicit FilthEditor(FilthProcessor&);
   ~FilthEditor() override;
   void resized() override;
-  void paint(juce::Graphics& g) override { g.fillAll(juce::Colour(0xff1a1a1a)); }
+  void paint(juce::Graphics& g) override;   // the splash's background, until the page has drawn its splash
 
 private:
   void timerCallback() override;
@@ -136,6 +136,7 @@ private:
   FilthProcessor& proc;
   std::unique_ptr<juce::ZipFile> zip;
   std::string initJson; int gen = 0, dbg = 0;
+  juce::uint32 born = 0, shownAt = 0;   // the page is hidden until its splash is up (no white flash)
   std::unique_ptr<juce::WebBrowserComponent> web;
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FilthEditor)
 };
