@@ -679,6 +679,8 @@ class PolivoksEngine {
   }
 
   // ENVELOPE MODE is gone from the panel: both envelopes always run single (⋀, no repeat), whatever a preset holds
+  // the filter's small-signal corner now (Hz): ω0 = Iset/(4·VT·C1)·√(wL·a3) from K140VCF.step; display only
+  get fcHz() { const f = this.vcf; return (this.iset || 0) / (4 * VT_OF(this.Tchip) * f.C1) * Math.sqrt(f.wL * f.a3) / (2 * Math.PI); }
   setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
@@ -746,7 +748,7 @@ class PolivoksEngine {
       const vl = lfo;
       const Iin = 12.5 / 100e3 + FilterCV.wiper(tc, 12.5, 47e3)
                 + FilterCV.wiper(ps.fEnv, ef * this.egF.Vpk, 100e3) + FilterCV.wiper(ps.fMod, vl, 100e3);
-      const Iset = this.fcv.iset(Iin, this.Tchip);
+      const Iset = this.fcv.iset(Iin, this.Tchip); this.iset = Iset;   // read by the panel's filter curve (fcHz)
       vcf.setRes(ps.res);
       const VTf = VT_OF(this.Tchip);
       const lp = p.fMode < 0.5;

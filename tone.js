@@ -124,7 +124,6 @@ function makeTone(rand, amount) {
   const mk = (id, depth, lo, hi, divs) => { const div = pick(divs || [4, 8, 16, 32]); seqs[id] = { on: true, len: pick([8, 16, 16]), div, drift: drift(), depth: Math.round(depth * 10000) / 10000, slew: Math.round(Math.max(0.08, Math.min(2, div * 0.125 * mid(0.3, 0.6))) * 1000) / 1000, steps: walk(lo, hi) }; };
   mk('cutoff', mid(0.02, 0.05) * fac, -0.4, 1);
   if (R() < 0.5) mk('res', mid(0.02, 0.06) * fac, -1, 1);
-  if (R() < 0.4) mk('fEnv', mid(0.03, 0.07) * fac, -1, 1);
   // pulse width on every square or narrow-pulse oscillator.  The knob only narrows from 50 %,
   // so a plain square is moved off 50 % a little first to give the sequence room both ways.
   for (const n of ['o1', 'o2']) {

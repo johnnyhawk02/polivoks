@@ -218,6 +218,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
     <div class="box" id="g-vca" style="grid-area:3/18/4/20;--n:2;--m:1"><h2>VCA</h2></div>
   </div>
+  <div id="g-hide" hidden></div>
   <div class="panel low" id="low">
     <div class="torn"></div>
     <div class="box" id="seqpanel" style="grid-area:1/1/3/14;--n:13" aria-label="Knob modulation"><h2>MODULATE</h2></div>
@@ -923,6 +924,8 @@ class PolivoksEngine {
   }
 
   // ENVELOPE MODE is gone from the panel: both envelopes always run single (⋀, no repeat), whatever a preset holds
+  // the filter's small-signal corner now (Hz): ω0 = Iset/(4·VT·C1)·√(wL·a3) from K140VCF.step; display only
+  get fcHz() { const f = this.vcf; return (this.iset || 0) / (4 * VT_OF(this.Tchip) * f.C1) * Math.sqrt(f.wL * f.a3) / (2 * Math.PI); }
   setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
@@ -990,7 +993,7 @@ class PolivoksEngine {
       const vl = lfo;
       const Iin = 12.5 / 100e3 + FilterCV.wiper(tc, 12.5, 47e3)
                 + FilterCV.wiper(ps.fEnv, ef * this.egF.Vpk, 100e3) + FilterCV.wiper(ps.fMod, vl, 100e3);
-      const Iset = this.fcv.iset(Iin, this.Tchip);
+      const Iset = this.fcv.iset(Iin, this.Tchip); this.iset = Iset;   // read by the panel's filter curve (fcHz)
       vcf.setRes(ps.res);
       const VTf = VT_OF(this.Tchip);
       const lp = p.fMode < 0.5;
@@ -1434,7 +1437,6 @@ function makeTone(rand, amount) {
   const mk = (id, depth, lo, hi, divs) => { const div = pick(divs || [4, 8, 16, 32]); seqs[id] = { on: true, len: pick([8, 16, 16]), div, drift: drift(), depth: Math.round(depth * 10000) / 10000, slew: Math.round(Math.max(0.08, Math.min(2, div * 0.125 * mid(0.3, 0.6))) * 1000) / 1000, steps: walk(lo, hi) }; };
   mk('cutoff', mid(0.02, 0.05) * fac, -0.4, 1);
   if (R() < 0.5) mk('res', mid(0.02, 0.06) * fac, -1, 1);
-  if (R() < 0.4) mk('fEnv', mid(0.03, 0.07) * fac, -1, 1);
   // pulse width on every square or narrow-pulse oscillator.  The knob only narrows from 50 %,
   // so a plain square is moved off 50 % a little first to give the sequence room both ways.
   for (const n of ['o1', 'o2']) {
@@ -1658,8 +1660,11 @@ const L = {
   // FILTER: cutoff, resonance, type, then the two modulation amounts;
   // its envelope (A D S R and mode) has its own box, FILTER ENVELOPE, underneath
   'g-f': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0, 'ТИП'),
-    knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0),
+    { kind: 'resp' },
   ],
+  // ENV 2 AMOUNT and the filter's MOD are still in the circuit but off the panel: they are set from
+  // MODULATE with CUTOFF picked (its ENV 2 and LFO sliders), and saved, loaded and sequenced as before
+  'g-hide': [knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0)],
   'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // ENV 1 is the amplifier's envelope (hardwired to the VCA), ENV 2 the filter's (its depth is ENV 2 AMOUNT);
   // the VCA's own MOD and HOLD sit in a small box of their own
@@ -1736,7 +1741,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.88.1';
+const VERSION = '1.89.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1863,7 +1868,7 @@ function makeLed(c) {
 })();
 let respSvg = null;
 function makeResp() {
-  const d = document.createElement('div'); d.className = 'resp';
+  const d = document.createElement('div'); d.className = 'resp'; d.style.gridColumn = 'span 2';   // the live filter curve (drawn in 3D)
   respSvg = el('svg', { width: 72, height: 54, viewBox: '0 0 96 70' }, d); respSvg.style.marginTop = '4px'; drawResp(); return d;
 }
 function drawResp() {
@@ -1910,13 +1915,18 @@ const seqs = {};
 let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
 // RATE: how many 16th notes one step lasts, from 1/16 up to 8 bars
 const DIVS = [1, 2, 4, 8, 16, 32, 64, 128], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR', '2 BARS', '4 BARS', '8 BARS'];
-const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id]));
+const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id], id === 'cutoff' ? { eOn: false, lOn: false } : {}));   // cutoff's ENV 2 / LFO are the circuit's (CIRC)
 // a knob is moved when any of its three lanes is on: ENV, STEP (the sequence) or LFO
 const seqAct = (s) => !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn));
 const saveSeq = () => { try { localStorage.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
 const KNOBS = S.filter((c) => c.kind === 'knob');
 const seqMsg = (c) => { const s = seqOf(c.id); return { t: 'seq', id: c.id, s: Object.assign({}, s, { steps: s.steps.slice() }), range: c.scale === 'bip' ? [-1, 1] : [0, 1] }; };
-function pushSeq(c) { const s = seqOf(c.id); send(seqMsg(c)); c.seqMark(seqAct(s)); if (!seqAct(s)) c.showMod(null); saveSeq(); }
+// with CUTOFF picked, its ENV 2 and LFO sources are the circuit's own ENV 2 AMOUNT (fEnv) and filter MOD (fMod)
+const CIRC = { e: 'fEnv', l: 'fMod' }, circMemo = { fEnv: 0.45, fMod: 0.3 };
+const circOf = (k) => edC && edC.id === 'cutoff' ? S.find((c) => c.id === CIRC[k]) : null;
+const cutMarked = () => ['fEnv', 'fMod'].some((id) => state[id] > 0.005);
+const markOf = (c) => seqAct(seqs[c.id]) || (c.id === 'cutoff' && cutMarked());
+function pushSeq(c) { const s = seqOf(c.id); send(seqMsg(c)); c.seqMark(markOf(c)); if (!seqAct(s)) c.showMod(null); saveSeq(); }
 for (const c of KNOBS) if ((seqSaved.k || {})[c.id]) c.seqMark(seqAct(seqOf(c.id)));
 function onSeqPos(d) {
   lastPos = d;
@@ -2081,6 +2091,13 @@ function drawSeq() {
   q('.sq-envv').textContent = pc(s.eDepth); q('.sq-lfov').textContent = pc(s.lDepth);
   q('.sq-env').value = Math.round(s.eDepth * 100); q('.sq-lfo').value = Math.round(s.lDepth * 100);
   q('.sq-env2').value = Math.round(s.e2Depth * 100); q('.sq-vel').value = Math.round(s.vDepth * 100); q('.sq-env2v').textContent = pc(s.e2Depth); q('.sq-velv').textContent = pc(s.vDepth);
+  // CUTOFF: its ENV 2 and LFO are the circuit's ENV 2 AMOUNT and filter MOD (0…100 %)
+  for (const [k, cl, vc] of [['e', '.sq-eon', '.sq-env'], ['l', '.sq-lon', '.sq-lfo']]) {
+    const c = circOf(k); if (!c) continue; const on = c.v > 0.005;
+    q(cl).classList.toggle('lit', on); q(cl).closest('.sq-lane').classList.toggle('off', !on);
+    q(vc).value = Math.round(c.v * 100); q(vc + 'v').textContent = Math.round(c.v * 100) + '%';
+  }
+  { const c = S.find((x) => x.id === 'cutoff'); if (c) c.seqMark(markOf(c)); }
   for (const id in pickO) pickO[id].textContent = (seqAct(seqs[id]) ? '● ' : '') + pickO[id].dataset.n;
   knobSel.value = edC.id;
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
@@ -2098,8 +2115,9 @@ function markStep() {
 }
 const change = (fn) => { const s = seqOf(edC.id); fn(s); pushSeq(edC); drawSeq(); };
 q('.sq-on').onclick = () => change((s) => { s.on = !s.on; });
-q('.sq-eon').onclick = () => change((s) => { s.eOn = !s.eOn; });
-q('.sq-lon').onclick = () => change((s) => { s.lOn = !s.lOn; });
+const circToggle = (c) => { if (c.v > 0.005) { circMemo[c.id] = c.v; c.set(0); } else c.set(circMemo[c.id]); drawSeq(); };
+q('.sq-eon').onclick = () => { const c = circOf('e'); if (c) circToggle(c); else change((s) => { s.eOn = !s.eOn; }); };
+q('.sq-lon').onclick = () => { const c = circOf('l'); if (c) circToggle(c); else change((s) => { s.lOn = !s.lOn; }); };
 q('.sq-e2on').onclick = () => change((s) => { s.e2On = !s.e2On; });
 q('.sq-von').onclick = () => change((s) => { s.vOn = !s.vOn; });
 // the MOD SOURCE knobs (drawn in 3D as small knobs, dragged like the panel's): for the knob shown,
@@ -2115,7 +2133,7 @@ const MK = {
   lDepth: { bip: true, get: (s) => s.lDepth, set: (s, v) => { s.lDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.lOn = true; } },
 };
 // MOD and ENV depth: vertical sliders, centre = 0 (snaps within 2 %); moving one switches that source on
-for (const [cl, k, onK] of [['.sq-lfo', 'lDepth', 'lOn'], ['.sq-env', 'eDepth', 'eOn'], ['.sq-env2', 'e2Depth', 'e2On'], ['.sq-vel', 'vDepth', 'vOn']]) q(cl).oninput = (e) => change((s) => { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; s[k] = v; s[onK] = true; });
+for (const [cl, k, onK] of [['.sq-lfo', 'lDepth', 'lOn'], ['.sq-env', 'eDepth', 'eOn'], ['.sq-env2', 'e2Depth', 'e2On'], ['.sq-vel', 'vDepth', 'vOn']]) q(cl).oninput = (e) => { const cc = circOf(k[0]); if (cc && (k === 'eDepth' || k === 'lDepth')) { cc.set(Math.max(0, e.target.value / 100)); drawSeq(); return; } change((s) => { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; s[k] = v; s[onK] = true; }); };
 const seqMods = [...ed.querySelectorAll('.mknob')].map((el) => {
   const m = MK[el.dataset.m];
   return { id: 'seq-' + el.dataset.m, kind: 'knob', scale: m.bip ? 'bip' : 'u', def: m.bip ? 0 : m.get(SEQ_DEF()), el,
@@ -2280,7 +2298,7 @@ function loadPre(i) {
   for (const c of KNOBS) {
     const was = seqs[c.id], now = p.s && p.s[c.id];
     if (!was && !now) continue;
-    seqs[c.id] = Object.assign(SEQ_DEF(), now || {}, { steps: ((now && now.steps) || new Array(16).fill(0)).slice() });
+    seqs[c.id] = Object.assign(SEQ_DEF(), now || {}, { steps: ((now && now.steps) || new Array(16).fill(0)).slice() }, c.id === 'cutoff' ? { eOn: false, lOn: false } : {});
     pushSeq(c);
   }
   if (p.bpm) { bpm = p.bpm; send({ t: 'bpm', v: bpm }); saveSeq(); }
@@ -2323,7 +2341,7 @@ function vcoInfo(e) {
   const o2 = (53 - 69) / 12 - kb.cv2 / 1.5 + R[p.o2range | 0] + tune + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch);
   const env = p.vcaHold >= 0.5 ? 1 : Math.max(0, e.egA.v / e.egA.Vpk);
   const vol = Math.min(1, (p.outSel >= 0.5 ? ps.phones : ps.volume) * 1.3) * (e.powerLevel || 0);
-  return [ps.mix1 * env * vol, ps.mix2 * env * vol, o1, o2];
+  return [ps.mix1 * env * vol, ps.mix2 * env * vol, o1, o2, e.fcHz, ps.res];   // + the filter's corner (Hz) and resonance for the curve
 }`;
 async function powerOn() {
   // iOS 17+: play through the silent switch, like a music app, not like a web page's beeps
