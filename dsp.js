@@ -684,7 +684,7 @@ class PolivoksEngine {
   setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
-  noteOn(n, vel) { this.kb.press(n); this.vel = vel == null ? 1 : vel; }   // vel 0…1: the last key's MIDI velocity (1 from the screen and computer keys), a mod source only
+  noteOn(n, vel) { this.kb.press(n); this.vel = vel == null ? 1 : vel; this.key = n; }   // key: the last key pressed, for the KEY mod source   // vel 0…1: the last key's MIDI velocity (1 from the screen and computer keys), a mod source only
   noteOff(n) { this.kb.release(n); }
   allOff() { this.kb.held.length = 0; }
   setPrio(last) { this.kb.last = !!last; }
