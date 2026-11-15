@@ -247,7 +247,7 @@ function paintCtl(ctx, c) {
   } else if (c.kind === 'sel') {
     const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 40;
     c.opts.forEach((o, i) => {
-      ctx.font = `600 12px ${MONO}`; const out = o.t && c.span ? Math.abs(Math.sin(selA(c, i))) * (ctx.measureText(o.t).width / 2 + 2) : 0;   // wide words clear the knob
+      ctx.font = `600 12px ${MONO}`; const out = o.t && c.span > 160 ? Math.abs(Math.sin(selA(c, i))) * (ctx.measureText(o.t).width / 2 + 2) : 0;   // wide words clear the knob
       const a = selA(c, i), px = cx + Math.sin(a) * (KR + 11 + out), py = cy - Math.cos(a) * (KR + 12);
       if (o.t) text(ctx, o.t, px, py, `600 12px ${MONO}`);
       else { ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); IC[o.i].forEach(([u, v], k) => ctx[k ? 'lineTo' : 'moveTo'](px - 8 + u, py - 6 + v)); ctx.stroke(); }
@@ -625,6 +625,13 @@ for (const el of low.querySelectorAll('button')) {
     const s = el.textContent + el.className; if (s !== last) { last = s; p.userData.redraw(draw); }
     if (++n % 5 === 0) { const f = fade(el); if (f !== lastF) { lastF = f; p.material = p.material.map((m) => m.clone()); fadeMat(p.material, f); p.castShadow = f > 0.5; renderer.shadowMap.needsUpdate = true; } }
   });
+}
+// keys on the top panel (MORE in the FX box): raised black keys like the lower panel's
+for (const el of panel.querySelectorAll('button')) {
+  const r = rel(el, panel); if (!r.w) continue;
+  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, PAPER);
+  const p = plate(r.w, r.h, 9, draw, { bevel: true }); p.position.copy(pos(r.x, r.y, 0)); upper.add(p);
+  p.userData.btn = el; hits.push(p);
 }
 // ENV DEPTH and LFO DEPTH: two small knobs in the sequencer (A.seqMods), bipolar, with a white
 // value ring from the centre like the panel's own knobs; they act on the knob being edited
