@@ -265,7 +265,6 @@ function paintUpper(ctx) {
     text(ctx, lab.textContent, l.x + l.w / 2, l.y + (fs(lab) + 2) / 2, `600 ${fs(lab)}px ${MONO}`, INK, 'center', .5);
     ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(d.x + d.w / 2, d.y + d.h / 2, d.w / 2 + 3, 0, 7); ctx.fill();
   }
-  if (respEl) { const r = rel(respEl.querySelector('svg') || respEl, panel); ctx.save(); ctx.translate(r.x, r.y); paintResp(ctx, fmCtl && fmCtl.v >= 0.5); ctx.restore(); }
 }
 const respEl = panel.querySelector('.resp'), fmCtl = A.S.find((c) => c.id === 'fMode');
 const upSlab = slab(UW, UH, paintUpper); upSlab.userData.repaint(); upper.add(upSlab);
@@ -281,7 +280,38 @@ function sectionNames(root, group) {
   }
 }
 sectionNames(panel, upper);
-// filter response sketch: painted into the panel face, which is repainted when the filter type changes
+// FILTHER's live filter curve (where ENV 2 AMOUNT and MOD were): the response of a 2-pole LP or BP
+// at the filter's corner now (the engine reports it, envelope and LFO included) with a peak that
+// grows with RESONANCE; a flat face of its own, redrawn when the corner, resonance or type change
+if (respEl) {
+  const r0 = rel(respEl, panel), r = { x: r0.x + 6, y: r0.y + 14, w: r0.w - 12, h: r0.h - 28 };
+  const [c, ctx] = canvas(r.w, r.h), tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const m = tintable(new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }));
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.h), m); mesh.position.copy(pos(r.x + r.w / 2, r.y + r.h / 2, 0.15)); upper.add(mesh);
+  const F0 = Math.log10(20), F1 = Math.log10(20000), DB0 = -30, DB1 = 18;
+  const draw = (fc, res, bp) => {
+    const w = r.w, h = r.h, Q = 0.7 + 14 * Math.pow(res, 2.5);
+    ctx.fillStyle = PINK; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(1, 0); ctx.lineTo(1, h - 1); ctx.lineTo(w, h - 1); ctx.stroke();
+    ctx.setLineDash([2, 3]); ctx.beginPath(); const y0 = h * DB1 / (DB1 - DB0); ctx.moveTo(1, y0); ctx.lineTo(w, y0); ctx.stroke(); ctx.setLineDash([]);   // 0 dB
+    ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.beginPath();
+    for (let x = 0; x <= w; x += 1.5) {
+      const f = Math.pow(10, F0 + (F1 - F0) * x / w), q = f / Math.max(1, fc), d = Math.sqrt((1 - q * q) ** 2 + (q / Q) ** 2);
+      const g = bp ? (q / Q) / d : 1 / d, db = Math.max(DB0, Math.min(DB1, 20 * Math.log10(g + 1e-9)));
+      const y = (DB1 - db) / (DB1 - DB0) * (h - 2); x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+    text(ctx, bp ? 'BP' : 'LP', w - 3, 8, `600 9px ${MONO}`, INK, 'right');
+    tex.needsUpdate = true;
+  };
+  let last = '', n = 0;
+  ticks.push(() => {
+    if (++n % 2) return;
+    const v = A.vco || [], fc = v[4] || 20 * Math.pow(1000, (A.S.find((x) => x.id === 'cutoff') || { v: .5 }).v), res = v[5] != null ? v[5] : (A.S.find((x) => x.id === 'res') || { v: 0 }).v, bp = fmCtl && fmCtl.v >= 0.5;
+    const sig = Math.round(Math.log(fc) * 60) + ',' + Math.round(res * 100) + bp; if (sig === last) return; last = sig; draw(fc, res, bp);
+  });
+}
+// filter type: the panel face is repainted when it changes
 { let last = fmCtl && fmCtl.v; ticks.push(() => { if (fmCtl && fmCtl.v !== last) { last = fmCtl.v; upSlab.userData.repaint(); } }); }
 
 // a small red LED up and right of every knob: lit while its STEP, ENV or LFO is on (the page marks
@@ -752,6 +782,7 @@ function release() {
   if (grab) clearTimeout(grab.hold);
   if (grab && grab.c && !grab.moved) {
     const c = grab.c;
+    if (c.kind === 'knob' && A.KNOBS.includes(c)) A.pickSeq(c);   // a click or tap (no drag) shows the knob's modulation
     if (c.kind === 'sw') c.set(c.v ? 0 : 1);
     else if (c.kind === 'sel') c.set((c.v + 1) % c.opts.length);
   }
