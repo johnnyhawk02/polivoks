@@ -470,7 +470,8 @@ let title = null, titleU = null;
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
   let nameNow = null; ticks.push(() => {
-    const n = 'FILTH';   // Johnny: the CRT says FILTH only (the name drawing stays for any word) if (n === nameNow) return; nameNow = n;
+    const n = 'FILTH';   // Johnny: the CRT says FILTH only (the name drawing stays for any word)
+    if (n === nameNow) return; nameNow = n;   // redraw only when it changes, not every frame
     for (const [k, b] of [['tText', 0], ['tGlow', 9]]) { const old = titleU[k].value; titleU[k].value = nameLayer(b, n); if (old) old.dispose(); }
   });
   titleU = { tText: { value: nameLayer(0, 'FILTH') }, tGlow: { value: nameLayer(9, 'FILTH') }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
