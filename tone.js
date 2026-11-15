@@ -88,7 +88,6 @@ function makeTone(rand, amount) {
   // resonance: moderate, lower when the cutoff is low
   k.res = rng(0.15, 0.55, 0.05, 0.8);
   if (k.cutoff < 0.5) k.res = Math.min(k.res, 0.45);
-  if (bold() && (kind === 'pluck' || kind === 'bass')) k.fEgMode = 1;   // repeating filter envelope
 
   // ---- one gentle modulation job for the shared LFO (or none)
   const job = wpick({ none: 3, vibrato: kind === 'lead' || kind === 'pad' ? 4 : 2, sway: kind === 'pad' || kind === 'keys' ? 3 : 2, tremolo: 1, sparkle: 1 });

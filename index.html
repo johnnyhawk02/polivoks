@@ -117,7 +117,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .sq-main { display: flex; gap: 10px; align-items: stretch; margin: 0 8px; }
   /* MOD SOURCE: a box inside the knob's box, under the knob's name */
   .low .box.sub { padding: 20px 0 10px; gap: 8px var(--g); margin-top: 8px; }
-  .sq-kn .row { height: 40px; gap: 8px; } .sq-kn .val { flex: none; width: auto; min-width: 0; text-align: left; }
+  /* the five SEQ knobs sit together, one cell each: name, knob, value under it */
+  .sq-kn { margin: 0 2px; align-items: center; } .sq-kn .row { flex-direction: column; height: auto; gap: 3px; } .sq-kn .val { flex: none; width: 100%; text-align: center; }
   .sq-main > .sq-grid { flex: 1; margin: 0; height: auto; min-height: 86px; }
   .sq-main .f { margin: 0; }
   .sq-mods { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; flex: none; }
@@ -191,6 +192,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .v3d .f > span { font-size: 14px; line-height: 16px; }
   .v3d .val { font-size: 15px; }
   .v3d .f .row { height: 36px; }
+  .v3d .sq-kn .row { height: auto; }
   .v3d .btn, .v3d .sb, .v3d .f select, .v3d .pre-name { height: 36px; font-size: 15px; }
   .v3d .sb.sm { width: 36px; }
   .v3d .pre-name, .v3d .f select { font-size: 16px; }
@@ -206,14 +208,15 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"><h2>MASTER</h2></div>
     <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:6;--m:1"><h2>VCO I</h2></div>
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
-    <div class="box" id="g-mix" style="grid-area:3/10/4/13;--n:3;--m:1"><h2>MIXER</h2></div>
+    <div class="box" id="g-mix" style="grid-area:3/15/4/18;--n:3;--m:1"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/10;--n:6;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTHER</h2></div>
-    <div class="box" id="g-fe" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>ENV 1</h2></div>
+    <div class="box" id="g-a" style="grid-area:2/10/3/15;--n:4;--m:1"><h2>ENV 1</h2></div>
+    <div class="box" id="g-fe" style="grid-area:3/10/4/15;--n:4;--m:1"><h2>ENV 2</h2></div>
     <div class="ttl" style="grid-area:1/15/3/20"><span id="ttlw">FILTH</span></div>
     <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
-    <div class="box" id="g-a" style="grid-area:3/13/4/20;--n:7;--m:1"><h2>ENV 2</h2></div>
+    <div class="box" id="g-vca" style="grid-area:3/18/4/20;--n:2;--m:1"><h2>VCA</h2></div>
   </div>
   <div class="panel low" id="low">
     <div class="torn"></div>
@@ -919,7 +922,8 @@ class PolivoksEngine {
     this.scope = new Float32Array(512); this.scopeI = 0;
   }
 
-  setParam(id, v) { if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
+  // ENVELOPE MODE is gone from the panel: both envelopes always run single (⋀, no repeat), whatever a preset holds
+  setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
   noteOn(n, vel) { this.kb.press(n); this.vel = vel == null ? 1 : vel; }   // vel 0…1: the last key's MIDI velocity (1 from the screen and computer keys), a mod source only
@@ -958,9 +962,9 @@ class PolivoksEngine {
 
       // envelopes
       const ef = this.egF.step(this.gate, potA(p.fA, 200, 1e6), potA(p.fD, 1e3, 2e6), ps.fS, potA(p.fR, 1e3, 2e6), p.fEgMode >= 0.5);
-      this.envN = ef;                             // ENV 1 (filter envelope) 0…1, a mod source for any knob (seq.js)
+      this.envN = ef;                             // filter envelope 0…1: the ENV 2 mod source (seq.js keys e*)
       const ea = this.egA.step(this.gate, potA(p.aA, 200, 1e6), potA(p.aD, 1e3, 2e6), ps.aS, potA(p.aR, 1e3, 2e6), p.aEgMode >= 0.5);
-      this.env2N = ea;                            // ENV 2 (amplifier envelope) 0…1, a mod source too
+      this.env2N = ea;                            // amplifier envelope 0…1: the ENV 1 mod source (seq.js keys e2*)
 
       // slow thermal drift of each expo pair (±0.3 K random walk)
       this.drift1 += (rng.g() * 0.02 - this.drift1 * 1e-4); this.drift2 += (rng.g() * 0.02 - this.drift2 * 1e-4);
@@ -1053,7 +1057,7 @@ class KnobSeq {
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
     this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth }; drift = % faster (+) or slower (−) than the clock
-                         // mod sources: eDepth × ENV 1 (filter env, 0…1), e2Depth × ENV 2 (amp env), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
+                         // mod sources: eDepth × the filter envelope (ENV 2 on the panel, 0…1), e2Depth × the amp envelope (ENV 1), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;
@@ -1394,7 +1398,6 @@ function makeTone(rand, amount) {
   // resonance: moderate, lower when the cutoff is low
   k.res = rng(0.15, 0.55, 0.05, 0.8);
   if (k.cutoff < 0.5) k.res = Math.min(k.res, 0.45);
-  if (bold() && (kind === 'pluck' || kind === 'bass')) k.fEgMode = 1;   // repeating filter envelope
 
   // ---- one gentle modulation job for the shared LFO (or none)
   const job = wpick({ none: 3, vibrato: kind === 'lead' || kind === 'pad' ? 4 : 2, sway: kind === 'pad' || kind === 'keys' ? 3 : 2, tremolo: 1, sparkle: 1 });
@@ -1657,9 +1660,11 @@ const L = {
   'g-f': [knob('cutoff', 'ЧАСТОТА СРЕЗА', 'mm', .59), knob('res', 'РЕЗОНАНС', 'mm', .5), sw('fMode', 'ПФ', 'ФНЧ', 0, 'ТИП'),
     knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0),
   ],
-  'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
-  'g-a': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35),
-    knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), sw('aEgMode', '⋀', '⋀⋀', 0, 'РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ')],
+  'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
+  // ENV 1 is the amplifier's envelope (hardwired to the VCA), ENV 2 the filter's (its depth is ENV 2 AMOUNT);
+  // the VCA's own MOD and HOLD sit in a small box of their own
+  'g-a': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
+  'g-vca': [knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0)],
   // added effect, not on the Polivoks: TIME's seven ticks are the SYNC note values
   // six controls in six cells, the same width as VCO I and II above
   'g-echo': [knob('eTime', 'TIME', '06', .5), sw('eSync', 'FREE', 'SYNC', 1), knob('eFb', 'FEEDBACK', '06', .35),
@@ -1673,7 +1678,7 @@ const EN = {
   'ГЕНЕРАТОР I':'VCO I','ГЕНЕРАТОР II':'VCO II','ДИАПАЗОН':'RANGE','ФОРМА':'WAVE','МОДУЛЯЦИЯ':'MOD',
   'РАССТРОЙКА':'DETUNE','ВЫСОТА':'PITCH','МИКШЕР':'MIXER','ШУМ':'NOISE','ВНЕШ.':'EXT.','ФИЛЬТР':'FILTER','УСИЛИТЕЛЬ':'AMPLIFIER',
   'АТАКА':'ATTACK','ЗАТУХАНИЕ':'DECAY','ПЬЕДЕСТАЛ':'SUSTAIN','ПОСЛЕЗВУЧ.':'RELEASE','ЧАСТОТА СРЕЗА':'CUTOFF',
-  'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
+  'РЕЗОНАНС':'RESONANCE','ПФ':'BP','ФНЧ':'LP','ОГИБАЮЩАЯ':'ENV 2 AMOUNT','РЕЖИМ ГЕНЕРАТОРА<br>ОГИБАЮЩЕЙ':'ENVELOPE<br>MODE',
   'ОГИБ.':'ENV','БЫСТР.':'FAST','МЕДЛ.':'SLOW','ВКЛ.':'HOLD','ЧМ':'FM','ТИП':'TYPE','СЕТЬ':'POWER','МИН.':'MIN','МАКС.':'MAX','ЭМС «ПОЛИВОКС»':'EMS “POLIVOKS”',
 };
 // labels are written in Russian as on the original panel and shown in English
@@ -1731,7 +1736,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.87.0';
+const VERSION = '1.88.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1886,7 +1891,7 @@ for (const gid in L) {
 // FILTER, MIXER and AMPLIFIER sit on their own grid: equal columns across
 // the box and their own, shorter row height, rows from the top, so the knobs
 // are closer together vertically.  Any spare height falls at the bottom.
-for (const gid of ['g-f', 'g-fe']) document.getElementById(gid).classList.add('own');
+for (const gid of ['g-f', 'g-fe', 'g-a']) document.getElementById(gid).classList.add('own');
 applyLang();
 pwActive();
 document.getElementById('resetbtn').onclick = () => {
@@ -2010,22 +2015,22 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f notekeys nolab" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>
   <div class="box sub" style="grid-column:span 9;--n:9" aria-label="Step sequence for the knob"><h2>SEQ</h2>
     <div class="f sq-lane"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
-    <div class="f dim sq-kn" style="grid-column:span 2"><span>LENGTH</span><div class="row"><div class="mknob" data-m="len" aria-label="LENGTH"></div><b class="val sq-len"></b></div></div>
-    <div class="f dim sq-kn" style="grid-column:span 2"><span>RATE</span><div class="row"><div class="mknob" data-m="div" aria-label="RATE"></div><b class="val sq-div"></b></div></div>
-    <div class="f dim sq-kn" style="grid-column:span 2"><span>DEPTH</span><div class="row"><div class="mknob" data-m="depth" aria-label="DEPTH"></div><b class="val sq-depthv"></b></div></div>
-    <div class="f dim sq-kn" style="grid-column:span 2"><span>SLEW</span><div class="row"><div class="mknob" data-m="slew" aria-label="SLEW"></div><b class="val sq-slewv"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 1"><span>LENGTH</span><div class="row"><div class="mknob" data-m="len" aria-label="LENGTH"></div><b class="val sq-len"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 1"><span>RATE</span><div class="row"><div class="mknob" data-m="div" aria-label="RATE"></div><b class="val sq-div"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 1"><span>DEPTH</span><div class="row"><div class="mknob" data-m="depth" aria-label="DEPTH"></div><b class="val sq-depthv"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 1"><span>SLEW</span><div class="row"><div class="mknob" data-m="slew" aria-label="SLEW"></div><b class="val sq-slewv"></b></div></div>
+    <div class="f dim sq-kn" style="grid-column:span 1"><span>DRIFT</span><div class="row"><div class="mknob" data-m="drift" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"></div><b class="val sq-driftv"></b></div></div>
     <div class="sq-main" style="grid-column:1/-1"><div class="sq-grid dim"></div></div>
     <div class="f dim nolab" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
-    <div class="f dim" style="grid-column:span 4"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>
   </div>
   <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="LFO to this knob"><h2>LFO</h2>
     <div class="f nolab sq-lane vlane"><span>LFO</span><button class="sb sm sym sq-lon" aria-label="LFO to this knob on or off">●</button><input type="range" class="vert sq-lfo" min="-100" max="100" aria-label="LFO to this knob depth"><b class="val sq-lfov"></b></div>
   </div>
-  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="ENV 1 (filter envelope) to this knob"><h2>ENV 1</h2>
-    <div class="f nolab sq-lane vlane"><span>ENV 1</span><button class="sb sm sym sq-eon" aria-label="ENV 1 (filter envelope) to this knob on or off">●</button><input type="range" class="vert sq-env" min="-100" max="100" aria-label="ENV 1 (filter envelope) to this knob depth"><b class="val sq-envv"></b></div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="ENV 1 (amplifier envelope) to this knob"><h2>ENV 1</h2>
+    <div class="f nolab sq-lane vlane"><span>ENV 1</span><button class="sb sm sym sq-e2on" aria-label="ENV 1 (amplifier envelope) to this knob on or off">●</button><input type="range" class="vert sq-env2" min="-100" max="100" aria-label="ENV 1 (amplifier envelope) to this knob depth"><b class="val sq-env2v"></b></div>
   </div>
-  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="ENV 2 (amplifier envelope) to this knob"><h2>ENV 2</h2>
-    <div class="f nolab sq-lane vlane"><span>ENV 2</span><button class="sb sm sym sq-e2on" aria-label="ENV 2 (amplifier envelope) to this knob on or off">●</button><input type="range" class="vert sq-env2" min="-100" max="100" aria-label="ENV 2 (amplifier envelope) to this knob depth"><b class="val sq-env2v"></b></div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="ENV 2 (filter envelope) to this knob"><h2>ENV 2</h2>
+    <div class="f nolab sq-lane vlane"><span>ENV 2</span><button class="sb sm sym sq-eon" aria-label="ENV 2 (filter envelope) to this knob on or off">●</button><input type="range" class="vert sq-env" min="-100" max="100" aria-label="ENV 2 (filter envelope) to this knob depth"><b class="val sq-envv"></b></div>
   </div>
   <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="Key velocity to this knob"><h2>VEL</h2>
     <div class="f nolab sq-lane vlane"><span>VEL</span><button class="sb sm sym sq-von" aria-label="Key velocity to this knob on or off">●</button><input type="range" class="vert sq-vel" min="-100" max="100" aria-label="Key velocity to this knob depth"><b class="val sq-velv"></b></div>
@@ -2041,10 +2046,10 @@ ed.querySelectorAll('[data-note]').forEach((b) => {
 // which knob is being edited: a list grouped by panel section (● = its sequence runs);
 // touching a knob on the panel picks it too
 const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2detune: 'DETUNE', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', o1pw: 'VCO I PULSE W.', o2pw: 'VCO II PULSE W.', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE',
-  fA: 'VCF ATTACK', fD: 'VCF DECAY', fS: 'VCF SUSTAIN', fR: 'VCF RELEASE', fMod: 'VCF MOD', fEnv: 'VCF ENV', aA: 'VCA ATTACK', aD: 'VCA DECAY', aS: 'VCA SUSTAIN', aR: 'VCA RELEASE', aMod: 'VCA MOD',
+  fA: 'ENV 2 ATTACK', fD: 'ENV 2 DECAY', fS: 'ENV 2 SUSTAIN', fR: 'ENV 2 RELEASE', fMod: 'VCF MOD', fEnv: 'ENV 2 AMOUNT', aA: 'ENV 1 ATTACK', aD: 'ENV 1 DECAY', aS: 'ENV 1 SUSTAIN', aR: 'ENV 1 RELEASE', aMod: 'VCA MOD',
   eTime: 'ECHO TIME', eFb: 'ECHO FEEDBACK', eTone: 'ECHO TONE', eSpread: 'ECHO SPREAD', eMix: 'ECHO MIX' };
 const knobSel = q('.sq-knob'), pickO = {}, ORDER = [];
-for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-fe', 'g-a', 'g-echo']) {
+for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-a', 'g-fe', 'g-vca', 'g-echo']) {
   const h = document.querySelector('#' + gid + ' h2'), og = document.createElement('optgroup');
   og.label = h ? h.textContent : 'PERFORMANCE';
   for (const c of L[gid]) if (c.kind === 'knob') {
@@ -2081,7 +2086,7 @@ function drawSeq() {
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
   q('.sq-depthv').textContent = Math.round(s.depth * 100) + '%';
   q('.sq-slewv').textContent = s.slew < 1 ? Math.round(s.slew * 1000) + ' ms' : s.slew.toFixed(2) + ' s';
-  q('.sq-drift').value = s.drift || 0; q('.sq-driftv').textContent = (s.drift > 0 ? '+' : '') + (s.drift || 0) + '%';
+  q('.sq-driftv').textContent = (s.drift > 0 ? '+' : '') + (s.drift || 0) + '%';
   q('.sq-bpm').value = bpm; q('.sq-bpmv').textContent = bpm + ' BPM';
   markStep();
 }
@@ -2105,6 +2110,7 @@ const MK = {
   div: { get: (s) => DIVS.indexOf(s.div) / (DIVS.length - 1), set: (s, u) => { s.div = DIVS[Math.round(u * (DIVS.length - 1))]; } },
   depth: { get: (s) => s.depth, set: (s, u) => { s.depth = Math.round(u * 100) / 100; } },
   slew: { get: (s) => Math.sqrt(s.slew / 2), set: (s, u) => { s.slew = 2 * u * u; } },
+  drift: { bip: true, get: (s) => (s.drift || 0) / 50, set: (s, v) => { let d = Math.round(v * 50); if (Math.abs(d) <= 1) d = 0; s.drift = d; } },   // −50…+50 %, 0 = exactly the tempo
   eDepth: { bip: true, get: (s) => s.eDepth, set: (s, v) => { s.eDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.eOn = true; } },
   lDepth: { bip: true, get: (s) => s.lDepth, set: (s, v) => { s.lDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.lOn = true; } },
 };
@@ -2122,8 +2128,6 @@ ed.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => change((s) => {
   else if (a === 'clear') s.steps.fill(0);
 }));
 // DRIFT: 0 % is exactly the tempo; the dial snaps to it within 2 %
-q('.sq-drift').oninput = (e) => change((s) => { let v = +e.target.value; if (Math.abs(v) <= 2) v = 0; s.drift = v; });
-q('.sq-drift').ondblclick = () => change((s) => { s.drift = 0; });
 q('.sq-bpm').oninput = (e) => { bpm = +e.target.value; send({ t: 'bpm', v: bpm }); saveSeq(); drawSeq(); };
 // draw steps by dragging across the bars; drawing switches the sequence on
 let paint = null;

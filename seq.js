@@ -13,7 +13,7 @@ class KnobSeq {
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
     this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth }; drift = % faster (+) or slower (−) than the clock
-                         // mod sources: eDepth × ENV 1 (filter env, 0…1), e2Depth × ENV 2 (amp env), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
+                         // mod sources: eDepth × the filter envelope (ENV 2 on the panel, 0…1), e2Depth × the amp envelope (ENV 1), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;

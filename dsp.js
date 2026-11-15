@@ -678,7 +678,8 @@ class PolivoksEngine {
     this.scope = new Float32Array(512); this.scopeI = 0;
   }
 
-  setParam(id, v) { if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
+  // ENVELOPE MODE is gone from the panel: both envelopes always run single (⋀, no repeat), whatever a preset holds
+  setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
   noteOn(n, vel) { this.kb.press(n); this.vel = vel == null ? 1 : vel; }   // vel 0…1: the last key's MIDI velocity (1 from the screen and computer keys), a mod source only
@@ -717,9 +718,9 @@ class PolivoksEngine {
 
       // envelopes
       const ef = this.egF.step(this.gate, potA(p.fA, 200, 1e6), potA(p.fD, 1e3, 2e6), ps.fS, potA(p.fR, 1e3, 2e6), p.fEgMode >= 0.5);
-      this.envN = ef;                             // ENV 1 (filter envelope) 0…1, a mod source for any knob (seq.js)
+      this.envN = ef;                             // filter envelope 0…1: the ENV 2 mod source (seq.js keys e*)
       const ea = this.egA.step(this.gate, potA(p.aA, 200, 1e6), potA(p.aD, 1e3, 2e6), ps.aS, potA(p.aR, 1e3, 2e6), p.aEgMode >= 0.5);
-      this.env2N = ea;                            // ENV 2 (amplifier envelope) 0…1, a mod source too
+      this.env2N = ea;                            // amplifier envelope 0…1: the ENV 1 mod source (seq.js keys e2*)
 
       // slow thermal drift of each expo pair (±0.3 K random walk)
       this.drift1 += (rng.g() * 0.02 - this.drift1 * 1e-4); this.drift2 += (rng.g() * 0.02 - this.drift2 * 1e-4);
