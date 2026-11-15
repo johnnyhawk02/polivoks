@@ -209,11 +209,11 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-mix" style="grid-area:3/10/4/13;--n:3;--m:1"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/10;--n:6;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTHER</h2></div>
-    <div class="box" id="g-fe" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>FILTER ENVELOPE</h2></div>
+    <div class="box" id="g-fe" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>ENV 1</h2></div>
     <div class="ttl" style="grid-area:1/15/3/20"><span id="ttlw">FILTH</span></div>
     <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
-    <div class="box" id="g-a" style="grid-area:3/13/4/20;--n:7;--m:1"><h2>AMPLIFIER</h2></div>
+    <div class="box" id="g-a" style="grid-area:3/13/4/20;--n:7;--m:1"><h2>ENV 2</h2></div>
   </div>
   <div class="panel low" id="low">
     <div class="torn"></div>
@@ -922,7 +922,7 @@ class PolivoksEngine {
   setParam(id, v) { if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
-  noteOn(n) { this.kb.press(n); }
+  noteOn(n, vel) { this.kb.press(n); this.vel = vel == null ? 1 : vel; }   // vel 0…1: the last key's MIDI velocity (1 from the screen and computer keys), a mod source only
   noteOff(n) { this.kb.release(n); }
   allOff() { this.kb.held.length = 0; }
   setPrio(last) { this.kb.last = !!last; }
@@ -958,8 +958,9 @@ class PolivoksEngine {
 
       // envelopes
       const ef = this.egF.step(this.gate, potA(p.fA, 200, 1e6), potA(p.fD, 1e3, 2e6), ps.fS, potA(p.fR, 1e3, 2e6), p.fEgMode >= 0.5);
-      this.envN = ef;                             // filter envelope 0…1, read by the knob ENV lanes (seq.js)
+      this.envN = ef;                             // ENV 1 (filter envelope) 0…1, a mod source for any knob (seq.js)
       const ea = this.egA.step(this.gate, potA(p.aA, 200, 1e6), potA(p.aD, 1e3, 2e6), ps.aS, potA(p.aR, 1e3, 2e6), p.aEgMode >= 0.5);
+      this.env2N = ea;                            // ENV 2 (amplifier envelope) 0…1, a mod source too
 
       // slow thermal drift of each expo pair (±0.3 K random walk)
       this.drift1 += (rng.g() * 0.02 - this.drift1 * 1e-4); this.drift2 += (rng.g() * 0.02 - this.drift2 * 1e-4);
@@ -1051,8 +1052,8 @@ class KnobSeq {
     this.sr = sr; this.e = engine; this.report = report || null;
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
-    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth }; drift = % faster (+) or slower (−) than the clock
-                         // ENV / LFO lanes: eDepth × the filter envelope (0…1) and lDepth × the modulator (±1), each ± of the knob's travel
+    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth }; drift = % faster (+) or slower (−) than the clock
+                         // mod sources: eDepth × ENV 1 (filter env, 0…1), e2Depth × ENV 2 (amp env), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;
@@ -1065,7 +1066,7 @@ class KnobSeq {
   }
   extActive() { return this.extT >= 0 && this.time - this.extT < 0.5; }
   param(id, v) { this.base[id] = v; const s = this.seq[id]; if (!KnobSeq.act(s)) this.e.setParam(id, v); }
-  static act(s) { return !!(s && (s.on || s.eOn || s.lOn)); }   // the knob is moved by any of its three lanes
+  static act(s) { return !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn)); }   // the knob is moved by any of its sources
   setSeq(id, s, range) {
     const was = KnobSeq.act(this.seq[id]), wasOn = this.seq[id] && this.seq[id].on;
     this.seq[id] = s; if (range) this.range[id] = range;
@@ -1109,6 +1110,8 @@ class KnobSeq {
       c = (this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k) * s.depth;
       }
       if (s.eOn) c += (s.eDepth || 0) * (this.e.envN || 0);
+      if (s.e2On) c += (s.e2Depth || 0) * (this.e.env2N || 0);
+      if (s.vOn) c += (s.vDepth || 0) * (this.e.vel == null ? 1 : this.e.vel);
       if (s.lOn) c += (s.lDepth || 0) * Math.max(-1, Math.min(1, (this.e.lfoV || 0) / 1.43));   // triangle swings ±1.43 V
       const r = this.range[id] || [0, 1], b = id in this.base ? this.base[id] : r[0];
       const v = Math.max(r[0], Math.min(r[1], b + c * (r[1] - r[0])));
@@ -1132,7 +1135,7 @@ class KnobSeq {
     else if (d.t === 'clk') this.clock();
     else if (d.t === 'cstart') this.start();
     else if (d.t === 'cstop') this.stop();
-    else if (d.t === 'on') this.e.noteOn(d.n);
+    else if (d.t === 'on') this.e.noteOn(d.n, d.v);
     else if (d.t === 'off') this.e.noteOff(d.n);
     else if (d.t === 'all') this.e.allOff();
     else if (d.t === 'prio') this.e.setPrio(d.v);
@@ -1271,7 +1274,9 @@ class SoftClip {
 class FxRack {
   constructor(engine, fx) { this.e = engine; this.fx = fx; }
   setParam(id, v) { if (id in this.fx.p) this.fx.set(id, v); else this.e.setParam(id, v); }
-  noteOn(n) { this.e.noteOn(n); }
+  noteOn(n, vel) { this.e.noteOn(n, vel); }
+  // the mod sources KnobSeq reads (it holds this rack, not the engine)
+  get envN() { return this.e.envN; } get env2N() { return this.e.env2N; } get lfoV() { return this.e.lfoV; } get vel() { return this.e.vel; }
   noteOff(n) { this.e.noteOff(n); }
   allOff() { this.e.allOff(); }
   setPrio(last) { this.e.setPrio(last); }
@@ -1726,7 +1731,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.86.0';
+const VERSION = '1.87.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1886,7 +1891,7 @@ applyLang();
 pwActive();
 document.getElementById('resetbtn').onclick = () => {
   for (const c of S) c.set(c.def);
-  for (const id in seqs) if (seqAct(seqs[id])) { Object.assign(seqs[id], { on: false, eOn: false, lOn: false }); pushSeq(S.find((c) => c.id === id)); }
+  for (const id in seqs) if (seqAct(seqs[id])) { Object.assign(seqs[id], { on: false, eOn: false, lOn: false, e2On: false, vOn: false }); pushSeq(S.find((c) => c.id === id)); }
   if (edC) drawSeq();
 };
 
@@ -1894,7 +1899,7 @@ document.getElementById('resetbtn').onclick = () => {
 // A performance feature on top of the model (see seq.js): every knob can
 // carry a step sequence that moves it ± around where it is set.
 const SEQ_STORE = 'polivoks-seq-v1';
-const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0), eOn: false, eDepth: 0.3, lOn: false, lDepth: 0.2 });
+const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0), eOn: false, eDepth: 0.3, lOn: false, lDepth: 0.2, e2On: false, e2Depth: 0.3, vOn: false, vDepth: 0.3 });
 let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
 const seqs = {};
 let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
@@ -1902,7 +1907,7 @@ let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
 const DIVS = [1, 2, 4, 8, 16, 32, 64, 128], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR', '2 BARS', '4 BARS', '8 BARS'];
 const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id]));
 // a knob is moved when any of its three lanes is on: ENV, STEP (the sequence) or LFO
-const seqAct = (s) => !!(s && (s.on || s.eOn || s.lOn));
+const seqAct = (s) => !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn));
 const saveSeq = () => { try { localStorage.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
 const KNOBS = S.filter((c) => c.kind === 'knob');
 const seqMsg = (c) => { const s = seqOf(c.id); return { t: 'seq', id: c.id, s: Object.assign({}, s, { steps: s.steps.slice() }), range: c.scale === 'bip' ? [-1, 1] : [0, 1] }; };
@@ -1951,7 +1956,7 @@ const knobById = (id) => KNOBS.find((c) => c.id === id);
 const SAFE = (c) => c.id !== 'volume' && c.id !== 'phones' && c.id !== 'drive';   // never throw the level around
 // echo level knobs: PATCH keeps them in a tame range and MESS leaves them alone
 const ECHO_RANGE = { eFb: [.1, .55], eMix: [0, .4], eTone: [.2, .85] };
-function seqsOff() { for (const id in seqs) if (seqAct(seqs[id])) { Object.assign(seqs[id], { on: false, eOn: false, lOn: false }); pushSeq(knobById(id)); } }
+function seqsOff() { for (const id in seqs) if (seqAct(seqs[id])) { Object.assign(seqs[id], { on: false, eOn: false, lOn: false, e2On: false, vOn: false }); pushSeq(knobById(id)); } }
 // TONE MOD slider: how deep TONE's modulations and filter sequences go (virtually nothing ... moderate)
 let toneAmt = 0.35; try { const v = parseFloat(localStorage.getItem('polivoks-tone-amt')); if (v >= 0 && v <= 1) toneAmt = v; } catch (e) {}
 const tDepth = document.getElementById('rnd-tdepth'); tDepth.value = Math.round(toneAmt * 100);
@@ -2003,21 +2008,27 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f nolab" style="grid-column:span 6"><span>KNOB</span><div class="row"><button class="sb sm" data-k="-1" aria-label="Previous knob">◀</button><select class="sq-knob" aria-label="Knob to modulate"></select><button class="sb sm" data-k="1" aria-label="Next knob">▶</button></div></div>
   <div class="f" style="grid-column:span 4;display:none"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="f notekeys nolab" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>
-  <div class="box sub" style="grid-column:span 11;--n:11" aria-label="Step sequence for the knob"><h2>SEQUENCER</h2>
+  <div class="box sub" style="grid-column:span 9;--n:9" aria-label="Step sequence for the knob"><h2>SEQ</h2>
     <div class="f sq-lane"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>LENGTH</span><div class="row"><div class="mknob" data-m="len" aria-label="LENGTH"></div><b class="val sq-len"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>RATE</span><div class="row"><div class="mknob" data-m="div" aria-label="RATE"></div><b class="val sq-div"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>DEPTH</span><div class="row"><div class="mknob" data-m="depth" aria-label="DEPTH"></div><b class="val sq-depthv"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 2"><span>SLEW</span><div class="row"><div class="mknob" data-m="slew" aria-label="SLEW"></div><b class="val sq-slewv"></b></div></div>
-    <div class="f dim" style="grid-column:span 2"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>
     <div class="sq-main" style="grid-column:1/-1"><div class="sq-grid dim"></div></div>
-    <div class="f dim nolab" style="grid-column:span 6"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
+    <div class="f dim nolab" style="grid-column:span 5"><span>PATTERN</span><div class="row cells"><button class="sb" data-a="walk">WALK</button><button class="sb" data-a="euclid">EUCLID</button><button class="sb" data-a="steps">STEPS</button><button class="sb" data-a="chaos">CHAOS</button><button class="sb" data-a="clear">CLEAR</button></div></div>
+    <div class="f dim" style="grid-column:span 4"><span>DRIFT</span><div class="row"><input type="range" class="sq-drift" min="-50" max="50" step="1" aria-label="Drift: 0 plays exactly to the tempo, plus runs faster, minus slower"><b class="val sq-driftv" style="flex:none;width:56px"></b></div></div>
   </div>
-  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="LFO to this knob"><h2>MOD</h2>
-    <div class="f nolab sq-lane vlane"><span>MOD</span><button class="sb sm sym sq-lon" aria-label="LFO to this knob on or off">●</button><input type="range" class="vert sq-lfo" min="-100" max="100" aria-label="LFO to this knob depth"><b class="val sq-lfov"></b></div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="LFO to this knob"><h2>LFO</h2>
+    <div class="f nolab sq-lane vlane"><span>LFO</span><button class="sb sm sym sq-lon" aria-label="LFO to this knob on or off">●</button><input type="range" class="vert sq-lfo" min="-100" max="100" aria-label="LFO to this knob depth"><b class="val sq-lfov"></b></div>
   </div>
-  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="Filter envelope to this knob"><h2>ENV</h2>
-    <div class="f nolab sq-lane vlane"><span>ENV</span><button class="sb sm sym sq-eon" aria-label="Filter envelope to this knob on or off">●</button><input type="range" class="vert sq-env" min="-100" max="100" aria-label="Filter envelope to this knob depth"><b class="val sq-envv"></b></div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="ENV 1 (filter envelope) to this knob"><h2>ENV 1</h2>
+    <div class="f nolab sq-lane vlane"><span>ENV 1</span><button class="sb sm sym sq-eon" aria-label="ENV 1 (filter envelope) to this knob on or off">●</button><input type="range" class="vert sq-env" min="-100" max="100" aria-label="ENV 1 (filter envelope) to this knob depth"><b class="val sq-envv"></b></div>
+  </div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="ENV 2 (amplifier envelope) to this knob"><h2>ENV 2</h2>
+    <div class="f nolab sq-lane vlane"><span>ENV 2</span><button class="sb sm sym sq-e2on" aria-label="ENV 2 (amplifier envelope) to this knob on or off">●</button><input type="range" class="vert sq-env2" min="-100" max="100" aria-label="ENV 2 (amplifier envelope) to this knob depth"><b class="val sq-env2v"></b></div>
+  </div>
+  <div class="box sub vbox" style="grid-column:span 1;--n:1" aria-label="Key velocity to this knob"><h2>VEL</h2>
+    <div class="f nolab sq-lane vlane"><span>VEL</span><button class="sb sm sym sq-von" aria-label="Key velocity to this knob on or off">●</button><input type="range" class="vert sq-vel" min="-100" max="100" aria-label="Key velocity to this knob depth"><b class="val sq-velv"></b></div>
   </div>
 `);
 const q = (s) => document.querySelector(s), grid = q('.sq-grid'), edSrc = q('.sq-src');
@@ -2059,11 +2070,12 @@ function drawSeq() {
     b.classList.toggle('off', i >= s.len);
   });
   // three lanes, each with its own on key: ENV (filter envelope), STEP (the sequence), LFO (the modulator)
-  for (const [k, cl] of [['eOn', '.sq-eon'], ['on', '.sq-on'], ['lOn', '.sq-lon']]) { const b = q(cl); b.classList.toggle('lit', !!s[k]); b.closest('.sq-lane').classList.toggle('off', !s[k]); }
+  for (const [k, cl] of [['eOn', '.sq-eon'], ['on', '.sq-on'], ['lOn', '.sq-lon'], ['e2On', '.sq-e2on'], ['vOn', '.sq-von']]) { const b = q(cl); b.classList.toggle('lit', !!s[k]); b.closest('.sq-lane').classList.toggle('off', !s[k]); }
   ed.classList.toggle('idle', !s.on);
   const pc = (v) => (v > 0 ? '+' : '') + Math.round(v * 100) + '%';
   q('.sq-envv').textContent = pc(s.eDepth); q('.sq-lfov').textContent = pc(s.lDepth);
   q('.sq-env').value = Math.round(s.eDepth * 100); q('.sq-lfo').value = Math.round(s.lDepth * 100);
+  q('.sq-env2').value = Math.round(s.e2Depth * 100); q('.sq-vel').value = Math.round(s.vDepth * 100); q('.sq-env2v').textContent = pc(s.e2Depth); q('.sq-velv').textContent = pc(s.vDepth);
   for (const id in pickO) pickO[id].textContent = (seqAct(seqs[id]) ? '● ' : '') + pickO[id].dataset.n;
   knobSel.value = edC.id;
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
@@ -2083,6 +2095,8 @@ const change = (fn) => { const s = seqOf(edC.id); fn(s); pushSeq(edC); drawSeq()
 q('.sq-on').onclick = () => change((s) => { s.on = !s.on; });
 q('.sq-eon').onclick = () => change((s) => { s.eOn = !s.eOn; });
 q('.sq-lon').onclick = () => change((s) => { s.lOn = !s.lOn; });
+q('.sq-e2on').onclick = () => change((s) => { s.e2On = !s.e2On; });
+q('.sq-von').onclick = () => change((s) => { s.vOn = !s.vOn; });
 // the MOD SOURCE knobs (drawn in 3D as small knobs, dragged like the panel's): for the knob shown,
 // the step sequence's LENGTH (1…16, stepped), RATE (the 8 divisions, stepped), DEPTH and SLEW, and the
 // ENV and LFO depths (± of its travel, snapping to 0 within 2 %; turning one switches that source on)
@@ -2095,7 +2109,7 @@ const MK = {
   lDepth: { bip: true, get: (s) => s.lDepth, set: (s, v) => { s.lDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.lOn = true; } },
 };
 // MOD and ENV depth: vertical sliders, centre = 0 (snaps within 2 %); moving one switches that source on
-for (const [cl, k, onK] of [['.sq-lfo', 'lDepth', 'lOn'], ['.sq-env', 'eDepth', 'eOn']]) q(cl).oninput = (e) => change((s) => { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; s[k] = v; s[onK] = true; });
+for (const [cl, k, onK] of [['.sq-lfo', 'lDepth', 'lOn'], ['.sq-env', 'eDepth', 'eOn'], ['.sq-env2', 'e2Depth', 'e2On'], ['.sq-vel', 'vDepth', 'vOn']]) q(cl).oninput = (e) => change((s) => { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; s[k] = v; s[onK] = true; });
 const seqMods = [...ed.querySelectorAll('.mknob')].map((el) => {
   const m = MK[el.dataset.m];
   return { id: 'seq-' + el.dataset.m, kind: 'knob', scale: m.bip ? 'bip' : 'u', def: m.bip ? 0 : m.get(SEQ_DEF()), el,
@@ -2373,7 +2387,7 @@ for (const ev of ['pointerdown', 'keydown', 'touchend']) addEventListener(ev, st
 // ---------------------------------------------------------------- notes
 // a note stays down while any source (computer keys, MIDI) holds it
 const down = new Map();
-function on(n, src = 'ui') { let s = down.get(n); if (s) { s.add(src); return; } down.set(n, new Set([src])); send({ t: 'on', n }); }
+function on(n, src = 'ui', vel = 1) { let s = down.get(n); if (s) { s.add(src); return; } down.set(n, new Set([src])); send({ t: 'on', n, v: vel }); }   // vel 0…1 (MIDI), a mod source
 function off(n, src = 'ui') { const s = down.get(n); if (!s) return; s.delete(src); if (s.size) return; down.delete(n); send({ t: 'off', n }); }
 // computer keys
 const MAP = 'awsedftgyhujkolp;'; let oct = 4; const octv = document.getElementById('octv');
@@ -2432,7 +2446,7 @@ function midiMsg(m, bsii) {
   const [st, d1, d2] = m.data, ty = st & 0xf0;
   if (st >= 0xf8) { midiClock(st); return; }
   if (bsii && ty === 0xb0 && bsiiCC(d1, d2)) return;
-  if (ty === 0x90 && d2 > 0) { sustained.delete(d1); on(d1, 'midi'); }
+  if (ty === 0x90 && d2 > 0) { sustained.delete(d1); on(d1, 'midi', d2 / 127); }
   else if (ty === 0x80 || ty === 0x90) { if (pedal) sustained.add(d1); else off(d1, 'midi'); }
   else if (ty === 0xb0 && d1 === 64) { pedal = d2 >= 64; if (!pedal) { for (const n of sustained) off(n, 'midi'); sustained.clear(); } }
   else if (ty === 0xe0) { const b = ((d2 << 7) | d1) - 8192; send({ t: 'bend', v: b < 0 ? b / 8192 : b / 8191 }); }

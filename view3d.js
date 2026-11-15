@@ -722,8 +722,11 @@ cv.addEventListener('pointerdown', (e) => {
   const u = o.userData;
   if (u.title) { A.openOptions(); }   // tapping FILTH opens OPTIONS
   else if (u.ctl) {
-    const c = u.ctl; grab = { c, y0: e.clientY, v0: c.v, moved: false, scale: 220 * Math.min(1, innerWidth / 1400) + 80 };
-    if (c.kind === 'knob' && e.button === 0) A.pickSeq(c);
+    const c = u.ctl;
+    // a knob's modulation (MODULATE box) is shown by a right click, or a long press on a touch screen
+    if (c.kind === 'knob' && e.button === 2) { A.pickSeq(c); return; }
+    grab = { c, y0: e.clientY, v0: c.v, moved: false, scale: 220 * Math.min(1, innerWidth / 1400) + 80 };
+    if (c.kind === 'knob' && e.pointerType !== 'mouse') grab.hold = setTimeout(() => { if (grab && grab.c === c && !grab.moved) { A.pickSeq(c); grab.c = null; } }, 500);
   } else if (u.btn && u.btn.dataset.note) { pressed(o); grab = { note: +u.btn.dataset.note }; A.on(grab.note, 'pad'); }   // PLAY keys: held while pressed
   else if (u.btn) { pressed(o); u.btn.click(); }
   else if (u.sel) { pressed(o); openList(u.sel); }
@@ -739,13 +742,14 @@ cv.addEventListener('pointermove', (e) => {
   if (!grab || !e.buttons) return;
   if (grab.c) {
     const c = grab.c, dy = grab.y0 - e.clientY;
-    if (Math.abs(dy) > 4) grab.moved = true;
+    if (Math.abs(dy) > 4) { grab.moved = true; clearTimeout(grab.hold); }
     if (c.kind === 'knob') c.set(fromU(c, Math.max(0, Math.min(1, toU(c, grab.v0) + dy / (e.shiftKey ? 1200 : grab.scale)))));
     else if (c.kind === 'sel') c.set(grab.v0 + Math.round(dy / 22));
   } else if (grab.range) slide(e);
   else if (grab.grid) { const lp = onLower(e); if (lp) paintAt(grab.grid, lp); }
 });
 function release() {
+  if (grab) clearTimeout(grab.hold);
   if (grab && grab.c && !grab.moved) {
     const c = grab.c;
     if (c.kind === 'sw') c.set(c.v ? 0 : 1);
