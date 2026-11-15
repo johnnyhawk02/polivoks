@@ -12,7 +12,8 @@
 //     changes glide like a tape motor, so moving TIME bends the repeats
 //   - TIME is free (40 ms … 1.2 s) or, with SYNC, steps through note values of
 //     the shared clock (which follows MIDI clock)
-// The synth engine is untouched: this runs on its mono output.
+// The synth engine is untouched: this runs on the chorus's stereo output
+// (with the chorus OFF, the synth's mono output on both sides).
 // ============================================================================
 const ECHO_DEFAULTS = { eTime: 0.5, eFb: 0.35, eTone: 0.45, eMix: 0.25, eSpread: 0.8, eSync: 1 };
 // sync note values in 16ths: 1/16, 1/8T, 1/8, 1/8., 1/4, 1/4., 1/2
@@ -49,7 +50,7 @@ class TapeEcho {
     const c1 = 0.5 * (y2 - y0), c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3, c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
     return ((c3 * f + c2) * f + c1) * f + y1;
   }
-  // in: mono synth output (left buffer); writes the stereo result to L and R
+  // in: L and R (the chorus's output; the same signal on both when it is OFF); writes the stereo result back
   process(L, R, n) {
     const sr = this.sr, p = this.p, ps = this.ps;
     const sm = 1 - Math.exp(-1 / (0.02 * sr));
@@ -73,11 +74,11 @@ class TapeEcho {
       const dL = Math.max(4, this.d + wL), dR = Math.max(4, this.d + wR);
       const yL = this.read(this.bL, dL), yR = this.read(this.bR, dR);
 
-      const x = L[s], sp = ps.eSpread, fb = ECHO_FB_MAX * Math.min(1, Math.max(0, ps.eFb));
-      // ping-pong routing: the dry signal enters on the left (and on the right
-      // too as SPREAD comes down); SPREAD of each repeat crosses sides
+      const x = L[s], xR = R[s], sp = ps.eSpread, fb = ECHO_FB_MAX * Math.min(1, Math.max(0, ps.eFb));
+      // ping-pong routing: the left input enters on the left (and the right
+      // input on the right as SPREAD comes down); SPREAD of each repeat crosses sides
       let iL = x + fb * ((1 - sp) * yL + sp * yR);
-      let iR = x * (1 - sp) + fb * ((1 - sp) * yR + sp * yL);
+      let iR = xR * (1 - sp) + fb * ((1 - sp) * yR + sp * yL);
       // band limit on every pass: tone low-pass (two poles) and a 90 Hz low cut
       const fc = 650 * Math.pow(2, 4.2 * Math.min(1, Math.max(0, ps.eTone)));
       const lk = 1 - Math.exp(-TW * fc);
@@ -93,7 +94,7 @@ class TapeEcho {
       // dry stays full up to half MIX, then fades; wet comes up to full by half
       const m = Math.min(1, Math.max(0, ps.eMix)), dg = Math.min(1, 2 - 2 * m), wg = Math.min(1, 2 * m);
       L[s] = x * dg + yL * wg;   // the soft clipper (SoftClip) follows
-      R[s] = x * dg + yR * wg;
+      R[s] = xR * dg + yR * wg;
     }
   }
   static lim(x) { return SoftClip.lim(x); }
@@ -119,11 +120,101 @@ class SoftClip {
   static lim(x) { const a = x < 0 ? -x : x; if (a <= 0.7) return x; const y = 0.7 + 0.3 * Math.tanh((a - 0.7) / 0.3); return x < 0 ? -y : y; }
 }
 
-// Passes knob values to the synth engine or to the echo, so the knob
+// ============================================================================
+// Stereo chorus: an EFFECT ADDED AFTER THE SYNTH (the Polivoks had none),
+// modelled on the Roland Juno-60's.  It runs before the echo.
+//   Sourced (florian-anwander.de/roland_string_choruses): two MN3009 BBDs fed
+//   from one mono input; one LFO; I = 0.5 Hz triangle, full depth; II = 0.8 Hz
+//   triangle, full depth; I+II = fast, sine-like, 8 % depth; the second BBD's
+//   modulation is inverted in I and II and NOT inverted in I+II; each BBD
+//   output goes to one side and the dry signal is mixed 1:1 into both.
+//   MN3009: 256 stages, so the delay is 128 clock periods.
+//   Estimated (EST): the delay sweep 1.66 … 5.35 ms (widely quoted
+//   measurements, not from a schematic); the I+II rate 9.75 Hz (also quoted;
+//   the Juno-6 is 8 Hz, other sources say 8-10 Hz); the input and output
+//   filters (2-pole 9 kHz, below the lowest clock's 12 kHz Nyquist); the hiss
+//   (-76 dB re 1.0, MN3009-class S/N); the BBD's soft overload; the switch's
+//   5 ms fade; and the output trim CH_TRIM (output scaling, not circuit: the
+//   dry + wet sum is taken back so switching it on is about level).
+// The BBD is modelled as what it is: the filtered input is sampled at each
+// clock tick (at the tick's exact time), shifted 128 ticks, and held until
+// the next tick; the held steps are averaged over each output sample, then
+// smoothed by the output filter.  So the clock really sweeps from about 24 to
+// 77 kHz, with its own aliasing where the input filter lets it through.
+// With OFF selected (and the fade done) the signal is untouched and the
+// chorus costs nothing; the right channel is a copy of the left.
+// ============================================================================
+const CH_LFO = [0, 0.5, 0.8, 9.75];             // Hz for OFF, I, II, I+II (I+II EST)
+const CH_DEPTH = [0, 1, 1, 0.08];               // fraction of the full sweep
+const CH_DMIN = 1.66e-3, CH_DMAX = 5.35e-3;     // full sweep, s (EST)
+const CH_STAGES = 256, CH_FC = 9000, CH_NOISE = 1.6e-4, CH_TRIM = 0.72;
+
+class Biquad2 {           // 2-pole Butterworth low-pass (bilinear, prewarped)
+  constructor(fc, sr) {
+    const k = Math.tan(Math.PI * fc / sr), q = Math.SQRT1_2, n = 1 / (1 + k / q + k * k);
+    this.b0 = k * k * n; this.b1 = 2 * this.b0; this.a1 = 2 * (k * k - 1) * n; this.a2 = (1 - k / q + k * k) * n;
+    this.z1 = 0; this.z2 = 0;
+  }
+  run(x) { const y = this.b0 * x + this.z1; this.z1 = this.b1 * x - this.a1 * y + this.z2; this.z2 = this.b0 * x - this.a2 * y; return y; }
+  reset() { this.z1 = this.z2 = 0; }
+}
+class BBD {
+  constructor(sr) {
+    this.N = CH_STAGES / 2; this.buf = new Float32Array(this.N); this.i = 0;
+    this.ph = 0; this.hold = 0; this.pre = new Biquad2(CH_FC, sr); this.post = new Biquad2(CH_FC, sr); this.xp = 0;
+  }
+  reset() { this.buf.fill(0); this.i = 0; this.ph = 0; this.hold = 0; this.xp = 0; this.pre.reset(); this.post.reset(); }
+  // x: input this sample; inc: clock ticks per output sample (f_clk / sr)
+  step(x, inc, noise) {
+    const a = this.pre.run(x), a0 = this.xp; this.xp = a;
+    let ph = this.ph + inc, acc = 0, t0 = 0;
+    while (ph >= 1) {                       // a tick at fraction t of this sample
+      ph -= 1; const t = 1 - ph / inc;
+      acc += this.hold * (t - t0); t0 = t;
+      const v = a0 + (a - a0) * t;          // the input at the tick
+      this.hold = this.buf[this.i];         // out comes what went in 128 ticks ago
+      this.buf[this.i] = v > 1.5 || v < -1.5 ? 1.5 * Math.tanh(v / 1.5) : v;   // soft overload past the BBD's swing (EST)
+      this.i = this.i + 1 === this.N ? 0 : this.i + 1;
+    }
+    this.ph = ph; acc += this.hold * (1 - t0);
+    return this.post.run(acc + noise);
+  }
+}
+class JunoChorus {
+  constructor(sr) {
+    this.sr = sr; this.p = { chorus: 0 }; this.mode = 0;
+    this.l1 = new BBD(sr); this.l2 = new BBD(sr);
+    this.lph = 0; this.g = 0;               // LFO phase (0..1), wet gain (fades on switching)
+    this.rs = 0x1234567;
+  }
+  set(id, v) { if (id in this.p) this.p[id] = Math.max(0, Math.min(3, Math.round(v))); }
+  rnd() { let s = this.rs; s ^= s << 13; s ^= s >>> 17; s ^= s << 5; this.rs = s >>> 0; return this.rs / 4294967296 - 0.5; }
+  process(L, R, n) {
+    const want = this.p.chorus;
+    if (want === 0 && this.g === 0) { R.set(L.subarray(0, n)); return; }   // OFF: untouched
+    if (want !== 0) { if (this.g === 0) { this.l1.reset(); this.l2.reset(); } this.mode = want; }
+    const sr = this.sr, m = this.mode, fl = CH_LFO[m] / sr, dep = CH_DEPTH[m], inv = m !== 3;
+    const mid = (CH_DMIN + CH_DMAX) / 2, half = (CH_DMAX - CH_DMIN) / 2 * dep, N = CH_STAGES / 2;
+    const gT = want ? 1 : 0, gk = 1 / (0.005 * sr), nz = CH_NOISE * 3.4641;   // uniform noise of that RMS
+    for (let s = 0; s < n; s++) {
+      let ph = this.lph + fl; if (ph >= 1) ph -= 1; this.lph = ph;
+      // triangle (I, II) or sine (I+II), -1 … 1
+      const lf = m === 3 ? Math.sin(2 * Math.PI * ph) : (ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph);
+      const d1 = mid + half * lf, d2 = mid + half * (inv ? -lf : lf);
+      const x = L[s];
+      const w1 = this.l1.step(x, N / (d1 * sr), nz * this.rnd()), w2 = this.l2.step(x, N / (d2 * sr), nz * this.rnd());
+      this.g += gT > this.g ? Math.min(gk, gT - this.g) : -Math.min(gk, this.g - gT);
+      const g = this.g, t = 1 + (CH_TRIM - 1) * g;
+      L[s] = (x + g * w1) * t; R[s] = (x + g * w2) * t;
+    }
+  }
+}
+
+// Passes knob values to the synth engine , the chorus or the echo, so the knob
 // sequencer can drive both through the one setParam it knows.
 class FxRack {
-  constructor(engine, fx) { this.e = engine; this.fx = fx; }
-  setParam(id, v) { if (id in this.fx.p) this.fx.set(id, v); else this.e.setParam(id, v); }
+  constructor(engine, fx, ch) { this.e = engine; this.fx = fx; this.ch = ch; }
+  setParam(id, v) { if (id in this.fx.p) this.fx.set(id, v); else if (this.ch && id in this.ch.p) this.ch.set(id, v); else this.e.setParam(id, v); }
   noteOn(n, vel) { this.e.noteOn(n, vel); }
   // the mod sources KnobSeq reads (it holds this rack, not the engine)
   get envN() { return this.e.envN; } get env2N() { return this.e.env2N; } get lfoV() { return this.e.lfoV; } get vel() { return this.e.vel; } get key() { return this.e.key; }
@@ -152,4 +243,4 @@ class Level {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, SoftClip, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
+if (typeof module !== 'undefined') module.exports = { JunoChorus, CH_LFO, CH_DEPTH, CH_DMIN, CH_DMAX, CH_TRIM, TapeEcho, FxRack, Level, SoftClip, ECHO_DEFAULTS, ECHO_DIVS, ECHO_FB_MAX };
