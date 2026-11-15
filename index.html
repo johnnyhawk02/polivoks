@@ -235,8 +235,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-rnd" style="grid-area:2/14/3/20;--n:6"><h2>RANDOMISE</h2>
       <!-- two families: TONE (playable) with its gentle NUDGE and GROOVE; PATCH (anything goes) with its wilder NUDGE and MESS -->
       <div class="f" style="grid-column:span 3"><span>TONE</span><div class="row cells"><button class="btn" id="rnd-tone">TONE</button><button class="btn" id="rnd-nudge">NUDGE</button><button class="btn" id="rnd-groove">GROOVE</button></div></div>
-      <div class="f" style="grid-column:span 3"><span>TONE MOD</span><div class="row"><input type="range" id="rnd-tdepth" min="0" max="100" aria-label="How deep the randomised modulations go, from virtually nothing to moderate"></div></div>
-      <div class="f" style="grid-column:span 3"><span>PATCH</span><div class="row cells"><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-pnudge">NUDGE</button><button class="btn" id="rnd-mess">MESS</button></div></div>
+      <div class="f" style="grid-column:1 / span 3"><span>PATCH</span><div class="row cells"><button class="btn" id="rnd-patch">PATCH</button><button class="btn" id="rnd-pnudge">NUDGE</button><button class="btn" id="rnd-mess">MESS</button></div></div>
     </div>
   </div>
   <!-- no longer on the panel (clock/MIDI read-outs, external input, reset, wobble switch): kept unseen so their code still runs -->
@@ -1761,7 +1760,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.99.7';
+const VERSION = '1.99.9';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2001,9 +2000,7 @@ function seqsOff(mods) { for (const id in seqs) if (seqAct(seqs[id])) { Object.a
 const VIS = () => KNOBS.filter((c) => !c.el.closest('#g-hide') && SAFE(c));
 const MODS = [['lOn', 'lDepth'], ['e2On', 'e2Depth'], ['eOn', 'eDepth'], ['vOn', 'vDepth'], ['kOn', 'kDepth']];   // LFO, ENV 1, ENV 2, VEL, KEY
 // TONE MOD slider: how deep TONE's modulations and filter sequences go (virtually nothing ... moderate)
-let toneAmt = 0.35; try { const v = parseFloat(localStorage.getItem('polivoks-tone-amt')); if (v >= 0 && v <= 1) toneAmt = v; } catch (e) {}
-const tDepth = document.getElementById('rnd-tdepth'); tDepth.value = Math.round(toneAmt * 100);
-tDepth.oninput = () => { toneAmt = tDepth.value / 100; try { localStorage.setItem('polivoks-tone-amt', toneAmt); } catch (e) {} };
+const toneAmt = 1;   // TONE MOD fixed at full (Johnny): the slider is gone
 const dice = {
   // small moves of every knob around where it is
   nudge() {
@@ -2031,6 +2028,12 @@ const dice = {
     }
     if (state.mix1 < .3 && state.mix2 < .3) knobById('mix1').set(.6);
     S.find((c) => c.id === 'vcaHold').set(1);   // PATCH always leaves the VCA on HOLD, so a patch always sounds
+    // and always 2 or 3 long, slow, gliding sequences: 16 steps, 1 to 4 bars a step, slew 1 to 2 s, depth 25 to 50 %,
+    // on panel knobs (not the echo levels); any other sequences stop
+    seqsOff();
+    for (const c of VIS().filter((c) => c.id !== 'eFb' && c.id !== 'eMix').sort(() => Math.random() - .5).slice(0, 2 + Math.floor(rnd(0, 2)))) {
+      const s = seqOf(c.id); RND.walk(s); s.len = 16; s.div = pick([16, 32, 64]); s.slew = Math.round(rnd(1, 2) * 100) / 100; s.depth = q2(rnd(.25, .5)); s.drift = 0; s.on = true; pushSeq(c);
+    }
     // mod sources: all off (sequences stay), then one to three panel knobs (not the echo levels) get one source each (LFO, ENV 1, ENV 2 or VEL), ± 10…40 %
     for (const id in seqs) { const s = seqs[id]; if (MODS.some(([on]) => s[on])) { for (const [on] of MODS) s[on] = false; pushSeq(knobById(id)); } }
     for (const c of VIS().filter((c) => c.id !== 'eFb' && c.id !== 'eMix').sort(() => Math.random() - .5).slice(0, 1 + Math.floor(rnd(0, 3)))) {
