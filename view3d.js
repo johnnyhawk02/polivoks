@@ -36,7 +36,7 @@ const linesOf = (el) => el ? el.innerHTML.split(/<br\s*\/?>/i).map((t) => { cons
 const IC = { tri: [[2, 10], [8, 2], [14, 10]], saw: [[2, 10], [12, 2], [12, 10]], sq: [[2, 10], [2, 3], [8, 3], [8, 10], [14, 10]],
   sh: [[1, 8], [4, 8], [4, 3], [7, 3], [7, 10], [10, 10], [10, 5], [14, 5]], nz: [[1, 6], [2.5, 3], [4, 9], [5.5, 2], [7, 8], [8.5, 4], [10, 10], [11.5, 3], [13, 7]] };
 const ang = (u) => (-135 + 270 * u) * Math.PI / 180;
-const selA = (c, i) => { const n = c.opts.length, span = n === 5 ? 140 : 130; return (-span / 2 + span * i / (n - 1)) * Math.PI / 180; };
+const selA = (c, i) => { const n = c.opts.length, span = c.span || (n === 5 ? 140 : 130); return (-span / 2 + span * i / (n - 1)) * Math.PI / 180; };
 const toU = (c, v) => c.scale === 'bip' ? (v + 1) / 2 : v;
 const fromU = (c, u) => c.scale === 'bip' ? u * 2 - 1 : u;
 
@@ -247,7 +247,8 @@ function paintCtl(ctx, c) {
   } else if (c.kind === 'sel') {
     const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 40;
     c.opts.forEach((o, i) => {
-      const a = selA(c, i), px = cx + Math.sin(a) * (KR + 11), py = cy - Math.cos(a) * (KR + 12);
+      ctx.font = `600 12px ${MONO}`; const out = o.t && c.span ? Math.abs(Math.sin(selA(c, i))) * (ctx.measureText(o.t).width / 2 + 2) : 0;   // wide words clear the knob
+      const a = selA(c, i), px = cx + Math.sin(a) * (KR + 11 + out), py = cy - Math.cos(a) * (KR + 12);
       if (o.t) text(ctx, o.t, px, py, `600 12px ${MONO}`);
       else { ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.beginPath(); IC[o.i].forEach(([u, v], k) => ctx[k ? 'lineTo' : 'moveTo'](px - 8 + u, py - 6 + v)); ctx.stroke(); }
     });

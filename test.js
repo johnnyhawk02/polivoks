@@ -188,7 +188,7 @@ console.log('--- stability sweep ---');
   const runFx = (set, len, feed) => {
     const fx = new TapeEcho(SR); for (const k in set) { fx.set(k, set[k]); fx.ps[k] = set[k]; } fx.d = fx.target();
     const L = new Float32Array(SR * len), R = new Float32Array(SR * len);
-    for (let i = 0; i < L.length; i++) L[i] = feed(i);
+    for (let i = 0; i < L.length; i++) R[i] = L[i] = feed(i);   // the echo's input is stereo (the chorus's output; L = R with it OFF)
     for (let i = 0; i < L.length; i += 128) fx.process(L.subarray(i, i + 128), R.subarray(i, i + 128), 128);
     return { L, R, fx };
   };
@@ -206,17 +206,18 @@ console.log('--- stability sweep ---');
   console.log(`feedback at max: peak ${pk.toFixed(3)}, rms 1-2 s ${r1.toFixed(3)}, 5-6 s ${r5.toFixed(3)}, 11-12 s ${r11.toFixed(4)}`);
   if (pk > 1 || !(r5 < r1 && r11 < r5 * 0.5)) { console.log('ECHO RUNAWAY'); process.exitCode = 1; }
   // whole chain with random echo settings: finite, ≤ full scale, CPU
-  const e = new PolivoksEngine(SR), fx = new TapeEcho(SR), q = new KnobSeq(SR, new FxRack(e, fx)), clip = new SoftClip();
+  const { JunoChorus } = require('./fx.js');
+  const e = new PolivoksEngine(SR), fx = new TapeEcho(SR), ch = new JunoChorus(SR), q = new KnobSeq(SR, new FxRack(e, fx, ch)), clip = new SoftClip();
   q.msg({ t: 'p', id: 'power', v: 1 }); e.powerLevel = 1;
   for (const [k, v] of Object.entries({ volume: 1, cutoff: 0.8, res: 0.7, mix1: 1, mix2: 1 })) q.msg({ t: 'p', id: k, v });
   const oL = new Float32Array(128), oR = new Float32Array(128); let bad = 0, pk2 = 0; const t0 = Date.now(), nb = 3000;
   for (let b = 0; b < nb; b++) {
-    if (b % 60 === 0) { for (const k of ['eTime', 'eFb', 'eTone', 'eMix', 'eSpread']) q.msg({ t: 'p', id: k, v: Math.random() }); q.msg({ t: 'p', id: 'eSync', v: Math.random() < .5 ? 0 : 1 }); q.msg({ t: 'on', n: 36 + Math.floor(Math.random() * 36) }); }
+    if (b % 60 === 0) { for (const k of ['eTime', 'eFb', 'eTone', 'eMix', 'eSpread']) q.msg({ t: 'p', id: k, v: Math.random() }); q.msg({ t: 'p', id: 'eSync', v: Math.random() < .5 ? 0 : 1 }); q.msg({ t: 'p', id: 'chorus', v: Math.floor(Math.random() * 4) }); q.msg({ t: 'on', n: 36 + Math.floor(Math.random() * 36) }); }
     if (b % 60 === 30) q.msg({ t: 'all' });
-    q.render(oL, 128); fx.bpm = q.tempo(); fx.process(oL, oR, 128); clip.process(oL, oR, 128);
+    q.render(oL, 128); ch.process(oL, oR, 128); fx.bpm = q.tempo(); fx.process(oL, oR, 128); clip.process(oL, oR, 128);
     for (let i = 0; i < 128; i++) { if (!isFinite(oL[i]) || !isFinite(oR[i])) bad++; pk2 = Math.max(pk2, Math.abs(oL[i]), Math.abs(oR[i])); }
   }
-  console.log(`synth + echo, random settings: NaN/inf ${bad}, peak ${pk2.toFixed(3)}, CPU ${((Date.now() - t0) / 1000 / (nb * 128 / SR) * 100).toFixed(1)}% of realtime`);
+  console.log(`synth + chorus + echo, random settings: NaN/inf ${bad}, peak ${pk2.toFixed(3)}, CPU ${((Date.now() - t0) / 1000 / (nb * 128 / SR) * 100).toFixed(1)}% of realtime`);
   if (bad || pk2 > 1) { console.log('ECHO CHAIN FAILED'); process.exitCode = 1; }
   // soft clipper (added output stage): leaves quiet signals alone, tops out below 1, reports how hard it is hit (CLIP LED)
   { const c = new SoftClip(), a = new Float32Array([0.5, -0.6]), b = new Float32Array([0.3, 0]);
@@ -231,6 +232,46 @@ console.log('--- stability sweep ---');
   fx.set('eSync', 1); fx.set('eTime', 4 / 6); fx.bpm = q2.tempo();
   console.log(`MIDI clock 100 BPM: tempo ${q2.tempo()}, echo 1/4 = ${(fx.target() / SR * 1e3).toFixed(1)} ms`);
   if (q2.tempo() !== 100 || Math.abs(fx.target() / SR - 0.6) > 1e-6) { console.log('ECHO CLOCK FAILED'); process.exitCode = 1; }
+}
+// stereo chorus (an added effect before the echo, fx.js): the Juno-60's
+{
+  const { JunoChorus, CH_TRIM, CH_DMIN, CH_DMAX } = require('./fx.js');
+  console.log('--- stereo chorus (added effect, Juno-60 style BBD) ---');
+  let fail = false;
+  // OFF: left untouched, right a copy of it
+  { const c = new JunoChorus(SR), L = new Float32Array(256).map(() => Math.random() - .5), x = L.slice(), R = new Float32Array(256);
+    c.process(L, R, 256); const same = L.every((v, i) => v === x[i] && R[i] === v);
+    console.log('OFF: untouched, R = L:', same); if (!same) fail = true; }
+  // the BBD itself: 128 clock periods of delay, at both ends of the sweep
+  for (const d of [CH_DMIN, CH_DMAX]) {
+    const b = new JunoChorus(SR).l1; let pk = 0, at = 0;
+    for (let i = 0; i < 1000; i++) { const y = Math.abs(b.step(i === 10 ? 1 : 0, 128 / (d * SR), 0)); if (y > pk) { pk = y; at = i - 10; } }
+    const ms = at / SR * 1e3; console.log(`BBD clock ${(128 / d / 1e3).toFixed(1)} kHz: delay ${ms.toFixed(3)} ms (asked ${(d * 1e3).toFixed(2)})`);
+    if (Math.abs(ms - d * 1e3) > 0.15) fail = true;
+  }
+  // modes: delay sweep, rate and L/R sense, from a 1 kHz tone through each line
+  const want = { 1: [0.5, 3.69, -1], 2: [0.8, 3.69, -1], 3: [9.75, 0.295, 1] };
+  for (const m of [1, 2, 3]) {
+    const c = new JunoChorus(SR); c.set('chorus', m); const n = SR * 5, L = new Float32Array(n), R = new Float32Array(n);
+    for (let i = 0; i < n; i++) L[i] = 0.3 * Math.sin(2 * Math.PI * 1000 * i / SR);
+    const x = L.slice(); for (let i = 0; i < n; i += 128) c.process(L.subarray(i, i + 128), R.subarray(i, i + 128), 128);
+    const curve = (y) => { const t = []; for (let i = SR; i < n; i++) { const a = y[i - 1] / CH_TRIM - x[i - 1], b = y[i] / CH_TRIM - x[i]; if (a < 0 && b >= 0) t.push(i - 1 + a / (a - b)); } return t.map((v, k) => [v, (v - t[0]) - k * SR / 1000]); };
+    const a = curve(L), b = curve(R), va = a.map((p) => p[1]), mx = Math.max(...va), mn = Math.min(...va), md = (mx + mn) / 2;
+    const cr = []; for (let k = 1; k < a.length; k++) if (a[k - 1][1] < md && a[k][1] >= md) cr.push(a[k][0]);
+    const rate = (cr.length - 1) / ((cr[cr.length - 1] - cr[0]) / SR), pp = (mx - mn) / SR * 1e3;
+    const k2 = Math.min(a.length, b.length), ma = va.slice(0, k2).reduce((s, v) => s + v, 0) / k2, mb = b.slice(0, k2).reduce((s, p) => s + p[1], 0) / k2;
+    let sab = 0, saa = 0, sbb = 0; for (let k = 0; k < k2; k++) { sab += (va[k] - ma) * (b[k][1] - mb); saa += (va[k] - ma) ** 2; sbb += (b[k][1] - mb) ** 2; }
+    const corr = sab / Math.sqrt(saa * sbb), [wr, wp, wc] = want[m];
+    console.log(`${['', 'I', 'II', 'I+II'][m]}: rate ${rate.toFixed(3)} Hz, sweep ${pp.toFixed(3)} ms p-p, L/R sweeps ${corr > 0 ? 'together' : 'opposed'} (${corr.toFixed(2)})`);
+    if (Math.abs(rate - wr) > 0.02 * wr || Math.abs(pp - wp) > 0.1 * wp || Math.sign(corr) !== wc || Math.abs(corr) < 0.95) fail = true;
+  }
+  // switching off fades out in 5 ms, then it is bypassed again
+  { const c = new JunoChorus(SR); c.set('chorus', 1); const L = new Float32Array(SR / 10).fill(0.2), R = new Float32Array(SR / 10);
+    c.process(L, R, L.length); c.set('chorus', 0); const L2 = new Float32Array(480).fill(0.2), R2 = new Float32Array(480); c.process(L2, R2, 480);
+    const L3 = new Float32Array(16).fill(0.2), R3 = new Float32Array(16); c.process(L3, R3, 16);
+    const ok = c.g === 0 && L3.every((v) => v === Math.fround(0.2)) && R3.every((v) => v === Math.fround(0.2));
+    console.log('switch off: faded and bypassed after 10 ms:', ok); if (!ok) fail = true; }
+  if (fail) { console.log('CHORUS FAILED'); process.exitCode = 1; }
 }
 // TONE randomiser (tone.js): interval knob positions and the ranges it draws from
 {
