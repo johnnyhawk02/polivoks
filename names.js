@@ -5,6 +5,7 @@
 //  makeName(rnd) with rnd a () => [0,1) function, Math.random by default.
 // ============================================================================
 
+// sixteen lists; any two different ones are paired, then often jumbled
 const NAME_WORDS = {
   scifi: ['Nebula', 'Quasar', 'Photon', 'Plasma', 'Vortex', 'Ion Drive', 'Cyborg', 'Android', 'Warp Core', 'Hyperdrive',
     'Tachyon', 'Graviton', 'Nova', 'Pulsar', 'Orbit', 'Zenith', 'Nexus', 'Chronoton', 'Laser', 'Droid', 'Rocket', 'Cosmonaut',
@@ -45,6 +46,73 @@ const NAME_WORDS = {
     'Throok', 'Kazzoo', 'Plimth', 'Zoggle', 'Quorbin', 'Yuzzith', 'Bleeb', 'Groznak', 'Vuul', 'Sklorch', 'Neebo',
     'Trazzik', 'Ommuk', 'Xalvor', 'Phlenge', 'Ruzzbo', 'Klaatoo', 'Zibbit', 'Wexnor', 'Ghuun', 'Splontra', 'Ixxa',
     'Morbulon', 'Treeble', 'Gorvex', 'Quazzle', 'Flubbix', 'Zhurn', 'Obblonk'],
+  // gods, worlds, beasts and gear of the Norse sagas
+  norse: ['Odin', 'Thor', 'Loki', 'Freya', 'Frigg', 'Heimdall', 'Baldur', 'Tyr', 'Njord', 'Skadi', 'Idunn', 'Bragi',
+    'Fenrir', 'Jormungandr', 'Sleipnir', 'Yggdrasil', 'Mjolnir', 'Valhalla', 'Asgard', 'Midgard', 'Jotunheim', 'Niflheim',
+    'Muspelheim', 'Bifrost', 'Ragnarok', 'Valkyrie', 'Berserker', 'Huginn', 'Muninn', 'Gungnir', 'Draupnir', 'Ymir', 'Surtr',
+    'Mimir', 'Hrungnir', 'Fafnir', 'Sigurd', 'Brynhild', 'Ginnungagap', 'Einherjar', 'Skald', 'Rune Stone', 'Longship',
+    'Mead Hall', 'Jarl', 'Fjord', 'Kraken', 'Draugr', 'Norns', 'Ratatoskr', 'Nidhogg', 'Gjallarhorn', 'Skidbladnir', 'Vanir',
+    'Aesir', 'Alfheim', 'Svartalfheim', 'Frost Giant', 'Ullr', 'Vidar'],
+  // gods, heroes, monsters and thinkers of ancient Greece
+  greek: ['Zeus', 'Hera', 'Athena', 'Apollo', 'Artemis', 'Ares', 'Hermes', 'Hephaestus', 'Dionysus', 'Poseidon', 'Hades',
+    'Persephone', 'Demeter', 'Aphrodite', 'Prometheus', 'Pandora', 'Medusa', 'Minotaur', 'Cyclops', 'Hydra', 'Cerberus',
+    'Pegasus', 'Icarus', 'Daedalus', 'Achilles', 'Odysseus', 'Hercules', 'Perseus', 'Theseus', 'Argonaut', 'Labyrinth',
+    'Oracle', 'Delphi', 'Olympus', 'Sparta', 'Troy', 'Trojan Horse', 'Acropolis', 'Parthenon', 'Socrates', 'Plato',
+    'Aristotle', 'Pythagoras', 'Archimedes', 'Hippocrates', 'Sisyphus', 'Tantalus', 'Narcissus', 'Orpheus', 'Eurydice',
+    'Chimera', 'Siren', 'Harpy', 'Titan', 'Gorgon', 'Nemesis', 'Ambrosia', 'Amphora', 'Golden Fleece', 'Styx'],
+  // medicine-cabinet words: generics, a few UK chemist-shelf brands, body chemicals
+  pharma: ['Ibuprofen', 'Paracetamol', 'Aspirin', 'Amoxicillin', 'Codeine', 'Diazepam', 'Omeprazole', 'Simvastatin',
+    'Metformin', 'Lisinopril', 'Atorvastatin', 'Salbutamol', 'Prednisolone', 'Ketamine', 'Lidocaine', 'Morphine', 'Tramadol',
+    'Sertraline', 'Fluoxetine', 'Citalopram', 'Warfarin', 'Heparin', 'Insulin', 'Penicillin', 'Tetracycline', 'Doxycycline',
+    'Ciprofloxacin', 'Loratadine', 'Cetirizine', 'Lansoprazole', 'Gabapentin', 'Naproxen', 'Diclofenac', 'Propranolol',
+    'Amlodipine', 'Furosemide', 'Levothyroxine', 'Melatonin', 'Haloperidol', 'Lithium', 'Calpol', 'Lemsip', 'Gaviscon',
+    'Strepsils', 'Imodium', 'Antihistamine', 'Placebo', 'Methadone', 'Nitrous Oxide', 'Adrenaline', 'Dopamine', 'Serotonin',
+    'Oxytocin', 'Cortisone', 'Kaolin', 'Benzocaine', 'Clonazepam', 'Valproate', 'Mebeverine', 'Chloramphenicol'],
+  // Buffy the Vampire Slayer: people, places, monsters, kit
+  buffy: ['Buffy', 'Willow', 'Xander', 'Giles', 'Spike', 'Angel', 'Cordelia', 'Oz', 'Anya', 'Tara', 'Dawn', 'Faith',
+    'Drusilla', 'Glory', 'The Master', 'Mayor Wilkins', 'Hellmouth', 'Sunnydale', 'Slayer', 'Watcher', 'The Bronze',
+    'Mr Pointy', 'Scooby Gang', 'Magic Box', 'Initiative', 'Wishverse', 'Gentlemen', 'Bezoar', 'Moloch', 'Acathla',
+    'Kakistos', 'Gachnar', 'Jonathan', 'Warren', 'Andrew', 'Principal Snyder', 'Riley', 'Kendra', 'Harmony', 'Clem',
+    'Ethan Rayne', 'Big Bad', 'Stake', 'Holy Water', 'Crossbow', 'Vamp Face', 'Scythe', 'Turok-Han', 'First Evil',
+    'Wesley', 'Jenny Calendar', 'Band Candy', 'Doublemeat Palace', 'Hellgod', 'Sineya', 'Chosen One', 'Mr Trick',
+    'Amy the Rat', 'Hush', 'Restless'],
+  // the Soviet side of the Polivoks's world: space, cars, kitchens, places
+  soviet: ['Sputnik', 'Vostok', 'Soyuz', 'Mir', 'Lunokhod', 'Buran', 'Laika', 'Belka', 'Strelka', 'Gagarin', 'Tereshkova',
+    'Lada', 'Volga', 'Moskvich', 'Tupolev', 'Ilyushin', 'Matryoshka', 'Samovar', 'Balalaika', 'Kvass', 'Borscht', 'Pelmeni',
+    'Ushanka', 'Dacha', 'Kolkhoz', 'Politburo', 'Kremlin', 'Baikonur', 'Zenit', 'Elektronika', 'Kosmos', 'Salyut', 'Venera',
+    'Luna', 'Polyot', 'Raketa', 'Kometa', 'Zarya', 'Pravda', 'Tetris', 'Babushka', 'Taiga', 'Tundra', 'Kamchatka',
+    'Murmansk', 'Vladivostok', 'Kamaz', 'Ural', 'Tokamak', 'Theremin', 'Blini', 'Kefir', 'Shapka', 'Valenki', 'Troika',
+    'Sobaka', 'Zhiguli', 'Chaika', 'Okroshka', 'Syrniki'],
+  dinosaurs: ['Tyrannosaurus', 'Velociraptor', 'Triceratops', 'Stegosaurus', 'Brontosaurus', 'Diplodocus', 'Ankylosaurus',
+    'Pterodactyl', 'Iguanodon', 'Allosaurus', 'Spinosaurus', 'Parasaurolophus', 'Megalodon', 'Mammoth', 'Archaeopteryx',
+    'Compsognathus', 'Dimetrodon', 'Plesiosaur', 'Mosasaur', 'Ichthyosaur', 'Gallimimus', 'Oviraptor', 'Baryonyx',
+    'Carnotaurus', 'Deinonychus', 'Therizinosaurus', 'Maiasaura', 'Troodon', 'Microraptor', 'Smilodon', 'Dodo', 'Trilobite',
+    'Ammonite', 'Sabre Tooth', 'Woolly Rhino', 'Megatherium', 'Glyptodon', 'Quetzalcoatlus', 'Brachiosaurus',
+    'Edmontosaurus', 'Coelacanth', 'Dilophosaurus', 'Giganotosaurus', 'Styracosaurus', 'Pachycephalosaurus', 'Raptor',
+    'Protoceratops', 'Argentinosaurus', 'Dunkleosteus', 'Anomalocaris'],
+  minerals: ['Obsidian', 'Feldspar', 'Quartz', 'Malachite', 'Pyrite', 'Gypsum', 'Basalt', 'Granite', 'Gneiss', 'Schist',
+    'Mica', 'Garnet', 'Jasper', 'Onyx', 'Agate', 'Amethyst', 'Beryl', 'Topaz', 'Zircon', 'Bauxite', 'Galena', 'Magnetite',
+    'Hematite', 'Cinnabar', 'Fluorite', 'Dolomite', 'Tourmaline', 'Lapis Lazuli', 'Chalcedony', 'Serpentine', 'Pumice',
+    'Flint', 'Shale', 'Marble', 'Slate', 'Olivine', 'Peridot', 'Rhodochrosite', 'Vanadinite', 'Kyanite', 'Molybdenite',
+    'Sphalerite', 'Cassiterite', 'Uraninite', 'Labradorite', 'Bismuth', 'Jet', 'Amber', 'Moonstone', 'Tiger Eye'],
+  deepsea: ['Anglerfish', 'Gulper Eel', 'Vampire Squid', 'Blobfish', 'Giant Isopod', 'Oarfish', 'Viperfish', 'Hagfish',
+    'Siphonophore', 'Barreleye', 'Dumbo Octopus', 'Sea Pig', 'Frilled Shark', 'Goblin Shark', 'Lanternfish', 'Nautilus',
+    'Cuttlefish', 'Sea Cucumber', 'Moray', 'Lamprey', 'Krill', 'Narwhal', 'Beluga', 'Sea Butterfly', 'Comb Jelly',
+    'Tube Worm', 'Hatchetfish', 'Fangtooth', 'Loosejaw', 'Cookiecutter Shark', 'Sea Angel', 'Pyrosome', 'Yeti Crab',
+    'Snailfish', 'Tripod Fish', 'Sea Spider', 'Box Jelly', 'Man o War', 'Giant Squid', 'Sea Toad', 'Sixgill', 'Dragonfish',
+    'Black Swallower', 'Sea Lily', 'Brittle Star', 'Lobster', 'Mantis Shrimp', 'Sea Urchin', 'Basket Star', 'Cusk Eel'],
+  cocktails: ['Negroni', 'Mojito', 'Daiquiri', 'Margarita', 'Manhattan', 'Martini', 'Sazerac', 'Gimlet', 'Sidecar',
+    'Mai Tai', 'Zombie', 'Caipirinha', 'Cosmopolitan', 'Old Fashioned', 'Bellini', 'Mimosa', 'Paloma', 'Aperol Spritz',
+    'Bloody Mary', 'Pina Colada', 'Tom Collins', 'Moscow Mule', 'White Russian', 'Black Russian', 'Long Island', 'Mint Julep',
+    'Pisco Sour', 'Whisky Sour', 'Grasshopper', 'Snowball', 'Harvey Wallbanger', 'Rusty Nail', 'Godfather', 'Boulevardier',
+    'Americano', 'Hurricane', 'Singapore Sling', 'Espresso Martini', 'Kir Royale', 'Gin Fizz', 'Bramble', 'Painkiller',
+    'Corpse Reviver', 'Vesper', 'Aviation', 'Last Word', 'Tequila Sunrise', 'Sea Breeze', 'Snakebite', 'Cuba Libre'],
+  fungi: ['Chanterelle', 'Porcini', 'Morel', 'Truffle', 'Shiitake', 'Enoki', 'Oyster Mushroom', 'Puffball', 'Stinkhorn',
+    'Death Cap', 'Fly Agaric', 'Liberty Cap', 'Jelly Ear', 'Earthstar', 'Inkcap', 'Shaggy Mane', 'Bracket', 'Lions Mane',
+    'Reishi', 'Cordyceps', 'Mycelium', 'Spore', 'Toadstool', 'Russula', 'Bolete', 'Amanita', 'Penny Bun', 'Witches Butter',
+    'Turkey Tail', 'Destroying Angel', 'Slime Mould', 'Yeast', 'Lichen', 'Portobello', 'Blewit', 'Waxcap', 'Girolle',
+    'Matsutake', 'Maitake', 'Mildew', 'Cep', 'Deceiver', 'Parasol', 'Dryad Saddle', 'Ergot', 'Truffle Hound', 'Hedgehog Fungus',
+    'Velvet Shank', 'King Oyster', 'Candlesnuff'],
 };
 // an alien word made up on the spot, for even more variety
 const AL = { on: ['z', 'x', 'kr', 'vr', 'gl', 'th', 'q', 'bl', 'sk', 'dr', 'gr', 'zh', 'fl', 'k', 'v', 'pl', 'sn', 'y', ''],
@@ -131,12 +199,15 @@ function alienWord() {
 }
 const fromCat = (c) => c === 'alien' && R() < .35 ? alienWord() : pick(NAME_WORDS[c]);
 const CATS = Object.keys(NAME_WORDS);
+// lists that suit "The One With the ..." and "... of <Welsh town>" (not the Friends titles themselves, nor Welsh twice)
+const THE_ONE = ['food', 'tools', 'scifi', 'welsh', 'norse', 'greek', 'pharma', 'buffy', 'soviet', 'dinosaurs', 'minerals', 'deepsea', 'cocktails', 'fungi'];
+const OF_CATS = ['food', 'tools', 'scifi', 'alien', 'norse', 'greek', 'pharma', 'buffy', 'soviet', 'dinosaurs', 'minerals', 'deepsea', 'cocktails', 'fungi'];
 
 // raw name before any jumbling
 function rawName() {
   const r = R(), c1 = pick(CATS); let c2 = pick(CATS); while (c2 === c1) c2 = pick(CATS);
-  if (r < .1) return ['The', 'One', 'With', 'the'].concat(words(pick(NAME_WORDS[pick(['food', 'tools', 'scifi', 'welsh'])]))).join(' ');
-  if (r < .2) return fromCat(pick(['food', 'tools', 'scifi', 'alien'])) + ' of ' + pick(NAME_WORDS.welsh);
+  if (r < .1) return ['The', 'One', 'With', 'the'].concat(words(pick(NAME_WORDS[pick(THE_ONE)]))).join(' ');
+  if (r < .2) return fromCat(pick(OF_CATS)) + ' of ' + pick(NAME_WORDS.welsh);
   return fromCat(c1) + ' ' + fromCat(c2);
 }
 // jumble: two-word splices on a neighbouring pair, one-word ones on a single word
@@ -148,7 +219,7 @@ function jumble(ws) {
     if (SPLICE[k].length === 2) {
       const pairs = free.filter((i, n) => free[n + 1] !== undefined).map((i, n) => [i, free[n + 1]]); if (!pairs.length) continue;
       const [i, j] = pick(pairs), r = SPLICE[k](ws[i], ws[j]); if (!r || !r.every(sayable)) continue;
-      if (r.length === 1) { out.splice(j, 1); out[i] = r[0]; } else { out[i] = r[0]; out[j] = r[1]; }
+      if (r.length === 1) { if (j !== i + 1) continue; out.splice(j, 1); out[i] = r[0]; }   // a blend only joins words side by side, never across 'of' (that left 'Planelli Of') else { out[i] = r[0]; out[j] = r[1]; }
     } else {
       const i = pick(free), r = SPLICE[k](ws[i]); if (!r || !sayable(r[0])) continue; out[i] = r[0];
     }
