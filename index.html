@@ -81,8 +81,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .sw .slot { width: 18px; height: 32px; border: 2px solid var(--ink); position: relative; }
   .sw .lev { --lh: 12px; position: absolute; left: 2px; right: 2px; height: var(--lh); background: var(--ink); transition: top .08s; }
   .sw .t { font: 500 10px/12px var(--mono); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
-  .ttl { display: flex; align-items: center; justify-content: center; background: var(--ink); color: var(--paper);
-    font: 400 86px/1 var(--display); letter-spacing: .01em; text-transform: uppercase; white-space: nowrap; }
+  .ttl { display: flex; align-items: center; justify-content: center; color: var(--ink);   /* the name, printed flat on the panel (the CRT is gone since v2.12.0) */
+    font: 400 72px/1 var(--display); letter-spacing: .01em; text-transform: uppercase; white-space: nowrap; }
   /* below the synth: a second pink panel on the same 19 columns, then a thin
      white strip for read-outs.  Every control down here is a "field": a small
      label over a 30 px control, one or more cells wide. */
@@ -152,19 +152,19 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   @media (pointer: fine) { .notekeys { display: none !important; } }
   /* OPTIONS: a box that opens when FILTH is tapped */
   .ttl { cursor: pointer; }
-  #opts, #fxpop, #prepop { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: none; }   /* no dimming: the colours show in place */
-  #opts.open, #fxpop.open, #prepop.open { display: flex; }
-  :is(#opts, #fxpop, #prepop) .win { position: relative; width: min(520px, 92vw); background: var(--pink); color: var(--ink); box-shadow: inset 0 0 0 3px var(--ink); padding: 30px 22px 10px; font-family: var(--mono); }
-  :is(#opts, #fxpop, #prepop) h2 { position: absolute; top: -12px; left: 14px; margin: 0; font: 400 18px/1 var(--display); letter-spacing: .03em; color: var(--paper); background: var(--ink); padding: 5px 10px 4px; }
-  :is(#opts, #fxpop, #prepop) .x { position: absolute; top: -14px; right: 14px; width: 34px; height: 30px; font-size: 16px; }   /* on the top edge, like the name */
-  :is(#opts, #fxpop, #prepop) .f { margin: 0 0 16px; }
-  :is(#opts, #fxpop, #prepop) .f > span { font-size: 13px; line-height: 15px; }
-  :is(#opts, #fxpop, #prepop) .row { height: 34px; gap: 12px; }
-  :is(#opts, #fxpop, #prepop) input[type=range] { flex: 1; min-width: 0; accent-color: var(--ink); }
-  :is(#opts, #fxpop, #prepop) .row.cells { gap: 8px; }
+  #opts, #prepop { position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: none; }   /* no dimming: the colours show in place */
+  #opts.open, #prepop.open { display: flex; }
+  :is(#opts, #prepop) .win { position: relative; width: min(520px, 92vw); background: var(--pink); color: var(--ink); box-shadow: inset 0 0 0 3px var(--ink); padding: 30px 22px 10px; font-family: var(--mono); }
+  :is(#opts, #prepop) h2 { position: absolute; top: -12px; left: 14px; margin: 0; font: 400 18px/1 var(--display); letter-spacing: .03em; color: var(--paper); background: var(--ink); padding: 5px 10px 4px; }
+  :is(#opts, #prepop) .x { position: absolute; top: -14px; right: 14px; width: 34px; height: 30px; font-size: 16px; }   /* on the top edge, like the name */
+  :is(#opts, #prepop) .f { margin: 0 0 16px; }
+  :is(#opts, #prepop) .f > span { font-size: 13px; line-height: 15px; }
+  :is(#opts, #prepop) .row { height: 34px; gap: 12px; }
+  :is(#opts, #prepop) input[type=range] { flex: 1; min-width: 0; accent-color: var(--ink); }
+  :is(#opts, #prepop) .row.cells { gap: 8px; }
   /* a phone on its side: tighter rows so the whole box fits */
-  @media (max-height: 520px) { :is(#opts, #fxpop, #prepop) .val { width: 58px !important; } :is(#opts, #fxpop, #prepop) .sq-bpmv { width: 84px !important; } :is(#opts, #fxpop, #prepop) .win { padding: 22px 18px 4px; width: min(1100px, 96vw) !important; display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; } :is(#opts, #fxpop, #prepop) .f > span { width: 118px; } :is(#opts, #fxpop, #prepop) .f { margin-bottom: 0; } :is(#opts, #fxpop, #prepop) .row { height: 32px; } :is(#opts, #fxpop, #prepop) .f > span, :is(#opts, #fxpop, #prepop) .val { font-size: 12px; } :is(#opts, #fxpop, #prepop) .row.cells .sb { height: 26px; font-size: 13px; } :is(#opts, #fxpop, #prepop) input[type=color] { height: 24px; } }
-  :is(#opts, #fxpop, #prepop) .row.cells .sb { flex: 1; height: 30px; }
+  @media (max-height: 520px) { :is(#opts, #prepop) .val { width: 58px !important; } :is(#opts, #prepop) .sq-bpmv { width: 84px !important; } :is(#opts, #prepop) .win { padding: 22px 18px 4px; width: min(1100px, 96vw) !important; display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; } :is(#opts, #prepop) .f > span { width: 118px; } :is(#opts, #prepop) .f { margin-bottom: 0; } :is(#opts, #prepop) .row { height: 32px; } :is(#opts, #prepop) .f > span, :is(#opts, #prepop) .val { font-size: 12px; } :is(#opts, #prepop) .row.cells .sb { height: 26px; font-size: 13px; } :is(#opts, #prepop) input[type=color] { height: 24px; } }
+  :is(#opts, #prepop) .row.cells .sb { flex: 1; height: 30px; }
   #prepop .win { display: block !important; }
   #prepop .row.cells .sb.lit::before { content: none; }
   #prepop .pp-list { height: min(52vh, 460px); overflow-y: auto; margin: 0 0 10px; box-shadow: inset 0 0 0 2px var(--ink); padding: 2px; overscroll-behavior: contain; }
@@ -178,19 +178,19 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   #prepop .pp-none { padding: 14px 10px; font-size: 14px; }
   @media (max-height: 520px) { #prepop .pp-list { height: calc(100vh - 150px); } #prepop .pp-row { height: 28px; } }
   /* choice buttons in OPTIONS: the chosen one is solid black with white letters, the others just an outline */
-  :is(#opts, #fxpop, #prepop) .row.cells .sb { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
-  :is(#opts, #fxpop, #prepop) .row.cells .sb.lit { background: var(--ink); color: var(--paper); box-shadow: none; }
-  :is(#opts, #fxpop, #prepop) .row.cells .sb.lit::before { content: '● '; }
-  :is(#opts, #fxpop, #prepop) .val { flex: none; width: 82px; text-align: right; font-size: 14px; }
-  :is(#opts, #fxpop, #prepop) #opt-ver { width: auto !important; flex: 1; text-align: left; }
-  :is(#opts, #fxpop, #prepop) input[type=color] { flex: none; width: 46px; height: 30px; padding: 0; border: 2px solid var(--ink); background: none; cursor: pointer; }
+  :is(#opts, #prepop) .row.cells .sb { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+  :is(#opts, #prepop) .row.cells .sb.lit { background: var(--ink); color: var(--paper); box-shadow: none; }
+  :is(#opts, #prepop) .row.cells .sb.lit::before { content: '● '; }
+  :is(#opts, #prepop) .val { flex: none; width: 82px; text-align: right; font-size: 14px; }
+  :is(#opts, #prepop) #opt-ver { width: auto !important; flex: 1; text-align: left; }
+  :is(#opts, #prepop) input[type=color] { flex: none; width: 46px; height: 30px; padding: 0; border: 2px solid var(--ink); background: none; cursor: pointer; }
   /* one line per setting: name on the left, controls on the right */
-  :is(#opts, #fxpop, #prepop) .win { width: min(640px, 94vw); padding-top: 24px; }
-  :is(#opts, #fxpop, #prepop) .f { display: flex; flex-direction: row; align-items: center; gap: 12px; margin: 0 0 8px; }
+  :is(#opts, #prepop) .win { width: min(640px, 94vw); padding-top: 24px; }
+  :is(#opts, #prepop) .f { display: flex; flex-direction: row; align-items: center; gap: 12px; margin: 0 0 8px; }
   .ctl.more { display: flex; align-items: center; justify-content: center; }
   .ctl.more .btn { width: 64px; height: 28px; }
-  :is(#opts, #fxpop, #prepop) .f > span { flex: none; width: 140px; }
-  :is(#opts, #fxpop, #prepop) .row { flex: 1; min-width: 0; }
+  :is(#opts, #prepop) .f > span { flex: none; width: 140px; }
+  :is(#opts, #prepop) .row { flex: 1; min-width: 0; }
   #opts .hue { -webkit-appearance: none; appearance: none; height: 16px; border: 2px solid var(--ink); background: linear-gradient(to right, hsl(0 97% 52%), hsl(60 97% 52%), hsl(120 97% 52%), hsl(180 97% 52%), hsl(240 97% 52%), hsl(300 97% 52%), hsl(360 97% 52%)); }
   #opts .hue::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 28px; background: var(--ink); border: 2px solid var(--paper); }
   #opts .hue::-moz-range-thumb { width: 14px; height: 28px; background: var(--ink); border: 2px solid var(--paper); border-radius: 0; }
@@ -217,10 +217,12 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   /* breathing space (v2.11.0): FX's four controls evenly spread, MORE on its top edge by the name; MODULATE's inner boxes clear of its frame
      (its 13 columns give up 20 px for a 10 px margin each side), the knob list as wide as SEQ, a clear line
      above SEQ's name; RANDOMISE's lettering a size down so SUSTAIN and GROOVE don't fill their keys */
-  .v3d #g-fx { grid-template-columns: repeat(4, 1fr); padding: 0 12px; }   /* four controls spread over the box's five cells, clear of its sides */
-  .v3d #g-fx .ctl { width: auto; }
-  .v3d .ctl.more { position: absolute; top: -11px; left: 62px; width: auto; height: auto; padding: 0; }   /* MORE on the top edge, just after the box's name */
-  .v3d .ctl.more .btn { width: 72px; height: 26px; }
+  /* CHORUS: its two keys, I and II, side by side like the Juno's; DELAY's SYNC key on its top edge, just after the box's name */
+  .ctl.key { justify-content: flex-start; }
+  .ctl.key .btn { width: 62px; height: 62px; margin-top: 4px; font-size: 22px; }
+  .v3d .ctl.key .btn { width: 70px; height: 70px; margin-top: 14px; font-size: 26px; }
+  .ctl.edge { position: absolute; top: -11px; left: 104px; width: auto; height: auto; padding: 0; }
+  .v3d .ctl.edge .btn { width: 72px; height: 26px; }
   .v3d #seqpanel { grid-template-columns: repeat(13, calc(var(--cw) - 20px / 13)); padding-left: 10px; padding-right: 10px; }
   .v3d #seqpanel > .f:first-of-type { grid-column: span 8 !important; margin: 0; }
   .v3d #seqpanel .box.sub { grid-template-columns: repeat(var(--n), calc(var(--cw) - 20px / 13)); }
@@ -241,10 +243,10 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTHER</h2></div>
     <div class="box" id="g-a" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>ENV 1</h2></div>
     <div class="box" id="g-fe" style="grid-area:3/10/4/15;--n:5;--m:1"><h2>ENV 2</h2></div>
-    <div class="box" id="g-fx" style="grid-area:3/15/4/20;--n:5;--m:1"><h2>FX</h2></div>
-    <div class="ttl" style="grid-area:1/15/3/20"><span id="ttlw">FILTH</span></div>
-    <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
+    <!-- the effects (added, after the VCA): CHORUS and DELAY where the CRT was, the bottom row kept free for a third -->
+    <div class="box" id="g-ch" style="grid-area:1/15/2/17;--n:2;--m:1"><h2>CHORUS</h2></div>
+    <div class="ttl" style="grid-area:1/17/2/20"><span>FILTH</span></div>
+    <div class="box" id="g-dl" style="grid-area:2/15/3/20;--n:5;--m:1"><h2>DELAY</h2></div>
     <div class="box" id="g-vca" style="grid-area:3/8/4/10;--n:2;--m:1"><h2>VCA</h2></div>
   </div>
   <div id="g-hide" hidden></div>
@@ -267,8 +269,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
       <div class="f" style="grid-column:4 / span 3"><span>TYPE</span><div class="row cells"><button class="btn" id="rnd-bass">BASS</button><button class="btn" id="rnd-lead">LEAD</button><button class="btn" id="rnd-keys">KEYS</button></div></div>
     </div>
   </div>
-  <!-- no longer on the panel (clock/MIDI read-outs, external input, reset, wobble switch): kept unseen so their code still runs -->
-  <div id="spare" hidden><b class="val sq-src" style="text-align:left">INTERNAL</b><b class="val" id="midi">—</b><span id="octv">4</span><button class="btn" id="resetbtn">RESET</button><button class="sb" id="wobbtn" aria-pressed="true">ON</button></div>
+  <!-- no longer on the panel (clock/MIDI read-outs, external input, reset): kept unseen so their code still runs -->
+  <div id="spare" hidden><b class="val sq-src" style="text-align:left">INTERNAL</b><b class="val" id="midi">—</b><span id="octv">4</span><button class="btn" id="resetbtn">RESET</button></div>
   <div class="foot">
     <span>Engine: <b id="emode">off</b></span>
     <span>FILTH v<b id="ver"></b></span>
@@ -1078,7 +1080,7 @@ class PolivoksEngine {
       const K = this.K;
       const lfoR = K.lfoR;
       const lfo = this.lfo.step(lfoR, p.lfoMode | 0, this.nzAvg);
-      this.lfoV = lfo;                            // last modulator output (V), read by the page for the title wobble
+      this.lfoV = lfo;                            // last modulator output (V), read by the page (mod sources)
 
       // keyboard board: gate, track-and-hold, voice 2, glide (sheet 3)
       const kb = this.kb;
@@ -1959,6 +1961,8 @@ const sw = (id, top, bot, def, label) => ({ id, kind: 'sw', top, bot, def, label
 // bottom); `at` pins a control to a cell [column, row] where order matters
 const at = (c, col, row) => Object.assign(c, { at: [col, row] });
 const gap = { kind: 'spacer' };
+// a key that sets one bit of another control's value (lit while the bit is set)
+const key = (id, label, bit) => ({ kind: 'key', id, label, bit });
 const L = {
   'g-mod': [knob('lfoRate', 'ЧАСТОТА', 'mm', .45), sw('lfoRange', 'БЫСТР.', 'МЕДЛ.', 0, 'ДИАПАЗОН'), sel('lfoMode', 'РЕЖИМ', [{i:'tri'},{i:'sq'},{i:'sh'},{i:'nz'}], 0)],
   'g-perf': [at(knob('tune', 'НАСТРОЙКА', 'bip', 0), 1, 1), at(knob('glide', 'ГЛИССАНДО', 'mm', 0), 2, 1), at(sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1), 3, 1),
@@ -1980,19 +1984,19 @@ const L = {
   // MODULATE with CUTOFF picked (its ENV 2 and LFO sliders), and saved, loaded and sequenced as before
   // likewise each VCO's MOD (LFO to pitch): set from MODULATE with that VCO's PITCH picked (its LFO source)
   'g-hide': [knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0),
-    sw('eSync', 'FREE', 'SYNC', 1), knob('eTone', 'TONE', '06', .45), knob('eSpread', 'SPREAD', '06', .8)],
+    // the chorus's mode and the delay's FREE/SYNC: worked by keys on the panel (kind 'key' below)
+    Object.assign(sel('chorus', 'CHORUS', [{t:'OFF'},{t:'I'},{t:'II'},{t:'I+II'}], 0), { span: 130 }), sw('eSync', 'FREE', 'SYNC', 1)],
   'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('fEgMode', 'ЦИКЛ.', 'ОДНОКР.', 0)],
   // ENV 1 is the amplifier's envelope (hardwired to the VCA), ENV 2 the filter's (its depth is ENV 2 AMOUNT);
   // the VCA's own MOD and HOLD sit in a small box of their own
   'g-a': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('aEgMode', 'ЦИКЛ.', 'ОДНОКР.', 0)],
   'g-vca': [at(knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), 1, 1), at(sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), 2, 1)],
-  // added effects, not on the Polivoks, in one box: the Juno-60's chorus (OFF, I, II, I+II), then the
-  // echo's TIME (its seven ticks are the SYNC note values), FEEDBACK and MIX, and MORE, which opens the
-  // FX window for the deeper settings (FREE/SYNC, TONE, SPREAD: kept off the panel in g-hide, still saved,
-  // loaded, randomised and sequenced as before)
-  // (CHORUS sits fourth, next to MORE: in the first column its OFF/I/II words ran into the box's edge and its name)
-  'g-fx': [knob('eTime', 'ECHO TIME', '06', .5), knob('eFb', 'FEEDBACK', '06', .35), knob('eMix', 'ECHO MIX', '06', .25),
-    Object.assign(sel('chorus', 'CHORUS', [{t:'OFF'},{t:'I'},{t:'II'},{t:'I+II'}], 0), { span: 130 }), { kind: 'more' }],
+  // added effects, not on the Polivoks, after the VCA: the Juno-60's chorus, two keys I and II as on the Juno
+  // (both down = I+II, the `chorus` value is their sum: 0 OFF, 1 I, 2 II, 3 I+II); then the delay (the tape echo):
+  // TIME (its seven ticks are the SYNC note values), FEEDBACK, MIX, TONE, SPREAD and the SYNC key on its edge
+  'g-ch': [key('chorus', 'I', 1), key('chorus', 'II', 2)],
+  'g-dl': [knob('eTime', 'TIME', '06', .5), knob('eFb', 'FEEDBACK', '06', .35), knob('eMix', 'MIX', '06', .25),
+    knob('eTone', 'TONE', '06', .45), knob('eSpread', 'SPREAD', '06', .8), Object.assign(key('eSync', 'SYNC', 1), { edge: true })],
 };
 // fMode switch: top = ПФ (band-pass, value 1), bottom = ФНЧ (low-pass, 0) → invert mapping
 const INVERT = { fMode: true, voice: false, fEgMode: true, aEgMode: true };   // LOOP up = 1 (the original's ⋀⋀)
@@ -2034,37 +2038,8 @@ const save = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); }
 let engineMode = '', node = null, ctx = null, analyser = null, powered = false;
 let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
-// ---------------------------------------------------------------- title wobble
-// The letters of FILTH are pushed about by a fixed noise whose depth is the
-// modulator's output right now times how loud the synth is (RMS over 0.2 s): plain at 0 V, warped one way at the top of
-// the triangle and the other way at the bottom, so it moves with RATE, RANGE
-// (SLOW too) and MODE.  Only the title's filter changes, once per frame and
-// only when the value has moved; near 0 V the filter is dropped so the
-// letters are crisp.
-const WOB = { on: true, A: 9, vmax: 1.43, ref: 0.4, last: NaN };
-try { const w = localStorage.getItem('polivoks-wobble'); WOB.on = w ? w === '1' : !matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
-const wobW = document.getElementById('ttlw'), wobD = document.getElementById('wobd');
-function wobDraw(v) {
-  if (Math.abs(v) < 0.03) { wobW.style.filter = ''; return; }
-  wobD.setAttribute('scale', (WOB.A * v).toFixed(2));
-  wobW.style.filter = 'url(#wobf)';
-}
-function wobFrame() {
-  if (!WOB.on) return;
-  // depth = output RMS over the last 0.2 s; a held note at the default VOLUME is ≈0.45, so 0.4 and up is full depth
-  const v = Math.max(-1, Math.min(1, lfoV / WOB.vmax)) * Math.min(1, outRms / WOB.ref);
-  if (!(Math.abs(v - WOB.last) < 0.01)) { WOB.last = v; wobDraw(v); }
-  requestAnimationFrame(wobFrame);
-}
-function wobSet(on) {
-  WOB.on = on; try { localStorage.setItem('polivoks-wobble', on ? '1' : '0'); } catch (e) {}
-  const b = document.getElementById('wobbtn'); b.classList.toggle('lit', on); b.textContent = on ? 'ON' : 'OFF'; b.setAttribute('aria-pressed', on);
-  WOB.last = NaN; if (on) requestAnimationFrame(wobFrame); else wobW.style.filter = '';
-}
-document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
-wobSet(WOB.on);
-window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '2.11.0';
+window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m) };   // for headless checks
+const VERSION = '2.12.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2204,12 +2179,13 @@ function drawResp() {
   el('text', { x: 10, y: 20, 'font-size': 8.5, fill: '#0b0b0b' }, respSvg).textContent = tr('ФНЧ');
   el('text', { x: 64, y: 54, 'font-size': 8.5, fill: '#0b0b0b' }, respSvg).textContent = tr('ПФ');
 }
+const keys = [];
 for (const gid in L) {
   const host = document.getElementById(gid);
   for (const c of L[gid]) {
     if (c.kind === 'spacer') { host.appendChild(document.createElement('div')); continue; }
     if (c.kind === 'resp') { host.appendChild(makeResp()); continue; }
-    if (c.kind === 'more') { const d = host.appendChild(document.createElement('div')); d.className = 'ctl more'; d.innerHTML = '<button class="btn" id="fx-more" aria-label="More FX settings">MORE</button>'; continue; }
+    if (c.kind === 'key') { const d = host.appendChild(document.createElement('div')); d.className = 'ctl key' + (c.edge ? ' edge' : ''); const b = d.appendChild(document.createElement('button')); b.className = 'btn'; b.textContent = c.label; b.setAttribute('aria-label', (gid === 'g-ch' ? 'Chorus ' : '') + c.label); keys.push(Object.assign(c, { b })); continue; }
     if (c.kind === 'led') { host.appendChild(makeLed(c)); if (c.at) host.lastChild.style.gridArea = `${c.at[1]} / ${c.at[0]}`; continue; }
     const e = host.appendChild(c.kind === 'knob' ? makeKnob(c) : c.kind === 'sel' ? makeSel(c) : makeSwitch(c));
     if (c.at) e.style.gridArea = `${c.at[1]} / ${c.at[0]}`;
@@ -2221,6 +2197,12 @@ for (const gid in L) {
 // the box and their own, shorter row height, rows from the top, so the knobs
 // are closer together vertically.  Any spare height falls at the bottom.
 for (const gid of ['g-f', 'g-fe', 'g-a', 'g-o1', 'g-o2']) document.getElementById(gid).classList.add('own');
+// the keys follow their control however it is set (presets, RANDOMISE, MIDI): its set is wrapped to relight them
+for (const k of keys) {
+  const c = S.find((x) => x.id === k.id), lit = () => { for (const j of keys) if (j.id === k.id) { const on = !!((c.v | 0) & j.bit); j.b.classList.toggle('lit', on); j.b.setAttribute('aria-pressed', on); } };
+  if (!c.keyed) { const set = c.set; c.set = (v, quiet) => { set(v, quiet); lit(); }; c.keyed = true; }
+  k.b.onclick = () => c.set((c.v | 0) ^ k.bit); lit();
+}
 applyLang();
 pwActive();
 document.getElementById('resetbtn').onclick = () => {
@@ -2303,7 +2285,8 @@ const ECHO_RANGE = { eFb: [.1, .55], eMix: [0, .4], eTone: [.2, .85] };
 // seqsOff: every step sequence stops (GROOVE, MESS); with mods too, every mod source as well (TONE, PATCH)
 function seqsOff(mods) { for (const id in seqs) if (seqAct(seqs[id])) { Object.assign(seqs[id], mods ? { on: false, eOn: false, lOn: false, e2On: false, vOn: false, kOn: false } : { on: false }); pushSeq(knobById(id)); } }
 // knobs on the panel (not the circuit amounts kept off it), for the randomisers' picks
-const VIS = () => KNOBS.filter((c) => !c.el.closest('#g-hide') && SAFE(c));
+// (the delay's TONE and SPREAD were off the panel until v2.12.0: still left out, so the dice throw as before)
+const VIS = () => KNOBS.filter((c) => !c.el.closest('#g-hide') && c.id !== 'eTone' && c.id !== 'eSpread' && SAFE(c));
 const MODS = [['lOn', 'lDepth'], ['e2On', 'e2Depth'], ['eOn', 'eDepth'], ['vOn', 'vDepth'], ['kOn', 'kDepth']];   // LFO, ENV 1, ENV 2, VEL, KEY
 // TONE MOD slider: how deep TONE's modulations and filter sequences go (virtually nothing ... moderate)
 const toneAmt = 1;   // TONE MOD fixed at full (Johnny): the slider is gone
@@ -2421,9 +2404,9 @@ ed.querySelectorAll('[data-note]').forEach((b) => {
 // touching a knob on the panel picks it too
 const PICK = { lfoRate: 'LFO RATE', o1mod: 'VCO I MOD', o1fm: 'VCO I FM', o2mod: 'VCO II MOD', o2fm: 'VCO II FM', o1pitch: 'VCO I PITCH', o2pitch: 'VCO II PITCH', o1fine: 'VCO I FINE', o2fine: 'VCO II FINE', o1pw: 'VCO I PULSE W.', o2pw: 'VCO II PULSE W.', mix1: 'MIX VCO I', mix2: 'MIX VCO II', mixN: 'MIX NOISE',
   fA: 'ENV 2 ATTACK', fD: 'ENV 2 DECAY', fS: 'ENV 2 SUSTAIN', fR: 'ENV 2 RELEASE', fMod: 'VCF MOD', fEnv: 'ENV 2 AMOUNT', aA: 'ENV 1 ATTACK', aD: 'ENV 1 DECAY', aS: 'ENV 1 SUSTAIN', aR: 'ENV 1 RELEASE', aMod: 'VCA MOD',
-  eTime: 'ECHO TIME', eFb: 'ECHO FEEDBACK', eTone: 'ECHO TONE', eSpread: 'ECHO SPREAD', eMix: 'ECHO MIX' };
+  eTime: 'DELAY TIME', eFb: 'DELAY FEEDBACK', eTone: 'DELAY TONE', eSpread: 'DELAY SPREAD', eMix: 'DELAY MIX' };
 const knobSel = q('.sq-knob'), pickO = {}, ORDER = [];
-for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-a', 'g-fe', 'g-vca', 'g-fx']) {
+for (const gid of ['g-mod', 'g-perf', 'g-o1', 'g-o2', 'g-mix', 'g-f', 'g-a', 'g-fe', 'g-vca', 'g-dl']) {
   const h = document.querySelector('#' + gid + ' h2'), og = document.createElement('optgroup');
   og.label = h ? h.textContent : 'PERFORMANCE';
   for (const c of L[gid]) if (c.kind === 'knob') {
@@ -2540,8 +2523,8 @@ for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addE
 // sequencer), the panel colour, and the 3D view's three lights (left, right,
 // ambient), each a colour and a brightness.
 const LOOK_STORE = 'polivoks-look';
-const look = { hue: 87 / 360, sat: 1, lit: 0.9, finish: 'plastic', text: 0.81, glass: true, crt: 'white', angle: 0, angleLow: 0, lens: 0, lights: { left: { c: '#ffffff', i: 2 }, right: { c: '#d6d6d6', i: 1.91 }, amb: { c: '#ffffff', i: 2 } } };   // Johnny's defaults, 14 Nov (late); saved settings still win
-try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'glass', 'crt', 'angle', 'angleLow', 'lens']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
+const look = { hue: 87 / 360, sat: 1, lit: 0.9, finish: 'plastic', text: 0.81, angle: 0, angleLow: 0, lens: 0, lights: { left: { c: '#ffffff', i: 2 }, right: { c: '#d6d6d6', i: 1.91 }, amb: { c: '#ffffff', i: 2 } } };   // Johnny's defaults, 14 Nov (late); saved settings still win
+try { const s = JSON.parse(localStorage.getItem(LOOK_STORE) || '{}'); for (const k of ['hue', 'sat', 'lit', 'finish', 'text', 'angle', 'angleLow', 'lens']) if (s[k] != null) look[k] = s[k]; for (const k in look.lights) Object.assign(look.lights[k], (s.lights || {})[k]); } catch (e) {}
 const lookCss = () => `hsl(${Math.round(look.hue * 360)} ${Math.round(look.sat * 100)}% ${Math.round(look.lit * 100)}%)`;
 function applyLook() {
   document.documentElement.style.setProperty('--pink', lookCss());
@@ -2568,8 +2551,6 @@ optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTI
   <div class="f"><span>BOTTOM ANGLE</span><div class="row"><input type="range" min="0" max="35" id="opt-angle2" aria-label="Bottom panel angle"><b class="val" id="opt-angle2v"></b></div></div>
   <div class="f"><span>LENS (3D)</span><div class="row"><input type="range" min="0" max="100" id="opt-par" aria-label="Lens: long to wide"><b class="val" id="opt-parv"></b></div></div>
   <div class="f"><span>TEXT (3D)</span><div class="row"><input type="range" min="0" max="100" id="opt-text" aria-label="Text: lit by the lights or lit up"><b class="val" id="opt-textv"></b></div></div>
-  <div class="f"><span>CRT COLOUR</span><div class="row cells" id="opt-crt">${['orange', 'amber', 'green', 'white', 'blue'].map((c) => `<button class="sb" data-crt="${c}">${c.toUpperCase()}</button>`).join('')}</div></div>
-  <div class="f"><span>GLASS (3D)</span><div class="row cells" id="opt-glass"><button class="sb" data-g="1">ON</button><button class="sb" data-g="0">OFF</button></div></div>
   <div class="f"><span>FINISH (3D)</span><div class="row cells" id="opt-finish"><button class="sb" data-f="matt">MATT</button><button class="sb" data-f="plastic">PLASTIC</button><button class="sb" data-f="metal">METALLIC</button></div></div>
   ${[['left', 'LEFT LIGHT'], ['right', 'RIGHT LIGHT'], ['amb', 'AMBIENT LIGHT']].map(([k, t]) => `<div class="f"><span>${t}</span><div class="row"><input type="color" data-l="${k}" aria-label="${t} colour"><input type="range" min="0" max="200" data-li="${k}" aria-label="${t} brightness"><b class="val" data-lv="${k}"></b></div></div>`).join('')}
   <div class="f"><span>KEY PRIORITY</span><div class="row cells" id="opt-prio"><button class="sb" data-k="low">LOW</button><button class="sb" data-k="last">LAST</button></div></div>
@@ -2584,8 +2565,6 @@ function drawOpts() {
   optSat.value = Math.round(look.sat * 100); optsEl.querySelector('#opt-satv').textContent = Math.round(look.sat * 100) + '%';
   optLit.value = Math.round(look.lit * 100); optsEl.querySelector('#opt-litv').textContent = Math.round(look.lit * 100) + '%';
   optsEl.querySelectorAll('[data-f]').forEach((b) => b.classList.toggle('lit', b.dataset.f === look.finish));
-  optsEl.querySelectorAll('[data-crt]').forEach((b) => b.classList.toggle('lit', b.dataset.crt === (look.crt || 'white')));
-  optsEl.querySelectorAll('[data-g]').forEach((b) => b.classList.toggle('lit', (b.dataset.g === '1') === (look.glass !== false)));
   optsEl.querySelectorAll('[data-k]').forEach((b) => b.classList.toggle('lit', b.dataset.k === keyPrio));
   optsEl.querySelectorAll('[data-m]').forEach((b) => b.classList.toggle('lit', (b.dataset.m === 'mod') === fmMod));
   optsEl.querySelectorAll('[data-b]').forEach((b) => b.classList.toggle('lit', +b.dataset.b === bendSt));
@@ -2613,8 +2592,6 @@ optsEl.querySelectorAll('[data-k]').forEach((b) => { b.onclick = () => { keyPrio
 optsEl.querySelectorAll('[data-m]').forEach((b) => { b.onclick = () => { fmMod = b.dataset.m === 'mod'; try { localStorage.setItem(FMMOD_STORE, fmMod ? 'mod' : 'orig'); } catch (e) {} send({ t: 'fmmod', v: fmMod }); drawOpts(); }; });
 optsEl.querySelectorAll('[data-b]').forEach((b) => { b.onclick = () => { bendSt = +b.dataset.b; try { localStorage.setItem(BEND_STORE, bendSt); } catch (e) {} send({ t: 'bendst', v: bendSt }); drawOpts(); }; });
 optsEl.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { look.finish = b.dataset.f; applyLook(); drawOpts(); }; });
-optsEl.querySelectorAll('[data-crt]').forEach((b) => { b.onclick = () => { look.crt = b.dataset.crt; applyLook(); drawOpts(); }; });
-optsEl.querySelectorAll('[data-g]').forEach((b) => { b.onclick = () => { look.glass = b.dataset.g === '1'; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-l]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.l].c = e.value; applyLook(); drawOpts(); }; });
 optsEl.querySelectorAll('[data-li]').forEach((e) => { e.oninput = () => { look.lights[e.dataset.li].i = e.value / 100; applyLook(); drawOpts(); }; });
 function openOptions() { drawOpts(); optsEl.classList.add('open'); }
@@ -2638,29 +2615,6 @@ document.querySelector('.ttl').addEventListener('click', openOptions);
 // MORE in the FX box opens this: the chorus mode, and the echo's deeper settings
 // (FREE/SYNC, TONE, SPREAD), which are off the panel.  It works the same
 // controls as the panel, so presets, RANDOMISE and the sequencer see no change.
-const fxEl = document.createElement('div'); fxEl.id = 'fxpop';
-fxEl.innerHTML = `<div class="win" role="dialog" aria-label="FX"><h2>FX</h2><button class="btn x" aria-label="Close">✕</button>
-  <div class="f"><span>CHORUS</span><div class="row cells">${['OFF', 'I', 'II', 'I+II'].map((t, i) => `<button class="sb" data-ch="${i}">${t}</button>`).join('')}</div></div>
-  <div class="f"><span>ECHO TIME</span><div class="row cells"><button class="sb" data-sync="0">FREE</button><button class="sb" data-sync="1">SYNC</button></div></div>
-  <div class="f"><span>ECHO TONE</span><div class="row"><input type="range" min="0" max="100" data-fx="eTone" aria-label="Echo tone"><b class="val" data-fxv="eTone"></b></div></div>
-  <div class="f"><span>ECHO SPREAD</span><div class="row"><input type="range" min="0" max="100" data-fx="eSpread" aria-label="Echo spread"><b class="val" data-fxv="eSpread"></b></div></div></div>`;
-document.body.appendChild(fxEl);
-const ctlOf = (id) => S.find((c) => c.id === id);
-function drawFx() {
-  fxEl.querySelectorAll('[data-ch]').forEach((b) => b.classList.toggle('lit', +b.dataset.ch === ctlOf('chorus').v));
-  fxEl.querySelectorAll('[data-sync]').forEach((b) => b.classList.toggle('lit', +b.dataset.sync === (ctlOf('eSync').v ? 1 : 0)));
-  fxEl.querySelectorAll('[data-fx]').forEach((e) => { const v = Math.round(ctlOf(e.dataset.fx).v * 100); if (document.activeElement !== e) e.value = v; fxEl.querySelector(`[data-fxv="${e.dataset.fx}"]`).textContent = v + '%'; });
-}
-fxEl.querySelectorAll('[data-ch]').forEach((b) => { b.onclick = () => { ctlOf('chorus').set(+b.dataset.ch); drawFx(); }; });
-fxEl.querySelectorAll('[data-sync]').forEach((b) => { b.onclick = () => { ctlOf('eSync').set(+b.dataset.sync); drawFx(); }; });
-fxEl.querySelectorAll('[data-fx]').forEach((e) => { e.oninput = () => { ctlOf(e.dataset.fx).set(e.value / 100); drawFx(); }; });
-let fxTimer = 0;
-function openFx() { drawFx(); fxEl.classList.add('open'); clearInterval(fxTimer); fxTimer = setInterval(drawFx, 150); }   // follows presets, RANDOMISE and sequences while open
-function closeFx() { fxEl.classList.remove('open'); clearInterval(fxTimer); }
-fxEl.querySelector('.x').onclick = closeFx;
-fxEl.addEventListener('pointerdown', (e) => { if (e.target === fxEl) closeFx(); });
-addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFx(); });
-document.getElementById('fx-more').onclick = openFx;
 applyLook();
 
 // ---------------------------------------------------------------- presets
@@ -3010,7 +2964,7 @@ addEventListener('resize', fit); fit();
 // view3d.js only reads this app's state and works its controls (c.set, the
 // buttons' own clicks), so both views share every feature and setting.
 window.filthApp = {
-  S, KNOBS, seqOf, stepOf, change, pickSeq, on, off, WOB, VERSION, seqMods,
+  S, KNOBS, seqOf, stepOf, change, pickSeq, on, off, VERSION, seqMods,
   get edC() { return edC; }, get lastPos() { return lastPos; },
   look, openOptions,
   get lfoV() { return lfoV; }, get preName() { return preName; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },
