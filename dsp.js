@@ -22,7 +22,8 @@ function rail(x, vs) {
 
 // Pot tapers ----------------------------------------------------------------
 // 'A' (log) taper resistance, p in 0..1
-function potA(p, rmin, rmax) { const k = 5; return rmin + (rmax - rmin) * (Math.exp(k * p) - 1) / (Math.exp(k) - 1); }
+const EXP5M1 = Math.exp(5) - 1;
+function potA(p, rmin, rmax) { return rmin + (rmax - rmin) * (Math.exp(5 * p) - 1) / EXP5M1; }
 
 // Small fast RNG (xorshift32) ------------------------------------------------
 class Rng {
@@ -129,7 +130,9 @@ class VCO {
   dV(I) { return 7.948 + 35.51 * Math.pow(I, 0.73); }
   step(I) {
     const C = this.C, h = this.h, Vref = this.Vref, lo = this.vcLow, tau = this.tauD;
-    const dv = this.dV(I), hi = lo + dv - I * this.tDump / C;
+    // dV(I)'s pow() only when the current changes (VCO II: once per sample)
+    if (I !== this.lastI) { this.lastI = I; this.lastDV = this.dV(I); }
+    const dv = this.lastDV, hi = lo + dv - I * this.tDump / C;
     // A10 (+): the added PULSE WIDTH pot's volts (0 V = the original square)
     this.vplus = this.vpw;
     // A7 can't follow the reset: it climbs back at SR7 until it meets X again
@@ -146,7 +149,7 @@ class VCO {
         // vc = lo + A·(e^(−τd/τ) − E): exponential that lands on lo exactly
         // at the end of the dump.  It falls at ~90 V/µs, so A7 is climbing
         // throughout.
-        const E = Math.exp(-this.tDump / tau), A = this.dA;
+        const E = this.Ed || (this.Ed = Math.exp(-this.tDump / tau)), A = this.dA;   // E is a constant, computed once
         const t1 = this.tDump - this.rem, dt = Math.min(t, this.rem), t2 = t1 + dt;
         vc = lo + A * (Math.exp(-t2 / tau) - E);
         climbSpan(dt);
@@ -190,7 +193,9 @@ class VCO {
     let n = this.n10, pa = 0;
     for (let i = 1; i <= 4; i++) {
       const vd = this.vplus - (S0 + (S - S0) * (i - 0.5) / 4);
-      const n0 = n; n = clamp(n + hs * this.SR10 * Math.tanh(vd / k), -12, 12);
+      // pinned at a rail and pushed further into it, the clamp gives the rail
+      // whatever tanh() says, so it is skipped (same result, bit for bit)
+      const n0 = n; if (!((n === 12 && vd >= 0) || (n === -12 && vd <= 0))) n = clamp(n + hs * this.SR10 * Math.tanh(vd / k), -12, 12);
       pa += clamp(0.5 * (n0 + n), -this.Vsat, this.Vsat);
     }
     this.n10 = n; this.S0 = S;
@@ -251,16 +256,17 @@ class K140VCF {
     const h2 = h * th, h1 = h - h2;
     const y1 = this.y1, y2 = this.y2, o1 = this.vos1, o2 = this.vos2, u = wIn * vin + o1;
     // OTA current: Iset·tanh(x), scaled 1±d for the two slew directions
-    let t = Math.tanh((u - wL * y2 - wD * y1) * c);
-    const F1n = g * t * (1 + d * t);
-    t = Math.tanh((a3 * y1 + o2) * c);
-    const F2n = g * t * (1 + d * t);
+    const ta = Math.tanh((u - wL * y2 - wD * y1) * c);
+    const F1n = g * ta * (1 + d * ta);
+    const tb = Math.tanh((a3 * y1 + o2) * c);
+    const F2n = g * tb * (1 + d * tb);
     // Newton from the previous state; steps limited so the saturating tanh
     // can't throw it into a limit cycle when g·h is large
+    // (the first iterate sits on the old state, so it reuses ta / tb)
     let z1 = y1, z2 = y2;
     for (let it = 0; it < 4; it++) {
-      const t1 = Math.tanh((u - wL * z2 - wD * z1) * c);
-      const t2 = Math.tanh((a3 * z1 + o2) * c);
+      const t1 = it === 0 ? ta : Math.tanh((u - wL * z2 - wD * z1) * c);
+      const t2 = it === 0 ? tb : Math.tanh((a3 * z1 + o2) * c);
       const r1 = z1 - y1 - h1 * F1n - h2 * g * t1 * (1 + d * t1);
       const r2 = z2 - y2 - h1 * F2n - h2 * g * t2 * (1 + d * t2);
       const s1 = g * (1 - t1 * t1) * (1 + 2 * d * t1) * c, s2 = g * (1 - t2 * t2) * (1 + 2 * d * t2) * c * a3;
@@ -681,14 +687,14 @@ class PolivoksEngine {
   // ENVELOPE MODE is gone from the panel: both envelopes always run single (⋀, no repeat), whatever a preset holds
   // the filter's small-signal corner now (Hz): ω0 = Iset/(4·VT·C1)·√(wL·a3) from K140VCF.step; display only
   get fcHz() { const f = this.vcf; return (this.iset || 0) / (4 * VT_OF(this.Tchip) * f.C1) * Math.sqrt(f.wL * f.a3) / (2 * Math.PI); }
-  setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
+  setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.unsettled = true; this.kd = true; this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
   noteOn(n, vel) { this.kb.press(n); this.vel = vel == null ? 1 : vel; this.key = n; }   // key: the last key pressed, for the KEY mod source   // vel 0…1: the last key's MIDI velocity (1 from the screen and computer keys), a mod source only
   noteOff(n) { this.kb.release(n); }
   allOff() { this.kb.held.length = 0; }
   setPrio(last) { this.kb.last = !!last; }
-  setFmMod(on) { this.fmMod = !!on; }        // FM MOD (OPTIONS), off = as drawn
+  setFmMod(on) { this.fmMod = !!on; this.kd = true; }        // FM MOD (OPTIONS), off = as drawn
   setBend(v) { this.bend = Math.max(-1, Math.min(1, +v || 0)); }        // MIDI pitch bend, −1 … +1
   setModWheel(v) { this.modw = Math.max(0, Math.min(1, +v || 0)); }     // MIDI CC1, 0 … 1
   setBendRange(st) { this.bendSt = Math.max(1, Math.min(24, +st || 2)); } // semitones (OPTIONS)
@@ -700,7 +706,13 @@ class PolivoksEngine {
     const sm = 1 - Math.exp(-hb / 0.012), smW = 1 - Math.exp(-hb / 0.005);
     const rangeOct = [-2, -1, 0, 1, 2];
     for (let s = 0; s < n; s++) {
-      for (let j = 0; j < SMOOTHED.length; j++) { const k = SMOOTHED[j]; ps[k] += (p[k] - ps[k]) * sm; }
+      // knob smoothing.  Once no smoother moves any more (v + (p − v)·sm === v
+      // for every knob) the loop sleeps until setParam turns a knob again.
+      if (this.unsettled !== false) {
+        let any = false;
+        for (let j = 0; j < SMOOTHED.length; j++) { const k = SMOOTHED[j]; const v = ps[k], nv = v + (p[k] - v) * sm; if (nv !== v) { ps[k] = nv; any = true; } }
+        this.unsettled = any; if (any) this.kd = true;
+      }
       // power supply ramps like rail capacitors charging
       this.powerLevel += ((p.power ? 1 : 0) - this.powerLevel) * (p.power ? 0.0004 : 0.002);
 
@@ -709,19 +721,29 @@ class PolivoksEngine {
       //   SLOW range (added): R107's 1 MΩ gang and C7 ∥ C7a = 160 µF
       const slow = p.lfoRange >= 0.5;
       this.lfo.C = slow ? 160e-6 : 10e-6;
-      const lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3);
+      // numbers that depend only on knobs: recomputed (same expressions) on a
+      // sample where a knob moved (kd), otherwise read from K.  setParam,
+      // setFmMod and the smoothers set kd, so every knob write must go through them.
+      if (this.kd !== false) { const K = this.K || (this.K = {});
+        K.lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3); K.rg = potA(ps.glide, 0, 1e6);
+        K.fA = potA(p.fA, 200, 1e6); K.fD = potA(p.fD, 1e3, 2e6); K.fR = potA(p.fR, 1e3, 2e6); K.aA = potA(p.aA, 200, 1e6); K.aD = potA(p.aD, 1e3, 2e6); K.aR = potA(p.aR, 1e3, 2e6);
+        K.tune = ps.tune * 2 / 12; K.p1 = pitchOct(ps.o1pitch); K.d2 = detuneOct(ps.o2detune); K.p2 = pitchOct(ps.o2pitch); K.pw1 = vpwOf(ps.o1pw); K.pw2 = vpwOf(ps.o2pw);
+        K.fmk = fmOctPerVolt(ps.o1fm, this.fmMod) * LN2; K.tc = (Math.exp(5 * ps.cutoff) - 1) / (Math.exp(5) - 1); K.dg = driveGain(ps.drive); K.gn = mixGain(ps.mixN, 0);
+        this.vcf.setRes(ps.res); this.kd = false; }
+      const K = this.K;
+      const lfoR = K.lfoR;
       const lfo = this.lfo.step(lfoR, p.lfoMode | 0, this.nzAvg);
       this.lfoV = lfo;                            // last modulator output (V), read by the page for the title wobble
 
       // keyboard board: gate, track-and-hold, voice 2, glide (sheet 3)
       const kb = this.kb;
-      kb.step(potA(ps.glide, 0, 1e6), p.voice >= 0.5);
+      kb.step(K.rg, p.voice >= 0.5);
       this.gate = kb.gate;
 
       // envelopes
-      const ef = this.egF.step(this.gate, potA(p.fA, 200, 1e6), potA(p.fD, 1e3, 2e6), ps.fS, potA(p.fR, 1e3, 2e6), p.fEgMode >= 0.5);
+      const ef = this.egF.step(this.gate, K.fA, K.fD, ps.fS, K.fR, p.fEgMode >= 0.5);
       this.envN = ef;                             // filter envelope 0…1: the ENV 2 mod source (seq.js keys e*)
-      const ea = this.egA.step(this.gate, potA(p.aA, 200, 1e6), potA(p.aD, 1e3, 2e6), ps.aS, potA(p.aR, 1e3, 2e6), p.aEgMode >= 0.5);
+      const ea = this.egA.step(this.gate, K.aA, K.aD, ps.aS, K.aR, p.aEgMode >= 0.5);
       this.env2N = ea;                            // amplifier envelope 0…1: the ENV 1 mod source (seq.js keys e2*)
 
       // slow thermal drift of each expo pair (±0.3 K random walk)
@@ -729,27 +751,26 @@ class PolivoksEngine {
       const T1 = this.Tchip + clamp(this.drift1 * 0.01, -0.3, 0.3), T2 = this.Tchip + clamp(this.drift2 * 0.01, -0.3, 0.3);
 
       // pitch CVs (octaves relative to A4 at 8')
-      const tune = ps.tune * 2 / 12;
+      const tune = K.tune;
       //   pitch bend and mod wheel (MIDI, additions, see bendOct above)
       this.bendS += (this.bend - this.bendS) * smW; this.modwS += (this.modw - this.modwS) * smW;
       const wheel = bendOct(this.bendS, this.bendSt) + wheelOct(this.modwS, lfo);
       //   key CV −1.5 V/oct (key 53 − 69 = −16 semitones at 0 V), summer inputs
-      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + wheel + modOct(ps.o1mod, lfo) + pitchOct(ps.o1pitch) + vco1.mismatch;
-      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + wheel + modOct(ps.o2mod, lfo) + detuneOct(ps.o2detune) + pitchOct(ps.o2pitch) + vco2.mismatch;
+      const oct1 = (53 - 69) / 12 - kb.cv1 / 1.5 + rangeOct[p.o1range | 0] + tune + wheel + modOct(ps.o1mod, lfo) + K.p1 + vco1.mismatch;
+      const oct2 = (53 - 69) / 12 - kb.cv2 / 1.5 + rangeOct[p.o2range | 0] + tune + wheel + modOct(ps.o2mod, lfo) + K.d2 + K.p2 + vco2.mismatch;
       const I1b = vco1.expo.current(oct1, T1), I2 = vco2.expo.current(oct2, T2);
-      vco1.vpw = vpwOf(ps.o1pw); vco2.vpw = vpwOf(ps.o2pw);
+      vco1.vpw = K.pw1; vco2.vpw = K.pw2;
       const w1 = Math.min(2, p.o1wave | 0), w2 = Math.min(2, p.o2wave | 0);   // 0 tri, 1 saw, 2 pulse
-      const fmk = fmOctPerVolt(ps.o1fm, this.fmMod) * LN2;      // nepers per volt of VCO II triangle
+      const fmk = K.fmk;      // nepers per volt of VCO II triangle
 
       // filter Iset: currents into A1's summing node (sheet 7 + panel, sheet 11)
       //   cutoff pot log taper EST; amount pots linear EST; modulation bus
       //   from sheet 10 (R91 100k pot → R86 100k)
-      const tc = (Math.exp(5 * ps.cutoff) - 1) / (Math.exp(5) - 1);
+      const tc = K.tc;
       const vl = lfo;
       const Iin = 12.5 / 100e3 + FilterCV.wiper(tc, 12.5, 47e3)
                 + FilterCV.wiper(ps.fEnv, ef * this.egF.Vpk, 100e3) + FilterCV.wiper(ps.fMod, vl, 100e3);
       const Iset = this.fcv.iset(Iin, this.Tchip); this.iset = Iset;   // read by the panel's filter curve (fcHz)
-      vcf.setRes(ps.res);
       const VTf = VT_OF(this.Tchip);
       const lp = p.fMode < 0.5;
 
@@ -760,7 +781,7 @@ class PolivoksEngine {
       this.vca.control(ps.aMod * lfo, 100e3 * ps.aMod * (1 - ps.aMod), venv);
       // mixer (sheet 9): per-channel gain into A2's virtual earth
       const g1 = mixGain(ps.mix1, vco1.Rout[w1]), g2 = mixGain(ps.mix2, vco2.Rout[w2]);
-      const gn = mixGain(ps.mixN, 0), dg = driveGain(ps.drive);
+      const gn = K.gn, dg = K.dg;
 
       // modulator noise: A2 bandwidth ≈15 kHz (КР140УД8Б GBW / 101), 0.25 V rms EST
       const nk = 1 - Math.exp(-ho * 2 * Math.PI * 15000);
