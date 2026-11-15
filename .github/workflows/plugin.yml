@@ -81,6 +81,10 @@ jobs:
           echo "art=$A" >> $GITHUB_OUTPUT
           ls -R $A | head -50
 
+      - name: Maths check (each Math function against Chromium's)
+        continue-on-error: true
+        run: node plugin/test/mathcheck.js ${{ steps.bin.outputs.render }}
+
       - name: Null test, engine (C++ against the web app's JavaScript in Chromium)
         run: node plugin/test/null.js ${{ steps.bin.outputs.render }}
 
