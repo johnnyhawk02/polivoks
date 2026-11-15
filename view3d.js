@@ -657,10 +657,10 @@ for (const el of lowEls.ranges) {
   const vert = el.classList.contains('vert');
   const slot = new THREE.Mesh(new THREE.BoxGeometry(vert ? 6 : r.w + 10, vert ? r.h + 10 : 6, 1.5), mat.ink.clone()); slot.position.copy(pos(r.x + r.w / 2, r.y + r.h / 2, 0.75)); lower.add(slot);
   const t = new THREE.Group(), capM = mat.ink.clone(), lineM = mat.lit.clone();
-  const cap = new THREE.Mesh(new THREE.BoxGeometry(vert ? 24 : 13, vert ? 13 : 24, 9), capM); cap.position.z = 4.5; cap.castShadow = true;
-  const line = new THREE.Mesh(new THREE.BoxGeometry(vert ? 20 : 2.4, vert ? 2.4 : 20, 0.6), lineM); line.position.z = 9.1;
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(vert ? 34 : 17, vert ? 18 : 30, 10), capM); cap.position.z = 5; cap.castShadow = true;
+  const line = new THREE.Mesh(new THREE.BoxGeometry(vert ? 30 : 2.6, vert ? 2.6 : 26, 0.6), lineM); line.position.z = 10.1;
   t.add(cap, line); lower.add(t); t.material = [capM, lineM, slot.material];
-  const hit = vert ? hitBox(30, r.h + 16, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower) : hitBox(r.w + 16, 26, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower); hit.userData.range = { el, r, min, max, vert };
+  const hit = vert ? hitBox(40, r.h + 22, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower) : hitBox(r.w + 16, 26, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower); hit.userData.range = { el, r, min, max, vert };
   let last = null, n = 0;
   ticks.push(() => { if (++n % 5 === 0) fadeMat(t.material, fade(el)); if (el.value !== last) { last = el.value; { const u = (el.value - min) / (max - min); t.position.copy(vert ? pos(r.x + r.w / 2, r.y + (1 - u) * r.h, 0) : pos(r.x + u * r.w, r.y + r.h / 2, 0)); } renderer.shadowMap.needsUpdate = true; } });
 }

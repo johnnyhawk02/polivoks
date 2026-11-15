@@ -131,7 +131,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .sq-stepkey { align-items: center; margin: 0 4px; }
   /* MOD and ENV: one-column boxes, LED key on top, a vertical depth slider (up = +), its value under it */
   .vlane { align-items: center; gap: 6px; margin: 0 4px; }
-  .vlane input.vert { writing-mode: vertical-lr; direction: rtl; width: 24px; height: 120px; flex: none; }
+  .vlane input.vert { writing-mode: vertical-lr; direction: rtl; width: 24px; height: 108px; flex: none; margin-top: 16px; }   /* clear of the LED key above */
   .vlane .val { flex: none; width: 100%; }
   /* the knob shown in the sequencer is not running: its settings and steps are greyed out */
   #seqpanel.idle .dim { opacity: .35; }
@@ -1757,7 +1757,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.99.4';
+const VERSION = '1.99.5';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
