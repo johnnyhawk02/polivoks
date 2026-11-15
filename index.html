@@ -1117,13 +1117,15 @@ class KnobSeq {
     this.sr = sr; this.e = engine; this.report = report || null;
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
-    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth, kOn, kDepth }; drift = % faster (+) or slower (−) than the clock
+    this.seq = {};       // id -> { on, len, div, depth, slew, drift, rt, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth, kOn, kDepth }; drift = % faster (+) or slower (−) than the clock; rt = RETRIG, a key press restarts it at step 1
                          // mod sources: eDepth × the filter envelope (ENV 2 on the panel, 0…1), e2Depth × the amp envelope (ENV 1), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;
     this.pos = 0;        // clock position in 16th notes
     this.prevPos = 0; this.ph = {};   // phase of each sequence with DRIFT (16ths)
+    this.org = {};       // RETRIG: the phase (16ths) where the last key press put step 1
+    this.trig = false;   // a key was pressed since the last tick
     this.time = 0;
     this.pulses = 0; this.extT = -1;   // MIDI clock, 24 pulses per quarter
     this.clkT = []; this.extBpm = 0;    // tempo measured from the MIDI clock
@@ -1136,6 +1138,7 @@ class KnobSeq {
     const was = KnobSeq.act(this.seq[id]), wasOn = this.seq[id] && this.seq[id].on;
     this.seq[id] = s; if (range) this.range[id] = range;
     if (s.on && !wasOn) { this.cur[id] = 0; delete this.ph[id]; }
+    if (!s.rt) delete this.org[id];
     if (!KnobSeq.act(s) && was && id in this.base) { this.e.setParam(id, this.base[id]); delete this.val[id]; }
   }
   setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
@@ -1150,7 +1153,7 @@ class KnobSeq {
       this.extBpm = Math.max(20, Math.min(300, b));
     }
   }
-  start() { this.pulses = 0; this.pos = 0; this.extT = this.time; }
+  start() { this.pulses = 0; this.pos = 0; this.extT = this.time; this.org = {}; }
   stop() { this.extT = -1; this.clkT.length = 0; }
   // the clock's tempo: MIDI clock while it runs, else the internal BPM
   tempo() { return this.extActive() && this.extBpm ? this.extBpm : this.bpm; }
@@ -1169,8 +1172,12 @@ class KnobSeq {
       const dr = s.drift || 0;
       if (!dr || dpos < 0) this.ph[id] = this.pos;
       else this.ph[id] = (this.ph[id] === undefined ? this.pos - dpos : this.ph[id]) + dpos * (1 + dr / 100);
-      if (dr) ph[id] = Math.floor(this.ph[id]);
-      const step = Math.floor(this.ph[id] / s.div) % s.len;
+      // RETRIG: every key press (legato or not) moves step 1 to that moment; the steps then run on
+      // at the sequence's rate from there, so it no longer lines up with the clock's grid
+      if (s.rt && this.trig) this.org[id] = this.ph[id];
+      const p = this.ph[id] - (s.rt && this.org[id] !== undefined ? this.org[id] : 0);
+      if (dr || p !== this.ph[id]) ph[id] = Math.floor(p);
+      const n = Math.floor(p / s.div), step = ((n % s.len) + s.len) % s.len;
       const k = s.slew > 0 ? 1 - Math.exp(-dt / s.slew) : 1;
       c = (this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k) * s.depth;
       }
@@ -1184,6 +1191,7 @@ class KnobSeq {
       const v = Math.max(r[0], Math.min(r[1], b + c * (r[1] - r[0])));
       if (v !== this.val[id]) { this.val[id] = v; this.e.setParam(id, v); }
     }
+    this.trig = false;
     this.repT += dt;
     if (this.report && this.repT >= 1 / 30) { this.repT = 0; this.report({ t: 'seqpos', pos: Math.floor(this.pos), ph, ext: this.extActive(), v: any ? Object.assign({}, this.val) : null }); }
   }
@@ -1202,7 +1210,7 @@ class KnobSeq {
     else if (d.t === 'clk') this.clock();
     else if (d.t === 'cstart') this.start();
     else if (d.t === 'cstop') this.stop();
-    else if (d.t === 'on') this.e.noteOn(d.n, d.v);
+    else if (d.t === 'on') { this.e.noteOn(d.n, d.v); this.trig = true; }
     else if (d.t === 'off') this.e.noteOff(d.n);
     else if (d.t === 'all') this.e.allOff();
     else if (d.t === 'prio') this.e.setPrio(d.v);
@@ -1988,7 +1996,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '2.8.0';
+const VERSION = '2.9.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2161,7 +2169,7 @@ const SEQ_STORE = 'polivoks-seq-v1';
 // pots only go one way), so a saved positive generic one there is dropped
 const circNeg = (id, q) => { const o = {}; for (const k in (CIRC_IDS[id] || {})) if (!(q && q[k + 'On'] && q[k + 'Depth'] < 0)) o[k + 'On'] = false; return o; };
 const CIRC_IDS = { cutoff: { e: 1, l: 1 }, o1pitch: { l: 1 }, o2pitch: { l: 1 } };
-const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0), eOn: false, eDepth: 0.3, lOn: false, lDepth: 0.2, e2On: false, e2Depth: 0.3, vOn: false, vDepth: 0.3, kOn: false, kDepth: 0.3 });
+const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, rt: false, steps: new Array(16).fill(0), eOn: false, eDepth: 0.3, lOn: false, lDepth: 0.2, e2On: false, e2Depth: 0.3, vOn: false, vDepth: 0.3, kOn: false, kDepth: 0.3 });
 let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
 const seqs = {};
 let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
@@ -2307,7 +2315,8 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f" style="grid-column:span 4;display:none"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="f notekeys nolab" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>
   <div class="box sub" style="grid-column:span 8;--n:8" aria-label="Step sequence for the knob"><h2>SEQ</h2>
-    <div class="f nolab sq-lane sq-stepkey" style="grid-column:-2/-1;grid-row:1"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
+    <div class="f sq-lane sq-stepkey sq-rtlane" style="grid-column:-3/-2;grid-row:1"><span>RETRIG</span><div class="row"><button class="sb sm sym sq-rt" aria-label="Retrigger: a key press restarts the sequence at step 1">●</button></div></div>
+    <div class="f sq-lane sq-stepkey" style="grid-column:-2/-1;grid-row:1"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
     <div class="f dim sq-kn" style="grid-column:span 1"><span>LENGTH</span><div class="row"><div class="mknob" data-m="len" aria-label="LENGTH"></div><b class="val sq-len"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 1"><span>RATE</span><div class="row"><div class="mknob" data-m="div" aria-label="RATE"></div><b class="val sq-div"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 1"><span>DEPTH</span><div class="row"><div class="mknob" data-m="depth" aria-label="DEPTH"></div><b class="val sq-depthv"></b></div></div>
@@ -2371,7 +2380,7 @@ function drawSeq() {
     b.classList.toggle('off', i >= s.len);
   });
   // three lanes, each with its own on key: ENV (filter envelope), STEP (the sequence), LFO (the modulator)
-  for (const [k, cl] of [['eOn', '.sq-eon'], ['on', '.sq-on'], ['lOn', '.sq-lon'], ['e2On', '.sq-e2on'], ['vOn', '.sq-von'], ['kOn', '.sq-kon']]) { const b = q(cl); b.classList.toggle('lit', !!s[k]); b.closest('.sq-lane').classList.toggle('off', !s[k]); }
+  for (const [k, cl] of [['rt', '.sq-rt'], ['eOn', '.sq-eon'], ['on', '.sq-on'], ['lOn', '.sq-lon'], ['e2On', '.sq-e2on'], ['vOn', '.sq-von'], ['kOn', '.sq-kon']]) { const b = q(cl); b.classList.toggle('lit', !!s[k]); b.closest('.sq-lane').classList.toggle('off', !s[k]); }
   ed.classList.toggle('idle', !s.on);
   const pc = (v) => (v > 0 ? '+' : '') + Math.round(v * 100) + '%';
   q('.sq-envv').textContent = pc(s.eDepth); q('.sq-lfov').textContent = pc(s.lDepth);
@@ -2396,13 +2405,15 @@ function drawSeq() {
   markStep();
 }
 // where a sequence is: the clock position, or its own phase when DRIFT is set
-const stepOf = (id, s) => s.on && lastPos ? Math.floor((lastPos.ph && lastPos.ph[id] !== undefined ? lastPos.ph[id] : lastPos.pos) / s.div) % s.len : -1;
+// (RETRIG: the phase counted from the last key press)
+const stepOf = (id, s) => { if (!s.on || !lastPos) return -1; const n = Math.floor((lastPos.ph && lastPos.ph[id] !== undefined ? lastPos.ph[id] : lastPos.pos) / s.div); return ((n % s.len) + s.len) % s.len; };
 function markStep() {
   const s = seqOf(edC.id), n = stepOf(edC.id, s);
   if (n !== nowStep) { if (bars[nowStep]) bars[nowStep].classList.remove('now'); if (bars[n]) bars[n].classList.add('now'); nowStep = n; }
 }
 const change = (fn) => { const s = seqOf(edC.id); fn(s); pushSeq(edC); drawSeq(); };
 q('.sq-on').onclick = () => change((s) => { s.on = !s.on; });
+q('.sq-rt').onclick = () => change((s) => { s.rt = !s.rt; });
 const circToggle = (c, k) => { const s = seqOf(edC.id); if (c.v > 0.005 || s[k + 'On']) { if (c.v > 0.005) circMemo[c.id] = c.v; c.set(0); change((q) => { q[k + 'On'] = false; }); } else c.set(circMemo[c.id]); drawSeq(); };
 q('.sq-eon').onclick = () => { const c = circOf('e'); if (c) circToggle(c, 'e'); else change((s) => { s.eOn = !s.eOn; }); };
 q('.sq-lon').onclick = () => { const c = circOf('l'); if (c) circToggle(c, 'l'); else change((s) => { s.lOn = !s.lOn; }); };
