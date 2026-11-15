@@ -97,6 +97,14 @@ function check(k, seqs) {
   const drone = dB(rms(dry, 5.8, 6.3)), tail = dB(Math.max(rms(L, 6.3, 6.8), rms(R, 6.3, 6.8)));
   const held = Math.max(...notes.slice(4)) > -40 ? centroid(dry, 2.6) : 0;
   const wob = wobble(dry, 2.55, 3.8);
+  // the shape of one note on its own (C4 held 1.5 s, no echo), from 10 ms rms of the dry synth:
+  // attack = time to within 3 dB of its peak, hold = level just before key up vs the peak (dB),
+  // release = time after key up until 40 dB under the peak
+  const one = render(Object.assign({}, k, { eMix: 0 }), [[0, 'on', 60], [1.5, 'off', 60]], 4, seqs).dry;
+  const w = 0.01, lv = []; for (let t = 0; t < 4 - w; t += w) lv.push(rms(one, t, t + w));
+  const up = Math.round(1.5 / w), pk = Math.max(...lv.slice(0, up)) || 1e-9;
+  const attack = lv.findIndex((v) => v >= 0.708 * pk) * w, hold = dB(lv[up - 2] / pk);
+  let rel = lv.slice(up).findIndex((v) => v < pk * 0.01); rel = rel < 0 ? 2.5 : rel * w;
   // self-oscillation: same patch, every input down, a key held
   const sk = Object.assign({}, k, { mix1: 0, mix2: 0, mixN: 0, eMix: 0 }), sk0 = Object.assign({}, sk, { res: 0 });
   const so = (q) => dB(rms(render(q, [[0, 'on', 60]], 1.2).dry, 0.6, 1.2)), sl = so(sk), scream = Math.min(sl - so(sk0), sl + 35);
@@ -107,8 +115,9 @@ function check(k, seqs) {
   if (drone > -50 || tail > -45) why.push('drone');
   if (scream > 10) why.push('screams');
   if (held > 4500) why.push('harsh');
-  if (wob > 2) why.push('wobbly');
-  return { notes, level, peak, drone, tail, held, wob, scream, why };
+  // (a pluck has died away by key up, so its level is not steady by design: no wobble check)
+  if (wob > 2 && hold > -20) why.push('wobbly');
+  return { notes, level, peak, drone, tail, held, wob, scream, attack, hold, rel, why };
 }
 
 const N = +process.argv[2] || 200, seed = +process.argv[3] || 1;
@@ -116,10 +125,11 @@ const pct = (v) => (100 * v).toFixed(0) + '%';
 const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
 const AMT = process.argv[5] === undefined ? undefined : +process.argv[5];
 const only = (process.argv[4] || '').toUpperCase();
+const KIND = process.env.KIND;   // e.g. KIND=pluck: TONE forced to that kind (a RANDOMISE TYPE button)
 for (const [name, gen] of [['TONE', makeTone], ['PATCH', patchDice]].filter(([n]) => !only || n === only)) {
   const R = mulberry(seed * 7919 + (name === 'TONE' ? 1 : 2)), res = [], kinds = {}, t0 = Date.now();
   for (let i = 0; i < N; i++) {
-    const { kind, k, seqs } = gen(R, AMT), r = check(k, seqs); r.kind = kind; r.k = k; res.push(r);
+    const { kind, k, seqs } = gen(R, AMT, KIND), r = check(k, seqs); r.kind = kind; r.k = k; res.push(r);
     const s = kinds[kind] || (kinds[kind] = { n: 0, ok: 0 }); s.n++; if (!r.why.length) s.ok++;
   }
   const count = (w) => res.filter((r) => r.why.includes(w)).length / N;
@@ -129,6 +139,8 @@ for (const [name, gen] of [['TONE', makeTone], ['PATCH', patchDice]].filter(([n]
   const lv = res.map((r) => r.level).filter((v) => v > -100);
   console.log(`level (phrase rms, dBFS): median ${med(lv).toFixed(1)}, 10-90% ${lv.slice().sort((a, b) => a - b)[Math.floor(N * .1)].toFixed(1)} … ${lv.slice().sort((a, b) => a - b)[Math.floor(N * .9)].toFixed(1)}   peak median ${med(res.map((r) => r.peak)).toFixed(2)}`);
   console.log(`held-note brightness (centroid): median ${med(res.map((r) => r.held)).toFixed(0)} Hz   wobble median ${med(res.map((r) => r.wob)).toFixed(2)} dB`);
+  const q = (a, f) => { const v = a.slice().sort((x, y) => x - y); return [.1, .5, .9].map((p) => f(v[Math.floor(p * (v.length - 1))])).join(' / '); };
+  console.log(`held note shape, 10 / 50 / 90 %: attack ${q(res.map((r) => r.attack), (v) => (v * 1000).toFixed(0))} ms   level at key up ${q(res.map((r) => r.hold), (v) => v.toFixed(0))} dB   release to -40 dB ${q(res.map((r) => r.rel), (v) => v.toFixed(2))} s`);
   if (name === 'TONE') console.log('by kind: ' + Object.entries(kinds).map(([k, s]) => `${k} ${s.ok}/${s.n}`).join(', '));
   if (process.env.SHOW) for (const r of res.filter((r) => r.why.length).slice(0, +process.env.SHOW)) console.log(' ', r.kind, r.why.join(','), 'notes', r.notes.map((v) => v.toFixed(0)).join(' '), 'drone', r.drone.toFixed(0), 'tail', r.tail.toFixed(0), 'scream', r.scream.toFixed(0), 'cent', r.held.toFixed(0), 'wob', r.wob.toFixed(1), process.env.K ? JSON.stringify(r.k) : '');
 }
