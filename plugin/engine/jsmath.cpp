@@ -19,6 +19,8 @@
 #include "shared/math/sin.h"
 #include "shared/math/cos.h"
 #include "shared/math/tan.h"
+#include "shared/math/tanh.h"
+#include "shared/math/pow.h"
 
 #include <cmath>
 #include <limits>
@@ -51,13 +53,25 @@ double sin(double x) { return L::sin(x); }
 double cos(double x) { return L::cos(x); }
 double tan(double x) { return L::tan(x); }
 double tanh(double x) { return sysTanh()(x); }
-// v8::internal::math::pow
-double pow(double x, double y) {
+// v8::internal::math::pow's special cases, then f
+static double v8pow(double x, double y, F2 f) {
   if (std::isnan(y)) return std::numeric_limits<double>::quiet_NaN();
   if (std::isinf(y) && (x == 1 || x == -1)) return std::numeric_limits<double>::quiet_NaN();
   if (std::isnan(x)) x = std::numeric_limits<double>::quiet_NaN();
   if (y == 2) return x * x;
   if (y == 0.5) return std::isinf(x) ? std::numeric_limits<double>::infinity() : std::sqrt(x + 0);
-  return sysPow()(x, y);
+  return f(x, y);
 }
+// candidates, for test/mathcheck.js (which pow / tanh a platform's Chrome uses)
+double variant(int k, double x, double y) {
+  switch (k) {
+    case 0: return L::tanh(x);
+    case 1: return v8pow(x, y, [](double a, double b) { return L::pow(a, b); });
+    case 2: { volatile F1 f = [](double a) { return std::tanh(a); }; return f(x); }
+    case 3: return v8pow(x, y, [](double a, double b) { volatile F2 f = [](double c, double d) { return std::pow(c, d); }; return f(a, b); });
+    case 4: return sysTanh()(x);
+    default: return v8pow(x, y, sysPow());
+  }
+}
+double pow(double x, double y) { return v8pow(x, y, sysPow()); }
 }  // namespace jsm

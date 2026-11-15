@@ -10,15 +10,16 @@ using namespace filth;
 static int mathMode(const char* in, const char* out) {
   FILE* f = std::fopen(in, "rb"); if (!f) return 1;
   std::vector<double> v; double d; while (std::fread(&d, 8, 1, f) == 1) v.push_back(d); std::fclose(f);
-  const size_t n = v.size() / 2; std::vector<double> o; o.reserve(n * 9);
-  for (int fn = 0; fn < 9; fn++) for (size_t i = 0; i < n; i++) {
+  const size_t n = v.size() / 2; std::vector<double> o; o.reserve(n * 15);
+  for (int fn = 0; fn < 15; fn++) for (size_t i = 0; i < n; i++) {
     const double x = v[2 * i], y = v[2 * i + 1];
     switch (fn) {
       case 0: o.push_back(jm::exp(x)); break;      case 1: o.push_back(jm::log(x)); break;
       case 2: o.push_back(jm::log1p(x)); break;    case 3: o.push_back(jm::log2(x)); break;
       case 4: o.push_back(jm::sin(x)); break;      case 5: o.push_back(jm::cos(x)); break;
       case 6: o.push_back(jm::tan(x)); break;      case 7: o.push_back(jm::tanh(x)); break;
-      default: o.push_back(jm::pow(x, y)); break;
+      case 8: o.push_back(jm::pow(x, y)); break;
+      default: o.push_back(jsm::variant(fn - 9, x, y)); break;
     }
   }
   FILE* g = std::fopen(out, "wb"); std::fwrite(o.data(), 8, o.size(), g); std::fclose(g); return 0;

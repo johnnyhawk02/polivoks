@@ -16,6 +16,7 @@ double cos(double x);
 double tan(double x);
 double tanh(double x);
 double pow(double x, double y);
+double variant(int k, double x, double y);   // test candidates (jsmath.cpp)
 }  // namespace jsm
 
 namespace jm {

@@ -23,6 +23,10 @@ for (let i = 0; i < N; i++) {   // the ranges the engine uses, and wider
     return o; }, [Array.from(X), FN]);
   await b.close();
   let bad = 0; console.log('Chromium ' + ver);
+  const VAR = [['tanh: LLVM libc', 7], ['pow: LLVM libc', 8], ['tanh: C runtime (std)', 7], ['pow: C runtime (std)', 8], ['tanh: system DLL', 7], ['pow: system DLL', 8]];
+  for (const [name, j] of VAR) { let m = 0; const k = 9 + VAR.findIndex((v) => v[0] === name);
+    for (let i = 0; i < N; i++) { const a = c[k * N + i], z = js[j * N + i]; if (!Object.is(a, z) && !(a !== a && z !== z)) m++; }
+    console.log(`  candidate ${name.padEnd(22)} ${m ? m + ' differ' : 'identical'}`); }
   FN.forEach((f, j) => { let m = 0, ex = '';
     for (let i = 0; i < N; i++) { const a = c[j * N + i], z = js[j * N + i]; if (!Object.is(a, z) && !(a !== a && z !== z)) { if (!m) ex = `  e.g. x=${X[2 * i]}${f == 'pow' ? ' y=' + X[2 * i + 1] : ''}: plugin ${a}, Chrome ${z}`; m++; } }
     bad += m; console.log(`${f.padEnd(6)} ${m ? m + ' of ' + N + ' differ' + ex : 'identical'}`); });
