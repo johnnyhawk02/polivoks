@@ -154,6 +154,7 @@ const mat = {
   knobMatt: new THREE.MeshStandardMaterial({ color: 0x060606, roughness: 0.97, metalness: 0, envMapIntensity: 0.15 }),
   knobRim: new THREE.MeshStandardMaterial({ color: 0xb4b4b4, roughness: 0.33, metalness: 1, envMapIntensity: 0.06 }),
   inkMatte: new THREE.MeshLambertMaterial({ color: 0x050505 }),
+  keyRim: new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.38, metalness: 0, envMapIntensity: 1.2 }),   // a key's bevelled top edge
   edge: new THREE.MeshStandardMaterial({ color: 0xb30a8c, roughness: 0.6 }),
   lit: new THREE.MeshBasicMaterial({ color: 0xffffff }),
 };
@@ -173,8 +174,20 @@ function plate(w, h, d, draw, opts = {}) {
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const top = opts.bg === PINK ? new THREE.MeshStandardMaterial({ map: tex, roughness: 0.78, metalness: 0 }) : new THREE.MeshLambertMaterial({ map: tex });
   if (opts.bg === PINK) tintable(top);
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
-  m.geometry.translate(w / 2, -h / 2, d / 2); m.castShadow = true; m.receiveShadow = true;
+  let m;
+  if (opts.bevel) {
+    // a key: its top edge rounded over by a small bevel in a satin black, so the rim catches the light
+    // like the knobs do (Johnny); the face keeps its painted lettering
+    const B = 1.6, sh = new THREE.Shape(); sh.moveTo(B, B); sh.lineTo(w - B, B); sh.lineTo(w - B, h - B); sh.lineTo(B, h - B); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: d - B, bevelEnabled: true, bevelThickness: B, bevelSize: B, bevelSegments: 3, curveSegments: 4 });
+    g.translate(0, -h, B * 0);   // top-left corner at the origin, like the box below
+    tex.repeat.set(1 / w, 1 / h); tex.offset.set(0, 0); tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    m = new THREE.Mesh(g, [top, mat.keyRim]); m.userData.topMat = 0;
+  } else {
+    m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [mat.inkMatte, mat.inkMatte, mat.inkMatte, mat.inkMatte, top, mat.inkMatte]);
+    m.geometry.translate(w / 2, -h / 2, d / 2); m.userData.topMat = 4;
+  }
+  m.castShadow = true; m.receiveShadow = true;
   m.userData.redraw = (f) => { ctx.fillStyle = opts.bg || INK; ctx.fillRect(0, 0, w, h); f(ctx, w, h); tex.needsUpdate = true; };
   m.userData.redraw(draw);
   return m;
@@ -603,7 +616,7 @@ for (const el of low.querySelectorAll('button')) {
     } if (lit) { ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h); }
     text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, lit ? INK : PAPER);
   };
-  const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
+  const p = plate(r.w, r.h, 9, draw, { bevel: true }); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
   p.userData.btn = el; hits.push(p);
   let last = el.textContent + el.className, lastF = 1, n = 0;
   ticks.push(() => {
@@ -636,7 +649,7 @@ for (const el of low.querySelectorAll('select')) {
   const r = rel(el, low);
   const label = () => { const o = el.selectedOptions[0]; return (o ? o.textContent : '').toUpperCase() + ' ▾'; };
   const draw = (ctx, w, h) => { ctx.save(); ctx.beginPath(); ctx.rect(4, 0, w - 8, h); ctx.clip(); text(ctx, label(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, PAPER); ctx.restore(); };
-  const p = plate(r.w, r.h, 9, draw); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
+  const p = plate(r.w, r.h, 9, draw, { bevel: true }); p.position.copy(pos(r.x, r.y, 0)); lower.add(p);   // raised keys
   p.userData.sel = el; hits.push(p);
   let last = label();
   ticks.push(() => { const s = label(); if (s !== last) { last = s; p.userData.redraw(draw); } });
@@ -761,13 +774,13 @@ let grab = null;
 // a key goes down flush with the panel and darkens while it is held, and springs back on release
 let held = null;
 const pressed = (o) => {
-  release3d(); held = o; o.position.z = -8; o.material[4].color.setScalar(0.6); renderer.shadowMap.needsUpdate = true;
+  release3d(); held = o; o.position.z = -8; o.material[o.userData.topMat].color.setScalar(0.6); renderer.shadowMap.needsUpdate = true;
   held.userData.t0 = performance.now();
 };
 function release3d() {
   if (!held) return; const o = held; held = null;
   // stay down at least a moment, so a quick tap is still seen
-  setTimeout(() => { o.position.z = 0; o.material[4].color.setScalar(1); renderer.shadowMap.needsUpdate = true; }, Math.max(0, 90 - (performance.now() - o.userData.t0)));
+  setTimeout(() => { o.position.z = 0; o.material[o.userData.topMat].color.setScalar(1); renderer.shadowMap.needsUpdate = true; }, Math.max(0, 90 - (performance.now() - o.userData.t0)));
 }
 cv.addEventListener('pointerdown', (e) => {
   const o = pick(e); grab = null;
