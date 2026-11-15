@@ -8,7 +8,7 @@ const CACHE = 'filth-' + V;
 // three.js and the fonts are pinned by their address, so they keep their own
 // cache across releases rather than downloading again each time
 const LIB = 'filth-lib-1';
-const OWN = ['./', 'view3d.js?v=' + V, 'manifest.webmanifest',
+const OWN = ['./', 'view3d.js?v=' + V, 'factory.json?v=' + V, 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
 const THREE = 'https://cdn.jsdelivr.net/npm/three@0.160.0/';
 const LIBS = [THREE + 'build/three.module.js', THREE + 'examples/jsm/environments/RoomEnvironment.js'];
