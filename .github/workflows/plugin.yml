@@ -38,7 +38,8 @@ jobs:
       - name: Headless Chromium (the null tests' reference is the browser's own JavaScript)
         shell: bash
         run: |
-          npm install --no-save --no-package-lock playwright@1.56.1
+          # Chromium 153 or later: V8 15.3 moved Math to LLVM libc (older Chrome used fdlibm)
+          npm install --no-save --no-package-lock playwright@1.63.0
           if [ "$RUNNER_OS" = "Linux" ]; then npx playwright install --with-deps chromium; else npx playwright install chromium; fi
 
       - name: Linux packages
