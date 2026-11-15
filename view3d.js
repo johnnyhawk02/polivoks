@@ -780,7 +780,9 @@ function frame() {
   }
   driveLamps(); driveAmbient(); driveProjector();
   renderer.render(scene, camera);
+  if (++drawn === 3) window.filthSplash && window.filthSplash.done();   // the panel is on screen: the loading splash goes
 }
+let drawn = 0;
 renderer.setAnimationLoop(frame);
 // for headless checks: where a control is on screen
 window.filth3d = {

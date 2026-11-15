@@ -318,15 +318,17 @@ FilthEditor::FilthEditor(FilthProcessor& p) : AudioProcessorEditor(p), proc(p) {
   auto webData = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("FILTH").getChildFile("WebView2");
   auto opts = WBC::Options{}
                   .withBackend(WBC::Options::Backend::webview2)
-                  .withWinWebView2Options(WBC::Options::WinWebView2{}.withUserDataFolder(webData).withStatusBarDisabled())
+                  .withWinWebView2Options(WBC::Options::WinWebView2{}.withUserDataFolder(webData).withStatusBarDisabled().withBackgroundColour(juce::Colour(0xff0b0b0b)))
                   .withNativeIntegrationEnabled()
                   .withKeepPageLoadedWhenBrowserIsHidden()
                   .withEventListener("filthMsg", [this](juce::var v) { proc.pageMessage(v.toString()); })
                   .withEventListener("filthStore", [this](juce::var v) { proc.pageStore(v.toString()); })
                   .withEventListener("filthReady", [](juce::var) {})
+                  .withEventListener("filthShown", [this](juce::var) { if (!shownAt) shownAt = juce::Time::getMillisecondCounter(); })
                   .withResourceProvider([this](const juce::String& url) { return resource(url); });
   web = std::make_unique<WBC>(opts);
-  addAndMakeVisible(*web);
+  addChildComponent(*web);   // shown once the page's splash is drawn (timerCallback): no white flash before it
+  born = juce::Time::getMillisecondCounter();
   web->goToURL(WBC::getResourceProviderRoot());
   const int w = proc.editorW, h = proc.editorH;   // (setResizeLimits resizes, and resized() records the size)
   setResizable(true, true);
@@ -372,7 +374,19 @@ std::optional<juce::WebBrowserComponent::Resource> FilthEditor::resource(const j
 }
 void FilthEditor::send(const char* event, const std::string& json) { if (web) web->emitEventIfBrowserIsVisible(event, juce::var(text(json))); }
 
+void FilthEditor::paint(juce::Graphics& g) {
+  // the page's splash background (#splash in index.html), so the window is never white while the page loads
+  const auto b = getLocalBounds().toFloat();
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff2a2a2a), b.getWidth() * 0.5f, b.getHeight() * 0.4f,
+                                         juce::Colour(0xff0b0b0b), b.getWidth() * 0.5f + b.getWidth() * 0.84f, b.getHeight() * 0.4f, true));
+  g.fillAll();
+}
+
 void FilthEditor::timerCallback() {
+  if (!web->isVisible()) {
+    const auto now = juce::Time::getMillisecondCounter();
+    if ((shownAt && now - shownAt > 150) || now - born > 4000) web->setVisible(true);
+  }
   if (juce::SystemStats::getEnvironmentVariable("FILTH_DEBUG", {}).isNotEmpty() && ++dbg % 120 == 0)
     web->evaluateJavascript("JSON.stringify({ mode: window.filthTest && window.filthTest.mode(), canvas: !!document.querySelector('canvas'), errors: window.__errs || [], w: innerWidth, h: innerHeight })",
                             [](juce::WebBrowserComponent::EvaluationResult r) { if (auto* v = r.getResult()) std::fprintf(stderr, "FILTH_DEBUG page %s\n", v->toString().toRawUTF8()); });

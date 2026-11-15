@@ -238,9 +238,27 @@ try { filthStore.removeItem('polivoks-view'); } catch (e) {}
   /* one flat panel (v2.15.0): the top and bottom halves meet with no join, so their inner edges give up
      11 px each and the gap between them matches the gap between rows */
   .v3d #panel { padding-bottom: 7px; } .v3d #low { padding-top: 7px; }
+  /* loading splash (v2.17.0): shown from the first paint until the 3D panel has drawn its first frame */
+  #splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    background: radial-gradient(120% 90% at 50% 40%, #2a2a2a 0%, #0b0b0b 70%); color: var(--paper); transition: opacity .45s ease; }
+  #splash.out { opacity: 0; pointer-events: none; }
+  #splash b { font: 400 clamp(56px, 14vw, 132px)/1 var(--display); letter-spacing: .04em; }
+  #splash i { position: relative; display: block; width: min(220px, 50vw); height: 2px; background: rgba(255,255,255,.15); overflow: hidden; }
+  #splash i::after { content: ""; position: absolute; top: 0; bottom: 0; width: 35%; background: var(--paper); animation: splash-run 1.1s ease-in-out infinite; }
+  #splash span { font: 500 11px var(--mono); letter-spacing: .3em; color: rgba(255,255,255,.5); }
+  @keyframes splash-run { from { left: -35%; } to { left: 100%; } }
 </style>
 </head>
 <body>
+<div id="splash"><b>FILTH</b><i></i><span>LOADING</span></div>
+<script>
+// the splash goes when the 3D panel has drawn (view3d.js calls done), or after 20 s whatever happens
+window.filthSplash = { done() { const e = document.getElementById('splash'); if (!e || e.classList.contains('out')) return;
+  e.classList.add('out'); setTimeout(() => e.remove(), 500); } };
+setTimeout(() => window.filthSplash.done(), 20000);
+// in the plugin: the window shows the page from now on (it keeps it hidden until the splash is up, so it never flashes white)
+try { if (window.__JUCE__ && window.__JUCE__.backend) window.__JUCE__.backend.emitEvent('filthShown', '1'); } catch (e) {}
+</script>
 <div id="stage">
   <div class="panel" id="panel">
     <div class="torn"></div>
@@ -2176,7 +2194,7 @@ let engineMode = '', node = null, ctx = null, analyser = null, powered = false;
 let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m) };   // for headless checks
-const VERSION = '2.16.0';
+const VERSION = '2.17.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -3119,7 +3137,7 @@ window.filthApp = {
   get lfoV() { return lfoV; }, get preName() { return preName; }, get clip() { return clipLed; }, get outRms() { return outRms; }, get vco() { return vcoI; },
 };
 // the version in the address, so a new release is never served from the browser's cache
-import('./view3d.js?v=' + VERSION);
+import('./view3d.js?v=' + VERSION).catch(() => window.filthSplash.done());
 // offline copy for the installed app (sw.js); a new version means a new
 // worker and a fresh cache, so an old release is never kept
 if ('serviceWorker' in navigator && window.isSecureContext && !window.filthPlugin) navigator.serviceWorker.register('./sw.js?v=' + VERSION).catch(() => {});
