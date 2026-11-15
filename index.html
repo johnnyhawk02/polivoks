@@ -2302,6 +2302,7 @@ optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTI
   <div class="f"><span>KEY PRIORITY</span><div class="row cells" id="opt-prio"><button class="sb" data-k="low">LOW</button><button class="sb" data-k="last">LAST</button></div></div>
   <div class="f"><span>FM DEPTH</span><div class="row cells" id="opt-fm"><button class="sb" data-m="orig">ORIGINAL</button><button class="sb" data-m="mod">MOD</button></div></div>
   <div class="f"><span>BEND RANGE</span><div class="row cells" id="opt-bend">${BENDS.map((b) => `<button class="sb" data-b="${b}">±${b}</button>`).join('')}</div></div>
+  <div class="f"><span>PRESETS</span><div class="row"><button class="btn" id="opt-export" style="flex:none;width:120px">EXPORT</button><button class="btn" id="opt-import" style="flex:none;width:120px">IMPORT</button><b class="val" id="opt-prev" style="text-align:left;width:auto;flex:1"></b></div></div>
   <div class="f"><span>UPDATE</span><div class="row"><button class="btn" id="opt-reload" style="flex:none;width:120px">RELOAD</button><b class="val" id="opt-ver" style="text-align:left;width:auto;flex:1"></b></div></div></div>`;
 document.body.appendChild(optsEl);
 { const tf = q('.sq-bpm').closest('.f'); optsEl.querySelector('#opt-tempo').append(...tf.querySelector('.row').childNodes); tf.remove(); }
@@ -2421,6 +2422,52 @@ preEl.del.onclick = () => {
   presets.splice(preI, 1); preI = -1; preName = freshName(); savePre(); drawPre();
 };
 drawPre();
+
+// EXPORT (in OPTIONS) saves every preset to a .json file; IMPORT adds the
+// presets from such a file, leaving out any whose name is already in the list.
+// A file exported here and copied into the site as factory.json becomes the
+// factory set: each factory preset is added to the list once, the first time
+// this browser sees it, so one that was deleted does not come back.
+const preMsg = (t) => { optsEl.querySelector('#opt-prev').textContent = t; };
+const preFile = () => JSON.stringify({ app: 'FILTH', version: VERSION, presets }, null, 1);
+function addPresets(list) {
+  let n = 0;
+  for (const p of list) {
+    if (!p || typeof p.name !== 'string' || !p.k || typeof p.k !== 'object') continue;
+    if (presets.some((q) => q.name === p.name)) continue;
+    presets.push({ name: p.name, k: p.k, s: p.s || {}, bpm: p.bpm }); n++;
+  }
+  if (n) { savePre(); drawPre(); }
+  return n;
+}
+const listOf = (j) => (Array.isArray(j) ? j : j && Array.isArray(j.presets) ? j.presets : []);
+optsEl.querySelector('#opt-export').onclick = async () => {
+  if (!presets.length) { preMsg('NO PRESETS'); return; }
+  const d = new Date(), name = `filth-presets-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.json`;
+  const file = new File([preFile()], name, { type: 'application/json' });
+  // a phone has no downloads folder to speak of, so it gets the share sheet
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); preMsg(presets.length + ' SAVED'); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  preMsg(presets.length + ' SAVED');
+};
+const preIn = document.createElement('input'); preIn.type = 'file'; preIn.accept = '.json,application/json'; preIn.hidden = true; document.body.append(preIn);
+optsEl.querySelector('#opt-import').onclick = () => { preIn.value = ''; preIn.click(); };
+preIn.onchange = async () => {
+  const f = preIn.files && preIn.files[0]; if (!f) return;
+  try { const n = addPresets(listOf(JSON.parse(await f.text()))); preMsg(n + ' ADDED'); } catch (e) { preMsg('NOT A PRESET FILE'); }
+};
+const FAC_SEEN = 'polivoks-factory-seen';
+fetch('factory.json?v=' + VERSION).then((r) => (r.ok ? r.json() : null)).then((j) => {
+  let seen = []; try { seen = JSON.parse(localStorage.getItem(FAC_SEEN) || '[]'); } catch (e) {}
+  if (!Array.isArray(seen)) seen = [];
+  const fresh = listOf(j).filter((p) => p && !seen.includes(p.name));
+  if (!fresh.length) return;
+  addPresets(fresh);
+  try { localStorage.setItem(FAC_SEEN, JSON.stringify(seen.concat(fresh.map((p) => p.name)))); } catch (e) {}
+}).catch(() => {});
 
 // ---------------------------------------------------------------- audio
 // Always on.  Browsers only let audio start after the first click, tap or key

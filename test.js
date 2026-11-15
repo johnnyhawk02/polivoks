@@ -283,7 +283,7 @@ console.log('--- stability sweep ---');
   const man = JSON.parse(fs.readFileSync(__dirname + '/manifest.webmanifest', 'utf8')); let bad = 0;
   const png = (f) => { const d = fs.readFileSync(__dirname + '/' + f); return d.readUInt32BE(16) + 'x' + d.readUInt32BE(20); };
   for (const i of man.icons) if (png(i.src) !== i.sizes) { bad++; console.log('icon size wrong', i.src); }
-  const sw = fs.readFileSync(__dirname + '/sw.js', 'utf8'), own = JSON.parse(sw.match(/const OWN = (\[[^\]]*\])/)[1].replace(/'/g, '"').replace(/"view3d\.js\?v=" \+ V/, '"view3d.js"'));
+  const sw = fs.readFileSync(__dirname + '/sw.js', 'utf8'), own = JSON.parse(sw.match(/const OWN = (\[[^\]]*\])/)[1].replace(/'/g, '"').replace(/"([^"]+)\?v=" \+ V/g, '"$1"'));
   for (const f of own) if (f !== './' && !fs.existsSync(__dirname + '/' + f)) { bad++; console.log('sw caches a missing file', f); }
   console.log(`PWA: ${man.icons.length} icons, ${own.length} files cached on install, apple icon ${png('icons/apple-touch-icon.png')}`, bad ? 'FAILED' : 'ok');
   if (bad) process.exitCode = 1;
