@@ -145,8 +145,11 @@ function makeTone(rand, amount) {
   if (R() < 0.5) mods.cutoff = { vOn: true, vDepth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
   if (R() < 0.25) mods.res = { eOn: true, eDepth: r2(Math.min(0.2, mid(0.03, 0.08) * fac)) };
   for (const n of ['o1', 'o2']) if (k[n + 'wave'] === 2 && R() < 0.33) mods[n + 'pw'] = { e2On: true, e2Depth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
+  // ---- now and then (1 in 20) a mono glide lead: VCO I up, VCO II off, MONO, a clear glide
+  let mono = false;
+  if (R() < 0.05) { mono = true; k.mix1 = mid(0.78, 0.92); k.mix2 = 0; k.glide = mid(0.3, 0.5); }
   for (const id in k) k[id] = Math.round(k[id] * 1e5) / 1e5;
-  return { kind, k, seqs, mods };
+  return { kind, k, seqs, mods, mono };
 }
 
 if (typeof module !== 'undefined') module.exports = { makeTone, TONE_PITCH, TONE_CENT, TONE_KINDS };
