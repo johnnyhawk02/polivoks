@@ -1,0 +1,1 @@
+LLVM libc headers (the closure of shared/math/{exp,log,log1p,log2,sin,cos,tan}.h), from github.com/llvm/llvm-project libc/ at 9ef5df8220e2be5abc095f6e67caec928fca4b51 (2026-11-15). V8 (Chrome) calls the same functions; they are correctly rounded, so any recent version gives the same bits.

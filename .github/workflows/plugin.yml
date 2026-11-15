@@ -35,6 +35,12 @@ jobs:
         with:
           node-version: 22
 
+      - name: Headless Chromium (the null tests' reference is the browser's own JavaScript)
+        shell: bash
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          if [ "$RUNNER_OS" = "Linux" ]; then npx playwright install --with-deps chromium; else npx playwright install chromium; fi
+
       - name: Linux packages
         if: runner.os == 'Linux'
         run: |
@@ -74,7 +80,7 @@ jobs:
           echo "art=$A" >> $GITHUB_OUTPUT
           ls -R $A | head -50
 
-      - name: Null test, engine (C++ against the web app's JavaScript)
+      - name: Null test, engine (C++ against the web app's JavaScript in Chromium)
         run: node plugin/test/null.js ${{ steps.bin.outputs.render }}
 
       - name: Null test, the built VST3 in a host

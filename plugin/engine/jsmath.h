@@ -1,4 +1,4 @@
-// JavaScript's Math, bit for bit (see jsmath.cpp).  The engine calls these
+// JavaScript's Math as Chrome computes it, bit for bit (see jsmath.cpp).  The engine calls these
 // instead of <cmath> so the plugin and the web app give the same numbers.
 // Build with floating-point contraction off (no fused multiply-add) and
 // without fast-math: CMakeLists.txt sets that for every compiler.
@@ -6,48 +6,28 @@
 #include <cmath>
 #include <cstdint>
 
-namespace filthjs {
-namespace base {
-namespace ieee754 {
-double acos(double x);
-double acosh(double x);
-double asin(double x);
-double asinh(double x);
-double atan(double x);
-double atan2(double y, double x);
-double cos(double x);
-double sin(double x);
+namespace jsm {   // jsmath.cpp
 double exp(double x);
-double atanh(double x);
 double log(double x);
 double log1p(double x);
 double log2(double x);
-double log10(double x);
-double cbrt(double x);
-double expm1(double x);
-double pow(double x, double y);
+double sin(double x);
+double cos(double x);
 double tan(double x);
-double cosh(double x);
-double sinh(double x);
 double tanh(double x);
-}  // namespace ieee754
-}  // namespace base
-}  // namespace filthjs
+double pow(double x, double y);
+}  // namespace jsm
 
 namespace jm {
-inline double exp(double x) { return filthjs::base::ieee754::exp(x); }
-inline double tanh(double x) { return filthjs::base::ieee754::tanh(x); }
-inline double log(double x) { return filthjs::base::ieee754::log(x); }
-inline double log1p(double x) { return filthjs::base::ieee754::log1p(x); }
-inline double log2(double x) { return filthjs::base::ieee754::log2(x); }
-inline double sin(double x) { return filthjs::base::ieee754::sin(x); }
-inline double cos(double x) { return filthjs::base::ieee754::cos(x); }
-inline double tan(double x) { return filthjs::base::ieee754::tan(x); }
-// V8's Math.pow is ieee754::pow (V8 checks: +-1 ** +-Infinity is NaN in JS)
-inline double pow(double x, double y) {
-  if (std::isnan(y) || ((x == 1 || x == -1) && std::isinf(y))) return NAN;
-  return filthjs::base::ieee754::pow(x, y);
-}
+inline double exp(double x) { return jsm::exp(x); }
+inline double tanh(double x) { return jsm::tanh(x); }
+inline double log(double x) { return jsm::log(x); }
+inline double log1p(double x) { return jsm::log1p(x); }
+inline double log2(double x) { return jsm::log2(x); }
+inline double sin(double x) { return jsm::sin(x); }
+inline double cos(double x) { return jsm::cos(x); }
+inline double tan(double x) { return jsm::tan(x); }
+inline double pow(double x, double y) { return jsm::pow(x, y); }
 inline double sqrt(double x) { return std::sqrt(x); }   // IEEE, exact everywhere
 inline double abs(double x) { return std::fabs(x); }
 inline double floor(double x) { return std::floor(x); }
