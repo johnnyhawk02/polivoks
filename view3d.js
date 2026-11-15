@@ -58,7 +58,7 @@ const corner = document.createElement('div');
 corner.textContent = `FILTH v${A.VERSION}`;
 Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: 'rgba(255,255,255,.5)' });   // no magenta anywhere: a quiet grey
 document.body.appendChild(corner);
-// OPTIONS: a quiet key in the bottom-left corner (the screen itself now flips pictures)
+// OPTIONS: a quiet key in the bottom-left corner (tapping the screen opens it too)
 const optKey = document.createElement('button'); optKey.textContent = 'OPTIONS';
 Object.assign(optKey.style, { position: 'fixed', left: '12px', bottom: '6px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: 'rgba(255,255,255,.5)', background: 'none', border: '0', padding: '2px 0', cursor: 'pointer' });
 optKey.onclick = () => A.openOptions(); document.body.appendChild(optKey);
@@ -414,7 +414,7 @@ for (const c of CTL) {
 // The letters sit on their own layer: pushed about by a fixed noise whose
 // depth is the modulator's output times how loud the synth is (as on the 2D
 // panel), and lit up by the output level.
-let title = null, titleU = null, crtPics = [];
+let title = null, titleU = null;
 {
   const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0;   // flat, raised plate
   const p = plate(w, h, 8, () => {});
@@ -440,50 +440,27 @@ let title = null, titleU = null, crtPics = [];
     const frame = new THREE.Mesh(fg2, new THREE.MeshStandardMaterial({ color: 0x242424, roughness: 0.32, metalness: 0.65, envMapIntensity: 1.2 }));
     frame.castShadow = true; frame.receiveShadow = true; p.add(frame);
   }
-  const layer = (blur) => {
-    const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
-    // FILTH stretched to fill its box: sized by the letters' own outline, a margin all round
-    const PADX = w * 0.07, PADY = h * 0.13; ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    const m = ctx.measureText('FILTH'), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
-    ctx.save(); ctx.translate(w / 2, h * 0.43); ctx.scale((w - 2 * PADX) / iw, (h * 0.86 - 2 * PADY) / ih);   // raised a little to leave the preset's name room underneath
-    ctx.fillStyle = PAPER; ctx.fillText('FILTH', -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
-    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+  // the CRT shows the current preset's name as a marquee: one big line scrolling right to left round and
+  // round (a gap of half a screen between passes), through the same phosphor, bloom and LFO wobble.  The
+  // line is drawn once on a strip that repeats sideways; the shader slides along it.  Redrawn when the name changes.
+  const strip = (blur, name) => {
+    const PADY = h * 0.14, txt = (name || 'FILTH').toUpperCase();
+    const mc = document.createElement('canvas').getContext('2d'); mc.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in mc) mc.letterSpacing = '2px';
+    const m = mc.measureText(txt), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+    const k = (h - 2 * PADY) / ih, SW = iw * k * 1.15 + w * 0.5;            // letters a touch wide, like FILTH was
+    const px = Math.min(S2, 4096 / SW), c = document.createElement('canvas'); c.width = Math.ceil(SW * px); c.height = Math.ceil(h * px);
+    const ctx = c.getContext('2d'); ctx.scale(px, px); if (blur) ctx.filter = `blur(${blur}px)`;
+    ctx.font = mc.font; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = PAPER;
+    ctx.save(); ctx.translate(w * 0.25, h / 2); ctx.scale(k * 1.15, k); ctx.fillText(txt, m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
+    const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; t.userData = { SW }; return t;
   };
-  // CRT pictures (Johnny's): every picture in the repo's crt/ folder.  The folder is listed through GitHub
-  // (so a file uploaded there shows up with no code change); offline it uses the last list seen, or the two
-  // built in.  They go through the same phosphor, scanlines and LFO wobble as the lettering, stretched to
-  // fill the screen like FILTH is, so the whole drawing shows; light parts glow.
-  const CRT_IMAGES = ['crt/smiley.jpg', ...[1, 2, 3, 4, 5, 6, 7, 8].map((i) => 'crt/typo-' + i + '.jpg'), 'crt/walker.jpg'], pics = [];
-  const picLayer = (img, blur) => {
-    const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
-    ctx.drawImage(img, 0, 0, w, h); ctx.filter = 'none';
-    const d = ctx.getImageData(0, 0, c.width, c.height), p = d.data;
-    for (let i = 0; i < p.length; i += 4) { const l = (p[i] * .3 + p[i + 1] * .59 + p[i + 2] * .11); p[i] = p[i + 1] = p[i + 2] = 255; p[i + 3] = l; }   // brightness → the alpha the shader reads
-    ctx.putImageData(d, 0, 0); const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
-  };
-  const loaded = new Set(), load = (src) => { if (loaded.has(src)) return; loaded.add(src); const im = new Image(); im.onload = () => pics.push({ t: picLayer(im, 0), g: picLayer(im, 9), src }); im.src = src; };
-  { let last = null; try { last = JSON.parse(localStorage.getItem('filth-crt-list')); } catch (e) {} for (const s of (last && last.length ? last : CRT_IMAGES)) load(s); }   // at once, so a tap works straight away
-  (async () => {
-    let list = null;
-    try {
-      const ac = new AbortController(); setTimeout(() => ac.abort(), 5000);
-      const r = await fetch('https://api.github.com/repos/johnnyhawk02/polivoks/contents/crt', { signal: ac.signal });
-      if (r.ok) { list = (await r.json()).filter((f) => f.type === 'file' && /\.(jpe?g|png|webp|gif)$/i.test(f.name)).map((f) => 'crt/' + f.name).sort(); try { localStorage.setItem('filth-crt-list', JSON.stringify(list)); } catch (e) {} }
-    } catch (e) {}
-    for (const src of list || []) load(src);   // pictures uploaded since the last visit
-    if (list) for (let i = pics.length - 1; i >= 0; i--) if (!list.includes(pics[i].src)) pics.splice(i, 1);   // and ones taken out of the folder
-  })();
-  crtPics = pics;
-  // the current preset's name, small along the bottom of the screen; redrawn when it changes
-  const nameLayer = (name) => {
-    const [c, ctx] = canvas(w, h), fsz = Math.round(h * 0.075);
-    ctx.font = `600 ${fsz}px ${MONO}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = PAPER; ctx.fillText(name.toUpperCase(), w / 2, h * 0.835, w * 0.6);
-    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
-  };
-  let nameNow = null; ticks.push(() => { const n = A.preName || ''; if (n === nameNow) return; nameNow = n; const old = titleU.tName.value; titleU.tName.value = nameLayer(n); if (old) old.dispose(); });
-  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, tImg: { value: null }, tImgG: { value: null }, tImg2: { value: null }, tImg2G: { value: null }, tName: { value: null }, wts: { value: new THREE.Vector3(1, 0, 0) }, flip: { value: 0 }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
+  let nameNow = null, scrollPx = 0, scrollT = performance.now(); ticks.push(() => {
+    const n = A.preName || 'FILTH';
+    if (n !== nameNow) { nameNow = n; scrollPx = 0; for (const [k, b] of [['tText', 0], ['tGlow', 9]]) { const old = titleU[k].value; titleU[k].value = strip(b, n); if (old) old.dispose(); } }
+    const now = performance.now(), SW = titleU.tText.value.userData.SW; scrollPx = (scrollPx + (now - scrollT) / 1000 * h * 0.9) % SW; scrollT = now;   // about a screen height a second
+    titleU.strip.value.set(w / SW, scrollPx / SW);
+  });
+  titleU = { tText: { value: strip(0, A.preName) }, tGlow: { value: strip(9, A.preName) }, strip: { value: new THREE.Vector2(1, 0) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
     ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
     scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
@@ -491,7 +468,7 @@ let title = null, titleU = null, crtPics = [];
     uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tText, tGlow, tImg, tImgG, tImg2, tImg2G, tName; uniform vec3 wts; uniform float amt, lvl, flip; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
+      uniform sampler2D tText, tGlow; uniform vec2 strip; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -511,12 +488,9 @@ let title = null, titleU = null, crtPics = [];
         if (uv0.x < 0. || uv0.x > 1. || uv0.y < 0. || uv0.y > 1.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
         vec2 px = uv0 * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
-        vec2 uv = uv0 + d * (amt + flip * size.y * .9) / size;   // the LFO wobble, plus a burst while the screen flips
-        float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
-        // pictures crossfading with FILTH; a picture is very dark (just visible) while the synth is silent and
-        // comes up with the sound, on the same quick-to-light, slow-to-fade level as the lettering's glow
-        if (wts.x < 1.) { float pk = .1 + .9 * lvl; t = t * wts.x + (texture2D(tImg, uv).a * wts.y + texture2D(tImg2, uv).a * wts.z) * pk; g = g * wts.x + (texture2D(tImgG, uv).a * wts.y + texture2D(tImg2G, uv).a * wts.z) * pk; }
-        t = max(t, texture2D(tName, uv).a * .85);              // the preset's name along the bottom, over FILTH or a picture
+        vec2 uv = uv0 + d * amt / size;
+        vec2 tuv = vec2(uv.x * strip.x + strip.y, uv.y);       // the marquee: across the repeating strip of the name
+        float t = texture2D(tText, tuv).a, g = texture2D(tGlow, tuv).a;
         float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
         float vig = smoothstep(1.35, .35, length(cuv));
         vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
@@ -556,32 +530,7 @@ let title = null, titleU = null, crtPics = [];
 }
 // CRT COLOUR: the phosphor of the FILTH screen
 const PHOSPHOR = { orange: [1, .5, .1], amber: [1, .72, .15], green: [.3, 1, .35], white: [.88, .93, 1], blue: [.3, .6, 1] };
-// CRT pictures.  The screen shows FILTH (-1) or a picture (0…n-1), crossfading from one to the other;
-// only a tap on the screen changes it: it flips to the next one in turn (FILTH, then each picture) with a slower crossfade,
-// and stays there until the next tap.
-let picFrom = -1, picTo = -1, picT0 = 0, picDur = 1, picBurst = 0;
-function picGo(to, dur, burst) {
-  const t = performance.now(), p = Math.min(1, (t - picT0) / picDur);
-  picFrom = p < 0.5 ? picFrom : picTo; picTo = to; picT0 = t; picDur = dur; picBurst = burst;
-  if (picFrom >= 0) titleU.tImg.value = crtPics[picFrom].t, titleU.tImgG.value = crtPics[picFrom].g;
-  if (picTo >= 0) titleU.tImg2.value = crtPics[picTo].t, titleU.tImg2G.value = crtPics[picTo].g;
-}
-function crtFlip() {   // a tap on the screen
-  if (!titleU || !crtPics.length) return;
-  const n = crtPics.length, next = picTo + 1 >= n ? -1 : picTo + 1;
-  picGo(next, 900, 0);
-}
-function drivePics() {
-  if (!titleU || !crtPics.length) return;
-  const t = performance.now();
-  const p = Math.min(1, (t - picT0) / picDur), w = [0, 0, 0];   // weights: FILTH, the picture faded from, the one faded to
-  if (picFrom < 0) w[0] += 1 - p; else w[1] += 1 - p;
-  if (picTo < 0) w[0] += p; else w[2] += p;
-  titleU.wts.value.set(w[0], w[1], w[2]);
-  titleU.flip.value = picBurst * Math.sin(Math.PI * p);   // the flip's wobble, strongest halfway
-}
 function driveTitle() {
-  drivePics();
   const P = PHOSPHOR[A.look.crt] || PHOSPHOR.white; titleU.ph.value.setRGB(P[0], P[1], P[2]);
   const W = A.WOB, v = Math.max(-1, Math.min(1, A.lfoV / W.vmax)) * Math.min(1, A.outRms / W.ref), a = W.on ? W.A * v : 0;
   // the plate is much taller than the 2D title (110 px), so the depth scales with it, and a little more
@@ -820,7 +769,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (!o) return;
   cv.setPointerCapture(e.pointerId); e.preventDefault();
   const u = o.userData;
-  if (u.title) { crtFlip(); }   // tapping the screen flips to the next picture (OPTIONS has its own key in the corner)
+  if (u.title) { A.openOptions(); }   // tapping the screen opens OPTIONS (so does the OPTIONS key in the corner)
   else if (u.ctl) {
     const c = u.ctl;
     // a knob's modulation (MODULATE box) is shown by a right click, or a long press on a touch screen
@@ -923,7 +872,6 @@ function frame() {
 renderer.setAnimationLoop(frame);
 // for headless checks: where a control is on screen
 window.filth3d = {
-  pic: () => { crtFlip(); return [picFrom, picTo]; },   // headless checks: flip the screen as a tap does
   ready: true,
   where(o) { const v = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
   ctl(id) { return this.where(A.S.find((c) => c.id === id).obj3); },
