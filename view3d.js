@@ -422,7 +422,7 @@ let title = null, titleU = null;
   // the CRT housing: like a tube's case, its four sides bow outward (the same barrel curve as
   // the screen inside) and its edges are rounded; kept shallow, so tipping the top panel up
   // never lets it cover the AMPLIFIER name
-  const BX = w * 0.012, BY = h * 0.025, BS = 3, BEZ = h * 0.06, FR = 11;  // side bow, top/bottom bow (subtle), edge round, bezel, frame width
+  const BX = w * 0.004, BY = h * 0.008, BS = 3, BEZ = h * 0.06, FR = 11;  // side bow, top/bottom bow (subtle), edge round, bezel, frame width
   const HX = w / 2 - BX - BS - FR, HY = h / 2 - BY - BS - FR;              // half-size of the case before its bow (the frame goes round it)
   const bowShape = (hx, hy) => {
     const sh = new THREE.Shape();
@@ -457,10 +457,10 @@ let title = null, titleU = null;
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
   let nameNow = null; ticks.push(() => {
-    const n = A.preName || 'FILTH'; if (n === nameNow) return; nameNow = n;
+    const n = 'FILTH';   // Johnny: the CRT says FILTH only (the name drawing stays for any word) if (n === nameNow) return; nameNow = n;
     for (const [k, b] of [['tText', 0], ['tGlow', 9]]) { const old = titleU[k].value; titleU[k].value = nameLayer(b, n); if (old) old.dispose(); }
   });
-  titleU = { tText: { value: nameLayer(0, A.preName) }, tGlow: { value: nameLayer(9, A.preName) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
+  titleU = { tText: { value: nameLayer(0, 'FILTH') }, tGlow: { value: nameLayer(9, 'FILTH') }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
     ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
     scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
@@ -483,7 +483,7 @@ let title = null, titleU = null;
         float edge = smoothstep(0., 10., min(ex, ey));
         if (edge <= 0.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
         vec2 cuv = q / vec2(scr.x + scr.z, scr.y + scr.w);     // the picture fills the screen
-        cuv *= 1. + 0.03 * dot(cuv, cuv);                     // barrel: the glass bulges, just a little
+        cuv *= 1. + 0.012 * dot(cuv, cuv);                     // barrel: the glass bulges, just a little
         vec2 uv0 = cuv * .5 + .5;
         if (uv0.x < 0. || uv0.x > 1. || uv0.y < 0. || uv0.y > 1.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
         vec2 px = uv0 * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
@@ -510,7 +510,7 @@ let title = null, titleU = null;
       for (let i = 0; i < a.count; i++) {
         const nx = a.getX(i) / (gw / 2), ny = a.getY(i) / (gh / 2);
         a.setX(i, a.getX(i) * (1 + (BX / (gw / 2)) * (1 - ny * ny))); a.setY(i, a.getY(i) * (1 + (BY / (gh / 2)) * (1 - nx * nx)));
-        a.setZ(i, lift + 4 * (1 - nx * nx) * (1 - ny * ny));
+        a.setZ(i, lift + 2 * (1 - nx * nx) * (1 - ny * ny));
       }
       g.computeVertexNormals(); return g;
     };

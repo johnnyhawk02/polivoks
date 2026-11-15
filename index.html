@@ -127,6 +127,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .sq-mods .val { flex: none; width: 46px; text-align: left; }
   .mknob { width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--ink); }
   .sq-lane.off .mknob, .sq-lane.off .val, .sq-lane.off input { opacity: .35; }
+  /* the SEQ box's on key sits top right, level with the LED keys of LFO, ENV 1, ENV 2, VEL and KEY */
+  .sq-stepkey { align-items: center; margin: 0 4px; }
   /* MOD and ENV: one-column boxes, LED key on top, a vertical depth slider (up = +), its value under it */
   .vlane { align-items: center; gap: 6px; margin: 0 4px; }
   .vlane input.vert { writing-mode: vertical-lr; direction: rtl; width: 24px; height: 120px; flex: none; }
@@ -1755,7 +1757,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.99.2';
+const VERSION = '1.99.4';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2057,7 +2059,7 @@ ed.insertAdjacentHTML('beforeend', `
   <div class="f" style="grid-column:span 4;display:none"><span>TEMPO</span><div class="row"><input type="range" class="sq-bpm" min="40" max="240" aria-label="Tempo"><b class="val sq-bpmv" style="flex:none;width:72px"></b></div></div>
   <div class="f notekeys nolab" style="grid-column:span 4"><span>PLAY</span><div class="row cells"><button class="btn" data-note="48">C3</button><button class="btn" data-note="55">G3</button><button class="btn" data-note="60">C4</button></div></div>
   <div class="box sub" style="grid-column:span 8;--n:8" aria-label="Step sequence for the knob"><h2>SEQ</h2>
-    <div class="f sq-lane"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
+    <div class="f nolab sq-lane sq-stepkey" style="grid-column:-2/-1;grid-row:1"><span>STEP</span><div class="row"><button class="sb sm sym sq-on" aria-label="Step sequence on or off">●</button></div></div>
     <div class="f dim sq-kn" style="grid-column:span 1"><span>LENGTH</span><div class="row"><div class="mknob" data-m="len" aria-label="LENGTH"></div><b class="val sq-len"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 1"><span>RATE</span><div class="row"><div class="mknob" data-m="div" aria-label="RATE"></div><b class="val sq-div"></b></div></div>
     <div class="f dim sq-kn" style="grid-column:span 1"><span>DEPTH</span><div class="row"><div class="mknob" data-m="depth" aria-label="DEPTH"></div><b class="val sq-depthv"></b></div></div>
