@@ -124,7 +124,9 @@ class SoftClip {
 class FxRack {
   constructor(engine, fx) { this.e = engine; this.fx = fx; }
   setParam(id, v) { if (id in this.fx.p) this.fx.set(id, v); else this.e.setParam(id, v); }
-  noteOn(n) { this.e.noteOn(n); }
+  noteOn(n, vel) { this.e.noteOn(n, vel); }
+  // the mod sources KnobSeq reads (it holds this rack, not the engine)
+  get envN() { return this.e.envN; } get env2N() { return this.e.env2N; } get lfoV() { return this.e.lfoV; } get vel() { return this.e.vel; }
   noteOff(n) { this.e.noteOff(n); }
   allOff() { this.e.allOff(); }
   setPrio(last) { this.e.setPrio(last); }
