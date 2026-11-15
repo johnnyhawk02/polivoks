@@ -406,7 +406,7 @@ for (const c of CTL) {
 // The letters sit on their own layer: pushed about by a fixed noise whose
 // depth is the modulator's output times how loud the synth is (as on the 2D
 // panel), and lit up by the output level.
-let title = null, titleU = null;
+let title = null, titleU = null, crtPics = [];
 {
   const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0;   // flat, raised plate
   const p = plate(w, h, 8, () => {});
@@ -442,7 +442,20 @@ let title = null, titleU = null;
     ctx.fillStyle = PAPER; ctx.fillText('FILTH', -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
-  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
+  // CRT pictures (Johnny's, in crt/): now and then one takes over the screen for a few seconds, through the
+  // same phosphor, scanlines and LFO wobble as the lettering.  Stretched to fill the screen like FILTH is,
+  // so the whole drawing shows; light parts glow.  Add a file to CRT_IMAGES (and to OWN in sw.js) for more.
+  const CRT_IMAGES = ['crt/walker.jpg', 'crt/smiley.jpg'], pics = [];
+  const picLayer = (img, blur) => {
+    const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
+    ctx.drawImage(img, 0, 0, w, h); ctx.filter = 'none';
+    const d = ctx.getImageData(0, 0, c.width, c.height), p = d.data;
+    for (let i = 0; i < p.length; i += 4) { const l = (p[i] * .3 + p[i + 1] * .59 + p[i + 2] * .11); p[i] = p[i + 1] = p[i + 2] = 255; p[i + 3] = l; }   // brightness → the alpha the shader reads
+    ctx.putImageData(d, 0, 0); const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+  };
+  for (const src of CRT_IMAGES) { const im = new Image(); im.onload = () => pics.push({ t: picLayer(im, 0), g: picLayer(im, 9) }); im.src = src; }
+  crtPics = pics;
+  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, tImg: { value: null }, tImgG: { value: null }, img: { value: 0 }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
     ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
     scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
@@ -450,7 +463,7 @@ let title = null, titleU = null;
     uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
+      uniform sampler2D tText, tGlow, tImg, tImgG; uniform float amt, lvl, img; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -472,6 +485,7 @@ let title = null, titleU = null;
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
         vec2 uv = uv0 + d * amt / size;
         float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
+        if (img > 0.) { t = mix(t, texture2D(tImg, uv).a, img); g = mix(g, texture2D(tImgG, uv).a, img); }   // a picture fading in over FILTH
         float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
         float vig = smoothstep(1.35, .35, length(cuv));
         vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
@@ -511,7 +525,20 @@ let title = null, titleU = null;
 }
 // CRT COLOUR: the phosphor of the FILTH screen
 const PHOSPHOR = { orange: [1, .5, .1], amber: [1, .72, .15], green: [.3, 1, .35], white: [.88, .93, 1], blue: [.3, .6, 1] };
+// CRT pictures: one every 8 to 20 s, held 3.5 s, fading in and out over 0.3 s, never the same twice running
+let picNext = performance.now() + 6000, picEnd = 0, picLast = -1;
+function drivePics() {
+  if (!titleU || !crtPics.length) return;
+  const t = performance.now();
+  if (t >= picNext && t > picEnd) {
+    let i = Math.floor(Math.random() * crtPics.length); if (crtPics.length > 1 && i === picLast) i = (i + 1) % crtPics.length; picLast = i;
+    titleU.tImg.value = crtPics[i].t; titleU.tImgG.value = crtPics[i].g; picEnd = t + 3500; picNext = picEnd + 8000 + Math.random() * 12000;
+  }
+  const left = picEnd - t, held = 3500 - left;
+  titleU.img.value = left <= 0 ? 0 : Math.max(0, Math.min(1, held / 300, left / 300));
+}
 function driveTitle() {
+  drivePics();
   const P = PHOSPHOR[A.look.crt] || PHOSPHOR.white; titleU.ph.value.setRGB(P[0], P[1], P[2]);
   const W = A.WOB, v = Math.max(-1, Math.min(1, A.lfoV / W.vmax)) * Math.min(1, A.outRms / W.ref), a = W.on ? W.A * v : 0;
   // the plate is much taller than the 2D title (110 px), so the depth scales with it, and a little more
@@ -853,6 +880,7 @@ function frame() {
 renderer.setAnimationLoop(frame);
 // for headless checks: where a control is on screen
 window.filth3d = {
+  pic: () => { picNext = 0; picEnd = 0; return crtPics.length; },   // headless checks: show a CRT picture now
   ready: true,
   where(o) { const v = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
   ctl(id) { return this.where(A.S.find((c) => c.id === id).obj3); },
