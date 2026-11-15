@@ -231,6 +231,9 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .v3d #seqpanel .box.sub { grid-template-columns: repeat(var(--n), calc(var(--cw) - 20px / 13)); }
   .v3d .low .box.sub { margin-top: 16px; }
   .v3d #g-rnd .btn { font-size: 13.5px; }
+  /* one flat panel (v2.15.0): the top and bottom halves meet with no join, so their inner edges give up
+     11 px each and the gap between them matches the gap between rows */
+  .v3d #panel { padding-bottom: 7px; } .v3d #low { padding-top: 7px; }
 </style>
 </head>
 <body>
@@ -2169,7 +2172,7 @@ let engineMode = '', node = null, ctx = null, analyser = null, powered = false;
 let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m) };   // for headless checks
-const VERSION = '2.14.0';
+const VERSION = '2.15.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
