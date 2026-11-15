@@ -320,17 +320,21 @@ if (respEl) {
 
 // a small red LED up and right of every knob: lit while its STEP, ENV or LFO is on (the page marks
 // the knob's label with .seq then); like the CLIP LED, a lamp and a soft halo
-const ledGeoS = new THREE.CylinderGeometry(5, 5, 3, 24); ledGeoS.rotateX(Math.PI / 2);   // big enough to read at a glance on a phone
+const ledGeoS = new THREE.CylinderGeometry(5, 5, 1, 24); ledGeoS.rotateX(Math.PI / 2);   // big enough to read at a glance on a phone
+// every LED sits down in a hole in the faceplate: a flat black rim round it, the lamp level with the face,
+// and only a faint glow escapes onto the panel (Johnny: in holes, very subtle glow)
+const holeMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+function ledHole(group, x, y, r) { const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.2, r + 2.4, 32), holeMat); m.position.copy(pos(x, y, 0.25)); group.add(m); }
 const ledHaloTex = (() => { const [c, x] = canvas(64, 64), g = x.createRadialGradient(32, 32, 3, 32, 32, 32);
   g.addColorStop(0, 'rgba(255,40,20,1)'); g.addColorStop(1, 'rgba(255,20,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
-const ledHaloGeo = new THREE.PlaneGeometry(40, 40), LED_OFF = new THREE.Color(0x3a0008), LED_ON = new THREE.Color(0xff3020);
+const ledHaloGeo = new THREE.PlaneGeometry(22, 22), LED_OFF = new THREE.Color(0x3a0008), LED_ON = new THREE.Color(0xff3020);
 function knobLed(c, cx, cy) {
   const lab = c.el.querySelector('.lab'); if (!lab) return;
   const x = cx + KR + 13, y = cy - KR - 6;
-  const lm = new THREE.MeshBasicMaterial({ color: LED_OFF }), led = new THREE.Mesh(ledGeoS, lm); led.position.copy(pos(x, y, 1.5)); upper.add(led);
+  const lm = new THREE.MeshBasicMaterial({ color: LED_OFF }), led = new THREE.Mesh(ledGeoS, lm); led.position.copy(pos(x, y, 0.3)); upper.add(led); ledHole(upper, x, y, 5);
   const hm = new THREE.MeshBasicMaterial({ map: ledHaloTex, transparent: true, opacity: 0, depthWrite: false }), halo = new THREE.Mesh(ledHaloGeo, hm); halo.position.copy(pos(x, y, 3.2)); upper.add(halo);
   let last = null;
-  ticks.push(() => { const on = lab.classList.contains('seq'); if (on === last) return; last = on; lm.color.copy(on ? LED_ON : LED_OFF); hm.opacity = on ? 0.75 : 0; });
+  ticks.push(() => { const on = lab.classList.contains('seq'); if (on === last) return; last = on; lm.color.copy(on ? LED_ON : LED_OFF); hm.opacity = on ? 0.18 : 0; });
 }
 // knobs, selectors, switches
 const levers = new Set();
@@ -400,9 +404,9 @@ for (const c of CTL) {
     const [gc, gx] = canvas(64, 64), gr = gx.createRadialGradient(32, 32, 4, 32, 32, 32);
     gr.addColorStop(0, 'rgba(255,60,40,1)'); gr.addColorStop(1, 'rgba(255,0,0,0)'); gx.fillStyle = gr; gx.fillRect(0, 0, 64, 64);
     const hm = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const halo = new THREE.Mesh(new THREE.PlaneGeometry(r * 7, r * 7), hm); halo.position.copy(pos(cx, cy, 4.5)); upper.add(halo);
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(r * 4, r * 4), hm); halo.position.copy(pos(cx, cy, 4.5)); upper.add(halo);
     const off = new THREE.Color(0x3a0008), on = new THREE.Color(0xff3020);
-    ticks.push(() => { const v = Math.min(1, A.clip || 0); lm.color.copy(off).lerp(on, Math.min(1, v * 1.6)); hm.opacity = 0.9 * v; });
+    ticks.push(() => { const v = Math.min(1, A.clip || 0); lm.color.copy(off).lerp(on, Math.min(1, v * 1.6)); hm.opacity = 0.3 * v; });
   }
 }
 
@@ -446,9 +450,10 @@ let title = null, titleU = null, crtPics = [];
     ctx.fillStyle = PAPER; ctx.fillText('FILTH', -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
-  // CRT pictures (Johnny's, in crt/): now and then one takes over the screen for a few seconds, through the
-  // same phosphor, scanlines and LFO wobble as the lettering.  Stretched to fill the screen like FILTH is,
-  // so the whole drawing shows; light parts glow.  Add a file to CRT_IMAGES (and to OWN in sw.js) for more.
+  // CRT pictures (Johnny's): every picture in the repo's crt/ folder.  The folder is listed through GitHub
+  // (so a file uploaded there shows up with no code change); offline it uses the last list seen, or the two
+  // built in.  They go through the same phosphor, scanlines and LFO wobble as the lettering, stretched to
+  // fill the screen like FILTH is, so the whole drawing shows; light parts glow.
   const CRT_IMAGES = ['crt/walker.jpg', 'crt/smiley.jpg'], pics = [];
   const picLayer = (img, blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
@@ -457,7 +462,16 @@ let title = null, titleU = null, crtPics = [];
     for (let i = 0; i < p.length; i += 4) { const l = (p[i] * .3 + p[i + 1] * .59 + p[i + 2] * .11); p[i] = p[i + 1] = p[i + 2] = 255; p[i + 3] = l; }   // brightness → the alpha the shader reads
     ctx.putImageData(d, 0, 0); const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
-  for (const src of CRT_IMAGES) { const im = new Image(); im.onload = () => pics.push({ t: picLayer(im, 0), g: picLayer(im, 9) }); im.src = src; }
+  (async () => {
+    let list = null;
+    try {
+      const ac = new AbortController(); setTimeout(() => ac.abort(), 5000);
+      const r = await fetch('https://api.github.com/repos/johnnyhawk02/polivoks/contents/crt', { signal: ac.signal });
+      if (r.ok) { list = (await r.json()).filter((f) => f.type === 'file' && /\.(jpe?g|png|webp|gif)$/i.test(f.name)).map((f) => 'crt/' + f.name).sort(); try { localStorage.setItem('filth-crt-list', JSON.stringify(list)); } catch (e) {} }
+    } catch (e) {}
+    if (!list || !list.length) try { list = JSON.parse(localStorage.getItem('filth-crt-list')); } catch (e) {}
+    for (const src of (list && list.length ? list : CRT_IMAGES)) { const im = new Image(); im.onload = () => pics.push({ t: picLayer(im, 0), g: picLayer(im, 9) }); im.src = src; }
+  })();
   crtPics = pics;
   titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, tImg: { value: null }, tImgG: { value: null }, tImg2: { value: null }, tImg2G: { value: null }, wts: { value: new THREE.Vector3(1, 0, 0) }, flip: { value: 0 }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
@@ -529,11 +543,10 @@ let title = null, titleU = null, crtPics = [];
 }
 // CRT COLOUR: the phosphor of the FILTH screen
 const PHOSPHOR = { orange: [1, .5, .1], amber: [1, .72, .15], green: [.3, 1, .35], white: [.88, .93, 1], blue: [.3, .6, 1] };
-// CRT pictures.  The screen shows FILTH (-1) or a picture (0…n-1), crossfading from one to the other.
-// Now and then (every 8 to 20 s while FILTH shows) a random picture comes up for 3.5 s with a quick fade;
-// a tap on the screen flips to the next one in turn (FILTH, then each picture), with a slower fade and an
-// extra burst of wobble in the middle, and stays there until the next tap.
-let picFrom = -1, picTo = -1, picT0 = 0, picDur = 1, picBurst = 0, picBack = 0, picNext = performance.now() + 6000, picLast = -1;
+// CRT pictures.  The screen shows FILTH (-1) or a picture (0…n-1), crossfading from one to the other;
+// only a tap on the screen changes it: it flips to the next one in turn (FILTH, then each picture) with a slower crossfade,
+// and stays there until the next tap.
+let picFrom = -1, picTo = -1, picT0 = 0, picDur = 1, picBurst = 0;
 function picGo(to, dur, burst) {
   const t = performance.now(), p = Math.min(1, (t - picT0) / picDur);
   picFrom = p < 0.5 ? picFrom : picTo; picTo = to; picT0 = t; picDur = dur; picBurst = burst;
@@ -543,16 +556,11 @@ function picGo(to, dur, burst) {
 function crtFlip() {   // a tap on the screen
   if (!titleU || !crtPics.length) return;
   const n = crtPics.length, next = picTo + 1 >= n ? -1 : picTo + 1;
-  picBack = 0; picGo(next, 900, 1); if (next < 0) picNext = performance.now() + 8000 + Math.random() * 12000;
+  picGo(next, 900, 0);
 }
 function drivePics() {
   if (!titleU || !crtPics.length) return;
   const t = performance.now();
-  if (picTo < 0 && !picBack && t >= picNext && t - picT0 > picDur) {   // a random picture, never the same twice running
-    let i = Math.floor(Math.random() * crtPics.length); if (crtPics.length > 1 && i === picLast) i = (i + 1) % crtPics.length; picLast = i;
-    picGo(i, 300, 0); picBack = t + 3800;
-  }
-  if (picBack && t >= picBack) { picBack = 0; picGo(-1, 300, 0); picNext = t + 8000 + Math.random() * 12000; }
   const p = Math.min(1, (t - picT0) / picDur), w = [0, 0, 0];   // weights: FILTH, the picture faded from, the one faded to
   if (picFrom < 0) w[0] += 1 - p; else w[1] += 1 - p;
   if (picTo < 0) w[0] += p; else w[2] += p;
@@ -628,7 +636,7 @@ for (const el of low.querySelectorAll('button')) {
     const lit = el.classList.contains('lit');
     if (el.classList.contains('sym')) {   // STEP / ENV / LFO on keys: a red LED on a black key, lit while that source is on
       const cx = w / 2, cy = h / 2;
-      if (lit) { const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 12); g.addColorStop(0, 'rgba(255,50,30,.9)'); g.addColorStop(1, 'rgba(255,20,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); }
+      if (lit) { const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 12); g.addColorStop(0, 'rgba(255,50,30,.25)'); g.addColorStop(1, 'rgba(255,20,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); }
       ctx.fillStyle = lit ? '#ff3020' : '#3a0008'; ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, 7); ctx.fill();
       return;
     } if (lit) { ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h); }
@@ -709,11 +717,11 @@ if (gridEl) {
   const tex = { on: frameTex('on'), now: frameTex('now'), off: frameTex('off') };
   const [gc, gx] = canvas(64, 64), gr = gx.createRadialGradient(32, 32, 3, 32, 32, 32);
   gr.addColorStop(0, 'rgba(255,40,20,1)'); gr.addColorStop(1, 'rgba(255,20,0,0)'); gx.fillStyle = gr; gx.fillRect(0, 0, 64, 64);
-  const haloTex = new THREE.CanvasTexture(gc), ledGeo = new THREE.CylinderGeometry(LED_R, LED_R, 3, 24), haloGeo = new THREE.PlaneGeometry(LED_R * 7, LED_R * 7);
+  const haloTex = new THREE.CanvasTexture(gc), ledGeo = new THREE.CylinderGeometry(LED_R, LED_R, 1, 24), haloGeo = new THREE.PlaneGeometry(LED_R * 4, LED_R * 4);
   const ledOff = new THREE.Color(0x3a0008), ledOn = new THREE.Color(0xff3020);
   const bars = barEls.map((be) => {
     const b = barRect(be), cx = b.x + b.w / 2, cy = b.y + b.h + LED_H / 2 + 1;
-    const lm = new THREE.MeshBasicMaterial({ color: ledOff }), led = new THREE.Mesh(ledGeo, lm); led.rotation.x = Math.PI / 2; led.position.copy(pos(cx, cy, 1.5)); lower.add(led);
+    const lm = new THREE.MeshBasicMaterial({ color: ledOff }), led = new THREE.Mesh(ledGeo, lm); led.rotation.x = Math.PI / 2; led.position.copy(pos(cx, cy, 0.3)); lower.add(led); ledHole(lower, cx, cy, LED_R);
     const hm = new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, opacity: 0, depthWrite: false });   // a red glow laid over the pale panel (adding light would only whiten it)
     const halo = new THREE.Mesh(haloGeo, hm); halo.position.copy(pos(cx, cy, 3.5)); lower.add(halo);
     const fm = tintable(new THREE.MeshStandardMaterial({ map: tex.on, roughness: 0.78 }));
@@ -740,7 +748,7 @@ if (gridEl) {
     const t = performance.now(), k = Math.exp(-(t - (glowT || t)) / 110); glowT = t;   // dies away with a 0.11 s time constant
     bars.forEach((B, i) => {
       B.g = i === now && s.on ? 1 : B.g * k; if (B.g < 0.01) B.g = 0;
-      B.lm.color.copy(ledOff).lerp(ledOn, B.g); B.hm.opacity = 0.55 * B.g;
+      B.lm.color.copy(ledOff).lerp(ledOn, B.g); B.hm.opacity = 0.18 * B.g;
     });
   });
 }
