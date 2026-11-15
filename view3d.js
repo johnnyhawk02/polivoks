@@ -58,6 +58,10 @@ const corner = document.createElement('div');
 corner.textContent = `FILTH v${A.VERSION}`;
 Object.assign(corner.style, { position: 'fixed', right: '12px', bottom: '8px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: 'rgba(255,255,255,.5)' });   // no magenta anywhere: a quiet grey
 document.body.appendChild(corner);
+// OPTIONS: a quiet key in the bottom-left corner (the screen itself now flips pictures)
+const optKey = document.createElement('button'); optKey.textContent = 'OPTIONS';
+Object.assign(optKey.style, { position: 'fixed', left: '12px', bottom: '6px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: 'rgba(255,255,255,.5)', background: 'none', border: '0', padding: '2px 0', cursor: 'pointer' });
+optKey.onclick = () => A.openOptions(); document.body.appendChild(optKey);
 
 const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
@@ -455,7 +459,7 @@ let title = null, titleU = null, crtPics = [];
   };
   for (const src of CRT_IMAGES) { const im = new Image(); im.onload = () => pics.push({ t: picLayer(im, 0), g: picLayer(im, 9) }); im.src = src; }
   crtPics = pics;
-  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, tImg: { value: null }, tImgG: { value: null }, img: { value: 0 }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
+  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, tImg: { value: null }, tImgG: { value: null }, tImg2: { value: null }, tImg2G: { value: null }, wts: { value: new THREE.Vector3(1, 0, 0) }, flip: { value: 0 }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
     ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
     scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
@@ -463,7 +467,7 @@ let title = null, titleU = null, crtPics = [];
     uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tText, tGlow, tImg, tImgG; uniform float amt, lvl, img; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
+      uniform sampler2D tText, tGlow, tImg, tImgG, tImg2, tImg2G; uniform vec3 wts; uniform float amt, lvl, flip; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -483,9 +487,9 @@ let title = null, titleU = null, crtPics = [];
         if (uv0.x < 0. || uv0.x > 1. || uv0.y < 0. || uv0.y > 1.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
         vec2 px = uv0 * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
-        vec2 uv = uv0 + d * amt / size;
+        vec2 uv = uv0 + d * (amt + flip * size.y * .9) / size;   // the LFO wobble, plus a burst while the screen flips
         float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
-        if (img > 0.) { t = mix(t, texture2D(tImg, uv).a, img); g = mix(g, texture2D(tImgG, uv).a, img); }   // a picture fading in over FILTH
+        if (wts.x < 1.) { t = t * wts.x + texture2D(tImg, uv).a * wts.y + texture2D(tImg2, uv).a * wts.z; g = g * wts.x + texture2D(tImgG, uv).a * wts.y + texture2D(tImg2G, uv).a * wts.z; }   // pictures crossfading with FILTH
         float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
         float vig = smoothstep(1.35, .35, length(cuv));
         vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
@@ -525,17 +529,35 @@ let title = null, titleU = null, crtPics = [];
 }
 // CRT COLOUR: the phosphor of the FILTH screen
 const PHOSPHOR = { orange: [1, .5, .1], amber: [1, .72, .15], green: [.3, 1, .35], white: [.88, .93, 1], blue: [.3, .6, 1] };
-// CRT pictures: one every 8 to 20 s, held 3.5 s, fading in and out over 0.3 s, never the same twice running
-let picNext = performance.now() + 6000, picEnd = 0, picLast = -1;
+// CRT pictures.  The screen shows FILTH (-1) or a picture (0…n-1), crossfading from one to the other.
+// Now and then (every 8 to 20 s while FILTH shows) a random picture comes up for 3.5 s with a quick fade;
+// a tap on the screen flips to the next one in turn (FILTH, then each picture), with a slower fade and an
+// extra burst of wobble in the middle, and stays there until the next tap.
+let picFrom = -1, picTo = -1, picT0 = 0, picDur = 1, picBurst = 0, picBack = 0, picNext = performance.now() + 6000, picLast = -1;
+function picGo(to, dur, burst) {
+  const t = performance.now(), p = Math.min(1, (t - picT0) / picDur);
+  picFrom = p < 0.5 ? picFrom : picTo; picTo = to; picT0 = t; picDur = dur; picBurst = burst;
+  if (picFrom >= 0) titleU.tImg.value = crtPics[picFrom].t, titleU.tImgG.value = crtPics[picFrom].g;
+  if (picTo >= 0) titleU.tImg2.value = crtPics[picTo].t, titleU.tImg2G.value = crtPics[picTo].g;
+}
+function crtFlip() {   // a tap on the screen
+  if (!titleU || !crtPics.length) return;
+  const n = crtPics.length, next = picTo + 1 >= n ? -1 : picTo + 1;
+  picBack = 0; picGo(next, 900, 1); if (next < 0) picNext = performance.now() + 8000 + Math.random() * 12000;
+}
 function drivePics() {
   if (!titleU || !crtPics.length) return;
   const t = performance.now();
-  if (t >= picNext && t > picEnd) {
+  if (picTo < 0 && !picBack && t >= picNext && t - picT0 > picDur) {   // a random picture, never the same twice running
     let i = Math.floor(Math.random() * crtPics.length); if (crtPics.length > 1 && i === picLast) i = (i + 1) % crtPics.length; picLast = i;
-    titleU.tImg.value = crtPics[i].t; titleU.tImgG.value = crtPics[i].g; picEnd = t + 3500; picNext = picEnd + 8000 + Math.random() * 12000;
+    picGo(i, 300, 0); picBack = t + 3800;
   }
-  const left = picEnd - t, held = 3500 - left;
-  titleU.img.value = left <= 0 ? 0 : Math.max(0, Math.min(1, held / 300, left / 300));
+  if (picBack && t >= picBack) { picBack = 0; picGo(-1, 300, 0); picNext = t + 8000 + Math.random() * 12000; }
+  const p = Math.min(1, (t - picT0) / picDur), w = [0, 0, 0];   // weights: FILTH, the picture faded from, the one faded to
+  if (picFrom < 0) w[0] += 1 - p; else w[1] += 1 - p;
+  if (picTo < 0) w[0] += p; else w[2] += p;
+  titleU.wts.value.set(w[0], w[1], w[2]);
+  titleU.flip.value = picBurst * Math.sin(Math.PI * p);   // the flip's wobble, strongest halfway
 }
 function driveTitle() {
   drivePics();
@@ -777,7 +799,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (!o) return;
   cv.setPointerCapture(e.pointerId); e.preventDefault();
   const u = o.userData;
-  if (u.title) { A.openOptions(); }   // tapping FILTH opens OPTIONS
+  if (u.title) { crtFlip(); }   // tapping the screen flips to the next picture (OPTIONS has its own key in the corner)
   else if (u.ctl) {
     const c = u.ctl;
     // a knob's modulation (MODULATE box) is shown by a right click, or a long press on a touch screen
@@ -880,7 +902,7 @@ function frame() {
 renderer.setAnimationLoop(frame);
 // for headless checks: where a control is on screen
 window.filth3d = {
-  pic: () => { picNext = 0; picEnd = 0; return crtPics.length; },   // headless checks: show a CRT picture now
+  pic: () => { crtFlip(); return [picFrom, picTo]; },   // headless checks: flip the screen as a tap does
   ready: true,
   where(o) { const v = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld).project(camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; },
   ctl(id) { return this.where(A.S.find((c) => c.id === id).obj3); },
