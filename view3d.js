@@ -446,8 +446,8 @@ let title = null, titleU = null;
   // Redrawn when the name changes.
   const nameLayer = (blur, name) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
-    const words = (name || 'FILTH').toUpperCase().split(/\s+/).filter(Boolean).slice(0, 4);
-    const PADX = w * 0.045, PADY = h * 0.07, gap = h * 0.035, lh = (h - 2 * PADY - gap * (words.length - 1)) / words.length;
+    const words = (name || 'FILTH').toUpperCase().split(/\s+/).filter(Boolean);   // every word (the name maker goes up to 7)
+    const PADX = w * 0.045, PADY = h * 0.07, gap = h * 0.035 * Math.min(1, 3 / words.length), lh = (h - 2 * PADY - gap * (words.length - 1)) / words.length;
     ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = PAPER;
     words.forEach((wd, i) => {
       const m = ctx.measureText(wd), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
