@@ -21,7 +21,7 @@
 // ============================================================================
 // PITCH knob positions for exact intervals (inverse of pitchOct in dsp.js)
 const TONE_PITCH = { 0: 0, 3: 0.257, 4: 0.34216, 5: 0.42689, 7: 0.59465, 12: 1, '-5': -0.42689, '-7': -0.59465, '-12': -1 };
-const TONE_CENT = 0.001025;     // DETUNE knob travel for one cent (detuneOct is linear here)
+const TONE_CENT = 0.01;         // FINE knob travel for one cent (fineOct is linear here; DETUNE is gone since v2.10.0)
 // LFO RATE knob for a few rates: 0 = 1.8 Hz (slowest), 0.2 = 4.7 Hz, 0.27 ≈ 6.3 Hz
 const TONE_KINDS = ['pluck', 'sustain', 'pad', 'bass', 'lead', 'keys'];
 
@@ -39,7 +39,7 @@ function makeTone(rand, amount, want) {
   const wpick = (o) => { let t = 0; for (const k in o) t += o[k]; let r = R() * t; for (const k in o) if ((r -= o[k]) < 0) return k; return Object.keys(o)[0]; };
   const kind = TONE_KINDS.includes(want) ? want : wpick({ pluck: 3, bass: 3, lead: 3, keys: 2, pad: 2, sustain: 2 });
   const k = {
-    tune: 0, glide: 0, voice: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o2mod: 0, o2detune: 0, o2pitch: 0, o1fine: 0, o2fine: 0,
+    tune: 0, glide: 0, voice: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o2mod: 0, o2fm: 0, o2pitch: 0, o1fine: 0, o2fine: 0,
     mixN: 0, fEgMode: 0, fMode: 0, fMod: 0, aEgMode: 0, aMod: 0, vcaHold: 0, lfoMode: 0, lfoRate: 0.2,
   };
 
@@ -59,7 +59,7 @@ function makeTone(rand, amount, want) {
   if (iv === 'twelfth') { k.o2pitch = TONE_PITCH[7]; if (k.o1range < 4) k.o2range++; }
   // detune in cents: a slow beat in unison, a hair otherwise; sign at random
   const cents = iv === 'uni' ? rng(2, 7, 1, 12) : mid(0, 3);
-  k.o2detune = (R() < 0.5 ? -1 : 1) * cents * TONE_CENT;
+  k.o2fine = (R() < 0.5 ? -1 : 1) * cents * TONE_CENT;
   // mixer: VCO I leads, VCO II a bit lower when it is on another interval
   k.mix1 = mid(0.5, 0.72);
   k.mix2 = iv === 'uni' ? mid(0.35, 0.55) : mid(0.3, 0.5);         // under VCO I so unison beats stay soft

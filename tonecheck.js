@@ -22,9 +22,9 @@ const SR = 48000;
 function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
 // the panel: knob ids, selector sizes and switches (level knobs left at default)
-const KNOBS = ['lfoRate', 'tune', 'glide', 'o1mod', 'o1fm', 'o1pitch', 'o2mod', 'o2detune', 'o2pitch', 'mix1', 'mix2', 'mixN',
+const KNOBS = ['lfoRate', 'tune', 'glide', 'o1mod', 'o1fm', 'o1pitch', 'o2mod', 'o2fm', 'o2pitch', 'o2fine', 'mix1', 'mix2', 'mixN',
   'fA', 'fD', 'fS', 'fR', 'cutoff', 'res', 'fMod', 'fEnv', 'aA', 'aD', 'aS', 'aR', 'aMod', 'eTime', 'eFb', 'eTone', 'eSpread', 'eMix'];
-const BIP = { tune: 1, o1pitch: 1, o2pitch: 1, o2detune: 1 };
+const BIP = { tune: 1, o1pitch: 1, o2pitch: 1, o2fine: 1 };
 const SELS = { lfoMode: 4, o1range: 5, o1wave: 3, o2range: 5, o2wave: 3 };
 const SWS = ['voice', 'fEgMode', 'fMode', 'aEgMode', 'vcaHold', 'eSync'];
 // PATCH as in index.html (dice.patch)
@@ -47,7 +47,7 @@ function engineFor(k, seqs) {
   for (const id in k) { if (id in fx.p) { fx.set(id, k[id]); fx.ps[id] = k[id]; } else { e.setParam(id, k[id]); e.ps[id] = k[id]; } }
   const q = new KnobSeq(SR, new FxRack(e, fx));
   for (const id in k) q.base[id] = k[id];
-  const rg = (id) => (id === 'o2detune' || /pitch|tune/.test(id) ? [-1, 1] : [0, 1]);
+  const rg = (id) => (/fine|pitch|tune/.test(id) ? [-1, 1] : [0, 1]);
   for (const id in seqs || {}) { q.setSeq(id, seqs[id], rg(id)); }
   return { e, fx, q };
 }

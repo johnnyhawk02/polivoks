@@ -1,4 +1,4 @@
-const { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, Modulator } = require('./dsp.js');
+const { PolivoksEngine, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, fineOct, Modulator } = require('./dsp.js');
 const fs = require('fs');
 const SR = 48000;
 
@@ -137,7 +137,7 @@ console.log('--- stability sweep ---');
   const keys = Object.keys(e.p); let bad = 0, pk = 0; const out = new Float32Array(128);
   const t0 = Date.now(); let blocks = 0;
   for (let b = 0; b < 3000; b++) {
-    if (b % 40 === 0) { for (const k of keys) if (k !== 'power') { const v = Math.random(); const map = { lfoMode: 3, o1range: 4, o2range: 4, o1wave: 2, o2wave: 2 }; e.setParam(k, map[k] ? Math.floor(v * (map[k] + 1)) : (k === 'tune' || k === 'o2detune' || k.endsWith('pitch')) ? v * 2 - 1 : v); } e.noteOn(30 + Math.floor(Math.random() * 60)); }
+    if (b % 40 === 0) { for (const k of keys) if (k !== 'power') { const v = Math.random(); const map = { lfoMode: 3, o1range: 4, o2range: 4, o1wave: 2, o2wave: 2 }; e.setParam(k, map[k] ? Math.floor(v * (map[k] + 1)) : (k === 'tune' || k.endsWith('fine') || k.endsWith('pitch')) ? v * 2 - 1 : v); } e.noteOn(30 + Math.floor(Math.random() * 60)); }
     if (b % 40 === 25) e.allOff();
     e.render(out, 128); blocks++;
     for (const v of out) { if (!isFinite(v)) bad++; pk = Math.max(pk, Math.abs(v)); }
@@ -148,7 +148,7 @@ console.log('--- stability sweep ---');
 // demo wav
 {
   const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
-  const set = { cutoff: 0.54, res: 0.85, fEnv: 0.55, fD: 0.35, fS: 0.1, aS: 0.8, mix1: 0.7, mix2: 0.55, o2detune: 0.012, o1range: 1, o2range: 2 };
+  const set = { cutoff: 0.54, res: 0.85, fEnv: 0.55, fD: 0.35, fS: 0.1, aS: 0.8, mix1: 0.7, mix2: 0.55, o2fine: 0.12, o1range: 1, o2range: 2 };
   for (const k in set) { e.setParam(k, set[k]); e.ps[k] = set[k]; }
   const seq = [36, 36, 48, 36, 39, 36, 43, 46], step = SR * 0.2; const out = new Float32Array(SR * 6);
   for (let i = 0, si = 0; i < out.length; i += 128) {
@@ -297,7 +297,7 @@ console.log('--- stability sweep ---');
   console.log('--- TONE randomiser ---');
   let bad = 0;
   for (const s in TONE_PITCH) { const c = 1200 * pitchOct(TONE_PITCH[s]) - 100 * s; if (Math.abs(c) > 0.5) { console.log('pitch knob for', s, 'off by', c.toFixed(2), 'cents'); bad++; } }
-  if (Math.abs(1200 * detuneOct(10 * TONE_CENT) - 10) > 0.1) { console.log('detune cent constant off'); bad++; }
+  if (Math.abs(1200 * fineOct(10 * TONE_CENT) - 10) > 0.1) { console.log('fine cent constant off'); bad++; }
   // heard: VCO II against VCO I on the fifth and the fourth (both saw, filter open)
   for (const s of [7, 5]) {
     const f = (solo) => freqOf(run(Object.assign({}, open, { o2wave: 1, o2pitch: TONE_PITCH[s] }, solo), 1, [57]).out, SR);
@@ -307,7 +307,7 @@ console.log('--- stability sweep ---');
   const kinds = {}; let n = 0;
   for (let i = 0; i < 5000; i++) {
     const { kind, k, seqs: sq } = makeTone(); kinds[kind] = (kinds[kind] || 0) + 1;
-    for (const id in k) { const lo = id === 'o2detune' || id === 'o2pitch' ? -1 : 0, hi = /range/.test(id) ? 4 : /wave/.test(id) ? 2 : /lfoMode/.test(id) ? 3 : /pw$/.test(id) ? 1 : 1; if (!(k[id] >= lo && k[id] <= hi)) { bad++; if (n++ < 5) console.log('out of range', id, k[id]); } }
+    for (const id in k) { const lo = /fine$|pitch$/.test(id) ? -1 : 0, hi = /range/.test(id) ? 4 : /wave/.test(id) ? 2 : /lfoMode/.test(id) ? 3 : /pw$/.test(id) ? 1 : 1; if (!(k[id] >= lo && k[id] <= hi)) { bad++; if (n++ < 5) console.log('out of range', id, k[id]); } }
     if (k.vcaHold || k.fMode || k.res > 0.8 || k.cutoff < 0.38 || k.mix1 < 0.4 || 'volume' in k || 'phones' in k || 'outSel' in k || k.o1mod > 0.01 || k.aMod > 0.07 || k.fMod > 0.1 || k.eFb > 0.55 || k.eSync !== 1) { bad++; if (n++ < 5) console.log('outside the usable zone', kind, JSON.stringify(k)); }
     if (!sq || !sq.cutoff) { bad++; if (n++ < 5) console.log('no cutoff sequence'); }
     for (const id in sq || {}) { const q = sq[id]; if (!['cutoff', 'res', 'fEnv', 'o1pw', 'o2pw', 'tune'].includes(id) || !q.on || q.depth > (id === 'tune' ? 0.03 : 0.2) || q.slew < 0.05 || Math.abs(q.drift) > 6 || ![4, 8, 16, 32, 64].includes(q.div) || q.steps.length !== 16 || q.steps.some((v) => !(v >= -1 && v <= 1)) || (id === 'cutoff' && q.steps.some((v) => v < -0.4))) { bad++; if (n++ < 5) console.log('bad sequence', id, JSON.stringify(q)); } }
@@ -406,7 +406,7 @@ console.log('--- stability sweep ---');
 }
 // FINE TUNE (an addition): ±1 semitone on each VCO
 {
-  const { fineOct } = require('./dsp.js');
+  
   const note = (id, v) => { const mix = id === 'o1fine' ? { mix1: 0.6, mix2: 0 } : { mix1: 0, mix2: 0.6, o2wave: 1 };
     const { out } = run(Object.assign({}, open, mix, { [id]: v }), 1, [57]); return freqOf(out, SR); };
   console.log('--- FINE TUNE (an addition, 10 MΩ EST) ---\nformula -1/-0.5/0/0.5/1 (cents):', [-1, -0.5, 0, 0.5, 1].map((d) => (1200 * fineOct(d)).toFixed(1)).join(' '));
@@ -437,4 +437,64 @@ console.log('--- stability sweep ---');
   console.log('--- ENVELOPE LOOP (ENV 1, A 0.1 D 0.3, key held 2 s) ---');
   console.log('ONCE: peaks', once.n, '| LOOP S 0: peaks', loop.n, 'period', loop.period.toFixed(3), 's | LOOP S 0.5: peaks', loopS.n, 'period', loopS.period.toFixed(3), 's | LOOP key up: falls to 20 % in', loop.rel.toFixed(3), 's, peaks after key up', loop.late);
   if (once.n !== 1 || loop.n < 3 || loopS.n <= loop.n || !(loop.rel >= 0 && loop.rel < 1.5) || loop.late) { console.log('ENVELOPE LOOP FAILED'); process.exitCode = 1; }
+}
+// VCO II FM (v2.10.0, an addition): VCO I's triangle into VCO II's summer, the mirror of VCO I's FM
+{
+  const { migrateDetune } = require('./dsp.js');
+  // pitch swing of one VCO (semitones peak to peak, from the expo current into its core) with the other one 2 octaves down
+  const dev = (which, mod, a) => {
+    const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1; e.setFmMod(mod);
+    const s0 = Object.assign({}, open, { o1range: which === 2 ? 0 : 2, o2range: which === 2 ? 2 : 0, o1fm: which === 1 ? a : 0, o2fm: which === 2 ? a : 0 });
+    for (const k in s0) { e.setParam(k, s0[k]); e.ps[k] = s0[k]; }
+    e.noteOn(57); e.render(new Float32Array(SR), SR);
+    const v = which === 1 ? e.vco1 : e.vco2, st = v.step.bind(v); let lo = 1e9, hi = 0;
+    v.step = (I) => { lo = Math.min(lo, I); hi = Math.max(hi, I); return st(I); };
+    e.render(new Float32Array(SR / 2), SR / 2);
+    return 12 * Math.log2(hi / lo);
+  };
+  console.log('--- VCO II FM (an addition: VCO I triangle → VCO II summer, mirror of VCO I FM) ---');
+  for (const mod of [false, true]) {
+    const r = [0.5, 1].map((a) => [dev(1, mod, a), dev(2, mod, a)]);
+    console.log((mod ? 'FM MOD ' : 'ORIGINAL') + ' pitch swing p-p (st), knob 0.5 / 1:  VCO I FM', r.map((x) => x[0].toFixed(2)).join(' / '), '| VCO II FM', r.map((x) => x[1].toFixed(2)).join(' / '));
+    for (const x of r) if (Math.abs(x[0] - x[1]) > 0.02 * x[0] + 0.05) { console.log('VCO II FM does not mirror VCO I FM'); process.exitCode = 1; }
+  }
+  // FM at 0 is the old engine exactly (no detune): bit-identical to the same knobs with o2fm left out
+  {
+    const go = (fm) => { const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1; e.setParam('o1fm', 0.4); if (fm != null) e.setParam('o2fm', fm); e.noteOn(50); const o = new Float32Array(SR); e.render(o, SR); return o; };
+    const a = go(null), b = go(0); let same = true; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) { same = false; break; }
+    console.log('VCO II FM at 0 leaves the sound bit-identical:', same); if (!same) process.exitCode = 1;
+  }
+  // both FMs up (mutual cross-mod): stays finite and bounded at every setting, both FM DEPTHs
+  {
+    let bad = 0, pk = 0, fmax = 0; const o = new Float32Array(128);
+    for (const mod of [false, true]) for (const a of [0.5, 1]) for (const r2 of [0, 2, 4]) {
+      const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1; e.setFmMod(mod);
+      const s0 = { o1fm: a, o2fm: a, o1range: 2, o2range: r2, mix1: 0.6, mix2: 0.6, cutoff: 1, res: 0.3, vcaHold: 1, o1wave: 0, o2wave: 1 };
+      for (const k in s0) { e.setParam(k, s0[k]); e.ps[k] = s0[k]; }
+      for (let b = 0; b < SR * 3 / 128; b++) {
+        if (b % 100 === 0) { e.allOff(); e.noteOn(20 + (b * 7) % 80); }
+        e.render(o, 128); for (const v of o) { if (!isFinite(v)) bad++; pk = Math.max(pk, Math.abs(v)); }
+        if (!isFinite(e.vco1.tri) || !isFinite(e.vco2.tri)) bad++;
+      }
+    }
+    console.log('both FMs up (0.5 / 1, ORIGINAL + MOD, VCO II 32\' / 8\' / 2\', random keys, 3 s each): NaN/inf', bad, 'peak', pk.toFixed(3));
+    if (bad) process.exitCode = 1;
+  }
+  // old presets: DETUNE's pitch moves to FINE / PITCH
+  {
+    const fac = JSON.parse(require('fs').readFileSync(__dirname + '/factory.json', 'utf8')).presets;
+    let n = 0, toFine = 0, toPitch = 0, worst = 0, lanes = 0; const off = (k) => detuneOct(+k.o2detune || 0) + pitchOct(+k.o2pitch || 0) + fineOct(+k.o2fine || 0) + (k.o2range == null ? 2 : k.o2range);
+    for (const p0 of fac) {
+      const p = JSON.parse(JSON.stringify(p0)); if (!('o2detune' in p.k)) continue; n++;
+      const before = off(p.k), pitch0 = p.k.o2pitch || 0;
+      const hadLane = p.s && p.s.o2detune && p.s.o2detune.on;
+      migrateDetune(p.k, p.s);
+      if ('o2detune' in p.k || (p.s && 'o2detune' in p.s)) { console.log('o2detune left in', p.name); process.exitCode = 1; }
+      if (hadLane && p.s.o2pitch && p.s.o2pitch.on) lanes++;
+      if ((p.k.o2pitch || 0) !== pitch0 || p.k.o2range !== p0.k.o2range) toPitch++; else if (p0.k.o2detune) toFine++;
+      worst = Math.max(worst, Math.abs(1200 * (off(p.k) - before)));
+    }
+    console.log('factory presets with DETUNE:', n, '| moved to FINE', toFine, '| to PITCH', toPitch, '| worst pitch error', worst.toFixed(4), 'cents | DETUNE sequences moved to PITCH', lanes);
+    if (worst > 0.05) { console.log('DETUNE MIGRATION FAILED'); process.exitCode = 1; }
+  }
 }
