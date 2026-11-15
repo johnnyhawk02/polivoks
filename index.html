@@ -1754,7 +1754,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.97.0';
+const VERSION = '1.98.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1922,7 +1922,9 @@ document.getElementById('resetbtn').onclick = () => {
 // A performance feature on top of the model (see seq.js): every knob can
 // carry a step sequence that moves it ± around where it is set.
 const SEQ_STORE = 'polivoks-seq-v1';
-const circOff = (id) => { const o = {}; for (const k in (CIRC_IDS[id] || {})) o[k + 'On'] = false; return o; };
+// a source that is the circuit's own amount (CIRC) only uses the generic one for NEGATIVE depths (the circuit's
+// pots only go one way), so a saved positive generic one there is dropped
+const circNeg = (id, q) => { const o = {}; for (const k in (CIRC_IDS[id] || {})) if (!(q && q[k + 'On'] && q[k + 'Depth'] < 0)) o[k + 'On'] = false; return o; };
 const CIRC_IDS = { cutoff: { e: 1, l: 1 }, o1pitch: { l: 1 }, o2pitch: { l: 1 } };
 const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0), eOn: false, eDepth: 0.3, lOn: false, lDepth: 0.2, e2On: false, e2Depth: 0.3, vOn: false, vDepth: 0.3, kOn: false, kDepth: 0.3 });
 let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
@@ -1930,7 +1932,7 @@ const seqs = {};
 let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
 // RATE: how many 16th notes one step lasts, from 1/16 up to 8 bars
 const DIVS = [1, 2, 4, 8, 16, 32, 64, 128], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR', '2 BARS', '4 BARS', '8 BARS'];
-const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id], circOff(id)));   // a source that is the circuit's own amount (CIRC) is never a generic one too
+const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id], circNeg(id, (seqSaved.k || {})[id])));
 // a knob is moved when any of its three lanes is on: ENV, STEP (the sequence) or LFO
 const seqAct = (s) => !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn || s.kOn));
 const saveSeq = () => { try { localStorage.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
@@ -2127,9 +2129,10 @@ function drawSeq() {
   q('.sq-env2').value = Math.round(s.e2Depth * 100); q('.sq-vel').value = Math.round(s.vDepth * 100); q('.sq-env2v').textContent = pc(s.e2Depth); q('.sq-velv').textContent = pc(s.vDepth);
   // CUTOFF: its ENV 2 and LFO are the circuit's ENV 2 AMOUNT and filter MOD (0…100 %)
   for (const [k, cl, vc] of [['e', '.sq-eon', '.sq-env'], ['l', '.sq-lon', '.sq-lfo']]) {
-    const c = circOf(k); if (!c) continue; const on = c.v > 0.005;
+    // up from the middle: the circuit's amount; down: the inverted source, through the generic depth
+    const c = circOf(k); if (!c) continue; const neg = s[k + 'On'] && s[k + 'Depth'] < 0, v = neg ? s[k + 'Depth'] : c.v, on = c.v > 0.005 || neg;
     q(cl).classList.toggle('lit', on); q(cl).closest('.sq-lane').classList.toggle('off', !on);
-    q(vc).value = Math.round(c.v * 100); q(vc + 'v').textContent = Math.round(c.v * 100) + '%';
+    q(vc).value = Math.round(v * 100); q(vc + 'v').textContent = pc(v);
   }
   for (const id in CIRC) { const c = S.find((x) => x.id === id); if (c) c.seqMark(markOf(c)); }
   for (const id in pickO) pickO[id].textContent = (seqAct(seqs[id]) ? '● ' : '') + pickO[id].dataset.n;
@@ -2149,9 +2152,9 @@ function markStep() {
 }
 const change = (fn) => { const s = seqOf(edC.id); fn(s); pushSeq(edC); drawSeq(); };
 q('.sq-on').onclick = () => change((s) => { s.on = !s.on; });
-const circToggle = (c) => { if (c.v > 0.005) { circMemo[c.id] = c.v; c.set(0); } else c.set(circMemo[c.id]); drawSeq(); };
-q('.sq-eon').onclick = () => { const c = circOf('e'); if (c) circToggle(c); else change((s) => { s.eOn = !s.eOn; }); };
-q('.sq-lon').onclick = () => { const c = circOf('l'); if (c) circToggle(c); else change((s) => { s.lOn = !s.lOn; }); };
+const circToggle = (c, k) => { const s = seqOf(edC.id); if (c.v > 0.005 || s[k + 'On']) { if (c.v > 0.005) circMemo[c.id] = c.v; c.set(0); change((q) => { q[k + 'On'] = false; }); } else c.set(circMemo[c.id]); drawSeq(); };
+q('.sq-eon').onclick = () => { const c = circOf('e'); if (c) circToggle(c, 'e'); else change((s) => { s.eOn = !s.eOn; }); };
+q('.sq-lon').onclick = () => { const c = circOf('l'); if (c) circToggle(c, 'l'); else change((s) => { s.lOn = !s.lOn; }); };
 q('.sq-e2on').onclick = () => change((s) => { s.e2On = !s.e2On; });
 q('.sq-von').onclick = () => change((s) => { s.vOn = !s.vOn; });
 q('.sq-kon').onclick = () => change((s) => { s.kOn = !s.kOn; });
@@ -2168,7 +2171,7 @@ const MK = {
   lDepth: { bip: true, get: (s) => s.lDepth, set: (s, v) => { s.lDepth = Math.abs(v) <= .02 ? 0 : Math.round(v * 100) / 100; s.lOn = true; } },
 };
 // MOD and ENV depth: vertical sliders, centre = 0 (snaps within 2 %); moving one switches that source on
-for (const [cl, k, onK] of [['.sq-lfo', 'lDepth', 'lOn'], ['.sq-env', 'eDepth', 'eOn'], ['.sq-env2', 'e2Depth', 'e2On'], ['.sq-vel', 'vDepth', 'vOn'], ['.sq-key', 'kDepth', 'kOn']]) q(cl).oninput = (e) => { const cc = circOf(k[0]); if (cc && (k === 'eDepth' || k === 'lDepth')) { cc.set(Math.max(0, e.target.value / 100)); drawSeq(); return; } change((s) => { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; s[k] = v; s[onK] = true; }); };
+for (const [cl, k, onK] of [['.sq-lfo', 'lDepth', 'lOn'], ['.sq-env', 'eDepth', 'eOn'], ['.sq-env2', 'e2Depth', 'e2On'], ['.sq-vel', 'vDepth', 'vOn'], ['.sq-key', 'kDepth', 'kOn']]) q(cl).oninput = (e) => { const cc = circOf(k[0]); if (cc && (k === 'eDepth' || k === 'lDepth')) { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; cc.set(Math.max(0, v)); change((s) => { s[onK] = v < 0; if (v < 0) s[k] = v; }); return; } change((s) => { let v = e.target.value / 100; if (Math.abs(v) <= .02) v = 0; s[k] = v; s[onK] = true; }); };
 const seqMods = [...ed.querySelectorAll('.mknob')].map((el) => {
   const m = MK[el.dataset.m];
   return { id: 'seq-' + el.dataset.m, kind: 'knob', scale: m.bip ? 'bip' : 'u', def: m.bip ? 0 : m.get(SEQ_DEF()), el,
@@ -2333,7 +2336,7 @@ function loadPre(i) {
   for (const c of KNOBS) {
     const was = seqs[c.id], now = p.s && p.s[c.id];
     if (!was && !now) continue;
-    seqs[c.id] = Object.assign(SEQ_DEF(), now || {}, { steps: ((now && now.steps) || new Array(16).fill(0)).slice() }, circOff(c.id));
+    seqs[c.id] = Object.assign(SEQ_DEF(), now || {}, { steps: ((now && now.steps) || new Array(16).fill(0)).slice() }, circNeg(c.id, now));
     pushSeq(c);
   }
   if (p.bpm) { bpm = p.bpm; send({ t: 'bpm', v: bpm }); saveSeq(); }
