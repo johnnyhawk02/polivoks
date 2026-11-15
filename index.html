@@ -56,7 +56,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .box.down { grid-auto-flow: column; }
   /* FILTER, MIXER, AMPLIFIER: their own grid, equal columns, shorter rows from the top */
   #stage { --orh: 94px; }
-  .box.own { grid-template-columns: repeat(var(--n), 1fr); grid-template-rows: repeat(var(--m, 1), var(--orh)); align-content: start; row-gap: 0; padding-top: 10px; }
+  .box.own { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); grid-template-rows: repeat(var(--m, 1), var(--orh)); align-content: start; row-gap: 0; padding-top: 10px; }
   .box.own .ctl, .box.own .sw, .box.own .resp { width: auto; height: var(--orh); padding-top: 8px; }
   /* section names: white letters on a plain black slab over the top edge */
   .box h2 {
@@ -106,7 +106,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
   .f input[type=range] { flex: 1; min-width: 0; margin: 0; accent-color: var(--ink); }
   .f select { height: 30px; flex: 1; min-width: 0; border: 0; background: var(--ink); color: var(--paper); font: 400 13px var(--display); text-transform: uppercase; padding: 0 6px; cursor: pointer; }
   /* knob step sequences (performance feature): label on a black slab while one runs */
-  .ctl .lab.seq { background: var(--ink); color: var(--pink); padding: 1px 5px; }
+  /* a knob with modulation: marked by its LED in 3D; the label keeps its size so nothing on the panel moves */
+  .ctl .lab.seq { }
   .sq-grid { grid-column: 1 / -1; margin: 0 8px; display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; height: 104px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
   .bar { position: relative; border: 2px solid var(--ink); transition: background-color .35s, box-shadow .35s; }
   .bar::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--ink); }
@@ -1754,7 +1755,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.99.0';
+const VERSION = '1.99.1';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
