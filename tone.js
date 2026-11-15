@@ -38,7 +38,7 @@ function makeTone(rand, amount) {
   const wpick = (o) => { let t = 0; for (const k in o) t += o[k]; let r = R() * t; for (const k in o) if ((r -= o[k]) < 0) return k; return Object.keys(o)[0]; };
   const kind = wpick({ pluck: 3, bass: 3, lead: 3, keys: 2, pad: 2 });
   const k = {
-    tune: 0, glide: 0, voice: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o2mod: 0, o2detune: 0, o2pitch: 0,
+    tune: 0, glide: 0, voice: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o2mod: 0, o2detune: 0, o2pitch: 0, o1fine: 0, o2fine: 0,
     mixN: 0, fEgMode: 0, fMode: 0, fMod: 0, aEgMode: 0, aMod: 0, vcaHold: 0, lfoMode: 0, lfoRate: 0.2,
   };
 
