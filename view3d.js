@@ -135,16 +135,10 @@ function driveLamps() {
 
 const rig = new THREE.Group(); scene.add(rig);
 const upper = new THREE.Group(), lower = new THREE.Group();
-// the top panel sits on a hinge along the join, so ANGLE (OPTIONS) tips it up toward you
-const hinge = new THREE.Group(); hinge.position.set(-UW / 2, TOTALH / 2 - UH, 0);
-upper.position.set(0, UH, 0); hinge.add(upper);
-// and the bottom panel on its own hinge at the same join: BOTTOM ANGLE brings its front edge toward you
-const hingeLow = new THREE.Group(); hingeLow.position.set(-UW / 2, TOTALH / 2 - UH, 0); hingeLow.add(lower);
-rig.add(hinge, hingeLow); front.target = rig;
-{ // the join: a dark rounded spine along the seam, seen as the top panel tips up
-  const spine = new THREE.Mesh(new THREE.CylinderGeometry(DEPTH / 2, DEPTH / 2, UW, 32), new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.6 }));
-  spine.rotation.z = Math.PI / 2; spine.position.set(0, TOTALH / 2 - UH, -DEPTH / 2); spine.castShadow = true; rig.add(spine);
-}
+// one flat panel facing you (Johnny, v2.14.0): the top and bottom halves sit edge to edge on the
+// same plane, no hinge, no angles
+upper.position.set(-UW / 2, TOTALH / 2, 0); lower.position.set(-UW / 2, TOTALH / 2 - UH, 0);
+rig.add(upper, lower); front.target = rig;
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(6000, 4000), new THREE.ShadowMaterial({ opacity: 0.45 }));
 floor.position.z = -DEPTH - 30; floor.receiveShadow = true; rig.add(floor);
 
@@ -733,11 +727,10 @@ cv.addEventListener('dblclick', (e) => { const o = pick(e); if (o && o.userData.
 
 // ---------------------------------------------------------------- frame
 renderer.shadowMap.needsUpdate = true;
-let angleNow = null;
-function driveAngle() {
-  const a = A.look.angle || 0, b = A.look.angleLow || 0, key = a + ',' + b + ',' + A.look.lens; if (key === angleNow) return; angleNow = key;
-  camera.fov = lensFov(A.look.lens);
-  hinge.rotation.x = a * Math.PI / 180; hingeLow.rotation.x = -b * Math.PI / 180; renderer.shadowMap.needsUpdate = true; fit();
+let lensNow = null;
+function driveLens() {
+  if (A.look.lens === lensNow) return; lensNow = A.look.lens;
+  camera.fov = lensFov(A.look.lens); renderer.shadowMap.needsUpdate = true; fit();
 }
 // LENS (OPTIONS): from a long lens far away (5°: flat, only shadows show
 // depth) to a wide angle up close (60°: strong perspective)
@@ -778,7 +771,7 @@ function driveProjector() {
   projector.l.position.set((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 1600);
 }
 function frame() {
-  driveAngle();
+  driveLens();
   for (const t of ticks) t();
   for (const lev of levers) {
     const d = lev.userData.target - lev.userData.y; lev.userData.y += d * 0.35;
