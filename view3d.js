@@ -278,6 +278,7 @@ function paintUpper(ctx) {
   for (const b of panel.querySelectorAll('.box')) recess(ctx, rel(b, panel));
   for (const c of CTL) paintCtl(ctx, c);
   ctx.globalAlpha = 1;
+  paintTitle(ctx);
   // CLIP LED: its label, and a black bezel the lamp sits in
   for (const el of panel.querySelectorAll('.ledc')) {
     const lab = el.querySelector('.lab'), l = rel(lab, panel), d = rel(el.querySelector('.led'), panel);
@@ -287,6 +288,7 @@ function paintUpper(ctx) {
 }
 const respEl = panel.querySelector('.resp'), fmCtl = A.S.find((c) => c.id === 'fMode');
 const upSlab = slab(UW, UH, paintUpper); upSlab.userData.repaint(); upper.add(upSlab);
+{ const r = rel(panel.querySelector('.ttl'), panel); hitBox(r.w, r.h, 4, r.x + r.w / 2, r.y + r.h / 2, 2, upper).userData.title = true; }   // FILTH opens OPTIONS
 // a sequence starting or stopping changes a label: repaint the face then
 const seqSig = () => CTL.map((c) => { const l = c.el.querySelector('.lab'); return (l && l.classList.contains('seq') ? 1 : 0) + (c.kind === 'sw' ? 's' + c.v : '') + (c.el.classList.contains('inactive') ? 'i' : ''); }).join('');
 { let last = seqSig(); ticks.push(() => { const s = seqSig(); if (s !== last) { last = s; upSlab.userData.repaint(); } }); }
@@ -426,131 +428,16 @@ for (const c of CTL) {
 }
 
 // ---------------------------------------------------------------- FILTH
-// The letters sit on their own layer: pushed about by a fixed noise whose
-// depth is the modulator's output times how loud the synth is (as on the 2D
-// panel), and lit up by the output level.
-let title = null, titleU = null;
-{
-  const r = rel(panel.querySelector('.ttl'), panel), w = r.w, h = r.h, TILT = 0;   // flat, raised plate
-  const p = plate(w, h, 8, () => {});
-  // the CRT housing: like a tube's case, its four sides bow outward (the same barrel curve as
-  // the screen inside) and its edges are rounded; kept shallow, so tipping the top panel up
-  // never lets it cover the AMPLIFIER name
-  const BX = w * 0.004, BY = h * 0.008, BS = 3, BEZ = h * 0.06, FR = 11;  // side bow, top/bottom bow (subtle), edge round, bezel, frame width
-  const HX = w / 2 - BX - BS - FR, HY = h / 2 - BY - BS - FR;              // half-size of the case before its bow (the frame goes round it)
-  const bowShape = (hx, hy) => {
-    const sh = new THREE.Shape();
-    sh.moveTo(-hx, -hy); sh.quadraticCurveTo(0, -hy - 2 * BY, hx, -hy); sh.quadraticCurveTo(hx + 2 * BX, 0, hx, hy);
-    sh.quadraticCurveTo(0, hy + 2 * BY, -hx, hy); sh.quadraticCurveTo(-hx - 2 * BX, 0, -hx, -hy); return sh;
-  };
-  {
-    const sh = bowShape(HX, HY);
-    const hg = new THREE.ExtrudeGeometry(sh, { depth: 6, bevelEnabled: true, bevelThickness: 3, bevelSize: BS, bevelSegments: 4, curveSegments: 24 });
-    hg.translate(w / 2, -h / 2, 3); p.geometry.dispose(); p.geometry = hg;     // front face at z 12
-    // a bevelled frame round the case, the same bowed outline: a rounded lip of dark satin
-    // metal standing a little proud, so the tube looks seated and its rim catches the side lights
-    const fs = bowShape(HX + FR, HY + FR); fs.holes.push(bowShape(HX + 1, HY + 1));
-    const fg2 = new THREE.ExtrudeGeometry(fs, { depth: 4, bevelEnabled: true, bevelThickness: 4, bevelSize: 3, bevelSegments: 6, curveSegments: 24 });
-    fg2.translate(w / 2, -h / 2, 4);                                            // front of the lip at z 16
-    const frame = new THREE.Mesh(fg2, new THREE.MeshStandardMaterial({ color: 0x242424, roughness: 0.32, metalness: 0.65, envMapIntensity: 1.2 }));
-    frame.castShadow = true; frame.receiveShadow = true; p.add(frame);
-  }
-  // the CRT shows the current preset's name, still: one word per line, all caps in the FILTH lettering, each
-  // line squashed or stretched to the full width of the screen and the lines sharing its height, edge to edge.
-  // Redrawn when the name changes.
-  const nameLayer = (blur, name) => {
-    const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
-    const words = (name || 'FILTH').toUpperCase().split(/\s+/).filter(Boolean);   // every word (the name maker goes up to 7)
-    const PADX = w * 0.045, PADY = h * 0.07, gap = h * 0.035 * Math.min(1, 3 / words.length), lh = (h - 2 * PADY - gap * (words.length - 1)) / words.length;
-    ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = PAPER;
-    words.forEach((wd, i) => {
-      const m = ctx.measureText(wd), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
-      ctx.save(); ctx.translate(w / 2, PADY + lh * (i + 0.5) + gap * i); ctx.scale((w - 2 * PADX) / iw, lh / ih);
-      ctx.fillText(wd, -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
-    });
-    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
-  };
-  let nameNow = null; ticks.push(() => {
-    const n = 'FILTH';   // Johnny: the CRT says FILTH only (the name drawing stays for any word)
-    if (n === nameNow) return; nameNow = n;   // redraw only when it changes, not every frame
-    for (const [k, b] of [['tText', 0], ['tGlow', 9]]) { const old = titleU[k].value; titleU[k].value = nameLayer(b, n); if (old) old.dispose(); }
-  });
-  titleU = { tText: { value: nameLayer(0, 'FILTH') }, tGlow: { value: nameLayer(9, 'FILTH') }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
-    // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
-    ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
-    scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
-  const sm = new THREE.ShaderMaterial({
-    uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `
-      uniform sampler2D tText, tGlow; uniform float amt, lvl; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
-      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
-        return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
-      float fbm(vec2 p) { return .65 * vn(p) + .35 * vn(p * 2.); }
-      // the FILTH plate is an orange CRT: a slightly bulging screen, orange phosphor
-      // lettering with a constant soft bloom that brightens with the sound, scanlines and
-      // a dark vignette; the wobble still bends the letters
-      void main() {
-        vec2 q = vUv * 2. - 1.;
-        // the screen is the bowed shape inside the bezel; its edge falls softly to black
-        float ex = (scr.x + scr.z * (1. - q.y * q.y) - abs(q.x)) * size.x * .5, ey = (scr.y + scr.w * (1. - q.x * q.x) - abs(q.y)) * size.y * .5;
-        float edge = smoothstep(0., 10., min(ex, ey));
-        if (edge <= 0.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
-        vec2 cuv = q / vec2(scr.x + scr.z, scr.y + scr.w);     // the picture fills the screen
-        cuv *= 1. + 0.012 * dot(cuv, cuv);                     // barrel: the glass bulges, just a little
-        vec2 uv0 = cuv * .5 + .5;
-        if (uv0.x < 0. || uv0.x > 1. || uv0.y < 0. || uv0.y > 1.) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
-        vec2 px = uv0 * size * (.045 * 110. / size.y);   // noise grain scales with the plate, so big letters warp as much as small ones did
-        vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
-        vec2 uv = uv0 + d * amt / size;
-        float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
-        float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
-        float vig = smoothstep(1.35, .35, length(cuv));
-        vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
-        gl_FragColor = vec4(c * edge, 1.);
-      }`,
-  });
-  const fg = new THREE.PlaneGeometry(w, h); fg.translate(w / 2, -h / 2, 12.15);
-  p.add(new THREE.Mesh(fg, sm));
-  // a glass cover over the plate: a clear, glossy pane that catches the side lights and the
-  // room, plus a faint diagonal glare; the lettering shows straight through (GLASS in OPTIONS)
-  {
-    const gm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.1, envMapIntensity: 3, depthWrite: false });
-    // the glass bulges gently like a CRT face: highest in the middle, falling to the rim,
-    // so its reflections and highlights slide round the curve
-    const bulged = (lift) => {
-      // the pane covers the screen and follows its bow: each row and column pushed out like the case
-      const gw = 2 * (HX - BEZ / 2), gh = 2 * (HY - BEZ / 2), g = new THREE.PlaneGeometry(gw, gh, 40, 24), a = g.attributes.position;
-      for (let i = 0; i < a.count; i++) {
-        const nx = a.getX(i) / (gw / 2), ny = a.getY(i) / (gh / 2);
-        a.setX(i, a.getX(i) * (1 + (BX / (gw / 2)) * (1 - ny * ny))); a.setY(i, a.getY(i) * (1 + (BY / (gh / 2)) * (1 - nx * nx)));
-        a.setZ(i, lift + 2 * (1 - nx * nx) * (1 - ny * ny));
-      }
-      g.computeVertexNormals(); return g;
-    };
-    const pane = new THREE.Mesh(bulged(0), gm); pane.position.set(w / 2, -h / 2, 12 + 1); p.add(pane);
-    const [gc, gx] = canvas(w, h), gr = gx.createLinearGradient(0, 0, w, h);
-    gr.addColorStop(0.18, 'rgba(255,255,255,0)'); gr.addColorStop(0.3, 'rgba(255,255,255,.16)'); gr.addColorStop(0.36, 'rgba(255,255,255,.05)');
-    gr.addColorStop(0.42, 'rgba(255,255,255,.12)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)');
-    gx.fillStyle = gr; gx.fillRect(0, 0, w, h);
-    const glare = new THREE.Mesh(bulged(0.4), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-    glare.position.set(w / 2, -h / 2, 12 + 1); p.add(glare);
-    ticks.push(() => { pane.visible = glare.visible = A.look.glass !== false; });
-  }
-  const hinge = new THREE.Group(); hinge.position.copy(pos(r.x, r.y + h, 0)); hinge.rotation.x = TILT;
-  p.position.set(0, h, 0); hinge.add(p); upper.add(hinge);
-  title = p; p.userData.title = true; hits.push(p);
-}
-// CRT COLOUR: the phosphor of the FILTH screen
-const PHOSPHOR = { orange: [1, .5, .1], amber: [1, .72, .15], green: [.3, 1, .35], white: [.88, .93, 1], blue: [.3, .6, 1] };
-function driveTitle() {
-  const P = PHOSPHOR[A.look.crt] || PHOSPHOR.white; titleU.ph.value.setRGB(P[0], P[1], P[2]);
-  const W = A.WOB, v = Math.max(-1, Math.min(1, A.lfoV / W.vmax)) * Math.min(1, A.outRms / W.ref), a = W.on ? W.A * v : 0;
-  // the plate is much taller than the 2D title (110 px), so the depth scales with it, and a little more
-  titleU.amt.value = Math.abs(a) < 0.05 ? 0 : a * 1.6 * titleU.size.value.y / 110;
-  const want = Math.max(0, Math.min(1, (20 * Math.log10(A.outRms + 1e-9) + 36) / 30)), l = titleU.lvl.value;
-  titleU.lvl.value = l + (want - l) * (want > l ? 0.45 : 0.07);   // quick to light, slow to fade
+// The name, printed flat on the panel in the display lettering, filling its three cells next to
+// CHORUS (the CRT that showed it is gone since v2.12.0).  Tapping it opens OPTIONS.
+function paintTitle(ctx) {
+  const r = rel(panel.querySelector('.ttl'), panel), word = 'FILTH', PADX = 6, PADY = r.h * 0.2;
+  ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  const m = ctx.measureText(word), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
+  const k = Math.min((r.w - 2 * PADX) / iw, (r.h - 2 * PADY) / ih);   // as big as the cells allow, its own proportions kept
+  ctx.save(); ctx.translate(r.x + r.w / 2, r.y + r.h / 2); ctx.scale(k, k); ctx.fillStyle = INK;
+  ctx.fillText(word, -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }
 
 // ---------------------------------------------------------------- lower panel
@@ -626,12 +513,14 @@ for (const el of low.querySelectorAll('button')) {
     if (++n % 5 === 0) { const f = fade(el); if (f !== lastF) { lastF = f; p.material = p.material.map((m) => m.clone()); fadeMat(p.material, f); p.castShadow = f > 0.5; renderer.shadowMap.needsUpdate = true; } }
   });
 }
-// keys on the top panel (MORE in the FX box): raised black keys like the lower panel's
+// keys on the top panel (CHORUS I and II, the delay's SYNC): raised black keys like the lower panel's,
+// a lit one turned over (black lettering on white)
 for (const el of panel.querySelectorAll('button')) {
   const r = rel(el, panel); if (!r.w) continue;
-  const draw = (ctx, w, h) => text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, PAPER);
+  const draw = (ctx, w, h) => { const lit = el.classList.contains('lit'); if (lit) { ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h); } text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, lit ? INK : PAPER); };
   const p = plate(r.w, r.h, 9, draw, { bevel: true }); p.position.copy(pos(r.x, r.y, 0)); upper.add(p);
   p.userData.btn = el; hits.push(p);
+  let last = el.className; ticks.push(() => { if (el.className !== last) { last = el.className; p.userData.redraw(draw); } });
 }
 // ENV DEPTH and LFO DEPTH: two small knobs in the sequencer (A.seqMods), bipolar, with a white
 // value ring from the centre like the panel's own knobs; they act on the knob being edited
@@ -796,7 +685,7 @@ cv.addEventListener('pointerdown', (e) => {
   if (!o) return;
   cv.setPointerCapture(e.pointerId); e.preventDefault();
   const u = o.userData;
-  if (u.title) { A.openOptions(); }   // tapping the screen opens OPTIONS (so does the OPTIONS key in the corner)
+  if (u.title) { A.openOptions(); }   // tapping FILTH opens OPTIONS (so does the OPTIONS key in the corner)
   else if (u.ctl) {
     const c = u.ctl;
     // a knob's modulation (MODULATE box) is shown by a right click, or a long press on a touch screen
@@ -893,7 +782,7 @@ function frame() {
     if (Math.abs(d) < 0.2) { lev.userData.y = lev.userData.target; levers.delete(lev); }
     lev.userData.place(); renderer.shadowMap.needsUpdate = true;
   }
-  driveLamps(); driveTitle(); driveAmbient(); driveProjector();
+  driveLamps(); driveAmbient(); driveProjector();
   renderer.render(scene, camera);
 }
 renderer.setAnimationLoop(frame);
