@@ -323,12 +323,17 @@ class FilterCV {
 //  VCA): a 5 µF capacitor charged/discharged through the pots and КД521
 //  diodes; comparator A5 ends the attack at +6 V.  The diode is solved with
 //  the Shockley equation, which gives the real curve shapes and tails.
+//  ENVELOPE MODE ⋀⋀ (the original's repeat mode, "Вх режима" X1 pin 5; LOOP
+//  on the panel): while the key is held, the decay hands back to the attack
+//  once the capacitor is Vloop above the sustain level.  Vloop 0.6 V (about
+//  where the КД521's decay current fades into its tail) is EST: the trip
+//  point of A5's hysteresis in this mode has not been worked out from sheet 7.
 // ============================================================================
 class EG {
   constructor(h) {
     this.h = h; this.C = 5e-6; this.Vpk = 6; this.Vsup = 12.5;
     this.v = 0; this.stage = 0; this.Iw = [1e-6, 1e-6, 1e-6];
-    this.nVT = 1.9 * VT_OF(300); this.Is = 2e-9; this.Rbleed = 10e6;
+    this.nVT = 1.9 * VT_OF(300); this.Is = 2e-9; this.Rbleed = 10e6; this.Vloop = 0.6;
   }
   diodeI(vd, R, w) {
     if (vd <= 0) return 0;
@@ -352,7 +357,7 @@ class EG {
       if (v >= this.Vpk) { v = this.Vpk; this.stage = 2; }
     } else if (this.stage === 2) {
       if (v > Vs) v -= this.diodeI(v - Vs, Rd, 1) * h / C;
-      if (cycle && v - Vs < 0.03 * this.Vpk) this.stage = 1;
+      if (cycle && v - Vs < this.Vloop) this.stage = 1;
     } else {
       v -= this.diodeI(v, Rr, 2) * h / C;
     }
@@ -636,6 +641,12 @@ function vpwOf(a) { return -12.5 * a * 20e3 / (76e3 + 100e3 * a * (1 - a)); }
 const bendR = (st) => 5 / (st / 12 * I_OCT);
 function bendOct(b, st) { const ad = (1 - b) / 2, v = -5 + 10 * ad, rth = 10e3 * ad * (1 - ad); return -(v / (bendR(st) + rth)) / I_OCT; }
 function wheelOct(a, v) { return -(a * v) / (470e3 + 100e3 * a * (1 - a)) / I_OCT; }
+// FINE TUNE (an addition: the Polivoks has no fine tune; Johnny asked for one
+//  on each VCO): a 100k pot across ±12.5 V like "Расстройка", wiper through
+//  10 MΩ (EST, chosen) into each VCO's summing node: ±1.25 µA = ±1 semitone
+//  at the ends, linear in between (pot taper linear EST).
+const FINE_R = 12.5 / (I_OCT / 12);
+function fineOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (FINE_R + rth) / I_OCT; }
 function detuneOct(d) { const ad = (1 - d) / 2, rth = 100e3 * ad * (1 - ad); return -(-12.5 + 25 * ad) / (1e6 + rth) / I_OCT; }
 
 // ============================================================================
@@ -646,13 +657,13 @@ const PARAM_DEFAULTS = {
   power: 0,
   lfoRate: 0.45, lfoMode: 0, lfoRange: 0,
   phones: 0.6, tune: 0, glide: 0, voice: 1, volume: 0.7, outSel: 0,
-  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o1pw: 0,
-  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0, o2pw: 0,
+  o1range: 2, o1wave: 1, o1mod: 0, o1fm: 0, o1pitch: 0, o1pw: 0, o1fine: 0,
+  o2range: 2, o2wave: 2, o2mod: 0, o2detune: 0.0, o2pitch: 0, o2pw: 0, o2fine: 0,
   mix1: 0.65, mix2: 0.5, mixN: 0, drive: 0,
   fA: 0.05, fD: 0.45, fS: 0.3, fR: 0.35, cutoff: 0.59, res: 0.5, fMod: 0, fEnv: 0.45, fMode: 0, fEgMode: 0,
   aA: 0.02, aD: 0.5, aS: 0.7, aR: 0.35, aEgMode: 0, aMod: 0, vcaHold: 0,
 };
-const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1pw','o2pw','mix1','mix2','mixN','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
+const SMOOTHED = ['lfoRate','phones','tune','glide','volume','o1mod','o1fm','o2mod','o2detune','o1pitch','o2pitch','o1fine','o2fine','o1pw','o2pw','mix1','mix2','mixN','drive','cutoff','res','fMod','fEnv','aMod','fS','aS'];
 
 class PolivoksEngine {
   constructor(sr) {
@@ -690,10 +701,10 @@ class PolivoksEngine {
     this.scope = new Float32Array(512); this.scopeI = 0;
   }
 
-  // ENVELOPE MODE is gone from the panel: both envelopes always run single (⋀, no repeat), whatever a preset holds
+  // ENVELOPE MODE (fEgMode, aEgMode): the original's ⋀ / ⋀⋀ switch, back on the panel as LOOP (v2.1.0)
   // the filter's small-signal corner now (Hz): ω0 = Iset/(4·VT·C1)·√(wL·a3) from K140VCF.step; display only
   get fcHz() { const f = this.vcf; return (this.iset || 0) / (4 * VT_OF(this.Tchip) * f.C1) * Math.sqrt(f.wL * f.a3) / (2 * Math.PI); }
-  setParam(id, v) { if (id === 'fEgMode' || id === 'aEgMode') v = 0; if (id in this.p) { this.unsettled = true; this.kd = true; this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
+  setParam(id, v) { if (id in this.p) { this.unsettled = true; this.kd = true; this.p[id] = v; if (SMOOTHED.indexOf(id) < 0) this.ps[id] = v; } }
 
   // keys go to the keyboard board; the envelopes follow its gate
   noteOn(n, vel) { this.kb.press(n); this.vel = vel == null ? 1 : vel; this.key = n; }   // key: the last key pressed, for the KEY mod source   // vel 0…1: the last key's MIDI velocity (1 from the screen and computer keys), a mod source only
@@ -733,7 +744,7 @@ class PolivoksEngine {
       if (this.kd !== false) { const K = this.K || (this.K = {});
         K.lfoR = 4.3e3 + potA(1 - ps.lfoRate, 0, slow ? 1e6 : 100e3); K.rg = potA(ps.glide, 0, 1e6);
         K.fA = potA(p.fA, 200, 1e6); K.fD = potA(p.fD, 1e3, 2e6); K.fR = potA(p.fR, 1e3, 2e6); K.aA = potA(p.aA, 200, 1e6); K.aD = potA(p.aD, 1e3, 2e6); K.aR = potA(p.aR, 1e3, 2e6);
-        K.tune = ps.tune * 2 / 12; K.p1 = pitchOct(ps.o1pitch); K.d2 = detuneOct(ps.o2detune); K.p2 = pitchOct(ps.o2pitch); K.pw1 = vpwOf(ps.o1pw); K.pw2 = vpwOf(ps.o2pw);
+        K.tune = ps.tune * 2 / 12; K.p1 = pitchOct(ps.o1pitch) + fineOct(ps.o1fine); K.d2 = detuneOct(ps.o2detune); K.p2 = pitchOct(ps.o2pitch) + fineOct(ps.o2fine); K.pw1 = vpwOf(ps.o1pw); K.pw2 = vpwOf(ps.o2pw);
         K.fmk = fmOctPerVolt(ps.o1fm, this.fmMod) * LN2; K.tc = (Math.exp(5 * ps.cutoff) - 1) / (Math.exp(5) - 1); K.dg = driveGain(ps.drive); K.gn = mixGain(ps.mixN, 0);
         this.vcf.setRes(ps.res); this.kd = false; }
       const K = this.K;
@@ -825,4 +836,4 @@ class PolivoksEngine {
   }
 }
 
-if (typeof module !== 'undefined') module.exports = { PolivoksEngine, bendOct, wheelOct, driveGain, Keyboard, modOct, fmOctPerVolt, detuneOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };
+if (typeof module !== 'undefined') module.exports = { PolivoksEngine, bendOct, wheelOct, driveGain, Keyboard, modOct, fmOctPerVolt, detuneOct, fineOct, pitchOct, vpwOf, VCO, K140VCF, FilterCV, EG, ExpoPair, VT_OF, VCA, K118Tail, Modulator, mixGain };

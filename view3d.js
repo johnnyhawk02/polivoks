@@ -253,7 +253,7 @@ function paintCtl(ctx, c) {
     });
   } else if (c.kind === 'sw') {
     // the side the switch is set to: its word on a black slab in white; the other side faded
-    const down = c.id === 'fMode' ? !c.v : !!c.v;
+    const down = c.inv ? !c.v : !!c.v;
     [...c.el.querySelectorAll('.t')].forEach((t, i) => {
       const q = rel(t, panel), on = (i === 1) === down, font = `600 ${fs(t)}px ${MONO}`;
       if (on) { ctx.font = font; const w = ctx.measureText(t.textContent).width + 10; ctx.fillStyle = INK; ctx.fillRect(q.x + q.w / 2 - w / 2, q.y + 1, w, q.h - 2); }   // inside the word's own line, clear of the slot
@@ -401,7 +401,7 @@ for (const c of CTL) {
     const q = rel(c.el.querySelector('.slot'), panel), cx = q.x + q.w / 2;
     const lev = new THREE.Mesh(leverGeo, mat.lit); lev.castShadow = true; upper.add(lev);   // white, so its position reads at a glance
     const hit = hitBox(c.el.offsetWidth - 10, 62, 10, cx, q.y + q.h / 2, 5, upper); hit.userData.ctl = c; c.obj3 = hit;
-    const at = (v) => { const down = c.id === 'fMode' ? !v : !!v; return down ? q.y + q.h - 2 - 6 : q.y + 2 + 6; };
+    const at = (v) => { const down = c.inv ? !v : !!v; return down ? q.y + q.h - 2 - 6 : q.y + 2 + 6; };
     let last = c.v; lev.userData = { y: at(c.v), target: at(c.v), place: () => lev.position.copy(pos(cx, lev.userData.y, 0)) }; lev.userData.place();
     ticks.push(() => { if (c.v !== last) { last = c.v; lev.userData.target = at(c.v); levers.add(lev); } });
   }
