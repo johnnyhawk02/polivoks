@@ -12,13 +12,15 @@ class KnobSeq {
     this.sr = sr; this.e = engine; this.report = report || null;
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
-    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth, kOn, kDepth }; drift = % faster (+) or slower (−) than the clock
+    this.seq = {};       // id -> { on, len, div, depth, slew, drift, rt, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth, kOn, kDepth }; drift = % faster (+) or slower (−) than the clock; rt = RETRIG, a key press restarts it at step 1
                          // mod sources: eDepth × the filter envelope (ENV 2 on the panel, 0…1), e2Depth × the amp envelope (ENV 1), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
     this.bpm = 120;
     this.pos = 0;        // clock position in 16th notes
     this.prevPos = 0; this.ph = {};   // phase of each sequence with DRIFT (16ths)
+    this.org = {};       // RETRIG: the phase (16ths) where the last key press put step 1
+    this.trig = false;   // a key was pressed since the last tick
     this.time = 0;
     this.pulses = 0; this.extT = -1;   // MIDI clock, 24 pulses per quarter
     this.clkT = []; this.extBpm = 0;    // tempo measured from the MIDI clock
@@ -31,6 +33,7 @@ class KnobSeq {
     const was = KnobSeq.act(this.seq[id]), wasOn = this.seq[id] && this.seq[id].on;
     this.seq[id] = s; if (range) this.range[id] = range;
     if (s.on && !wasOn) { this.cur[id] = 0; delete this.ph[id]; }
+    if (!s.rt) delete this.org[id];
     if (!KnobSeq.act(s) && was && id in this.base) { this.e.setParam(id, this.base[id]); delete this.val[id]; }
   }
   setBpm(b) { this.bpm = Math.max(20, Math.min(300, b)); }
@@ -45,7 +48,7 @@ class KnobSeq {
       this.extBpm = Math.max(20, Math.min(300, b));
     }
   }
-  start() { this.pulses = 0; this.pos = 0; this.extT = this.time; }
+  start() { this.pulses = 0; this.pos = 0; this.extT = this.time; this.org = {}; }
   stop() { this.extT = -1; this.clkT.length = 0; }
   // the clock's tempo: MIDI clock while it runs, else the internal BPM
   tempo() { return this.extActive() && this.extBpm ? this.extBpm : this.bpm; }
@@ -64,8 +67,12 @@ class KnobSeq {
       const dr = s.drift || 0;
       if (!dr || dpos < 0) this.ph[id] = this.pos;
       else this.ph[id] = (this.ph[id] === undefined ? this.pos - dpos : this.ph[id]) + dpos * (1 + dr / 100);
-      if (dr) ph[id] = Math.floor(this.ph[id]);
-      const step = Math.floor(this.ph[id] / s.div) % s.len;
+      // RETRIG: every key press (legato or not) moves step 1 to that moment; the steps then run on
+      // at the sequence's rate from there, so it no longer lines up with the clock's grid
+      if (s.rt && this.trig) this.org[id] = this.ph[id];
+      const p = this.ph[id] - (s.rt && this.org[id] !== undefined ? this.org[id] : 0);
+      if (dr || p !== this.ph[id]) ph[id] = Math.floor(p);
+      const n = Math.floor(p / s.div), step = ((n % s.len) + s.len) % s.len;
       const k = s.slew > 0 ? 1 - Math.exp(-dt / s.slew) : 1;
       c = (this.cur[id] = (this.cur[id] || 0) + (s.steps[step] - (this.cur[id] || 0)) * k) * s.depth;
       }
@@ -79,6 +86,7 @@ class KnobSeq {
       const v = Math.max(r[0], Math.min(r[1], b + c * (r[1] - r[0])));
       if (v !== this.val[id]) { this.val[id] = v; this.e.setParam(id, v); }
     }
+    this.trig = false;
     this.repT += dt;
     if (this.report && this.repT >= 1 / 30) { this.repT = 0; this.report({ t: 'seqpos', pos: Math.floor(this.pos), ph, ext: this.extActive(), v: any ? Object.assign({}, this.val) : null }); }
   }
@@ -97,7 +105,7 @@ class KnobSeq {
     else if (d.t === 'clk') this.clock();
     else if (d.t === 'cstart') this.start();
     else if (d.t === 'cstop') this.stop();
-    else if (d.t === 'on') this.e.noteOn(d.n, d.v);
+    else if (d.t === 'on') { this.e.noteOn(d.n, d.v); this.trig = true; }
     else if (d.t === 'off') this.e.noteOff(d.n);
     else if (d.t === 'all') this.e.allOff();
     else if (d.t === 'prio') this.e.setPrio(d.v);

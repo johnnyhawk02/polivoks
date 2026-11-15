@@ -180,6 +180,24 @@ console.log('--- stability sweep ---');
   console.log('seq cutoff values', [...seen].sort().join(' '), '| moved', moved.toFixed(3), '| off ->', e.p.cutoff);
   if (![...seen].includes('1.000') || ![...seen].includes('0.000') || ![...seen].includes('0.750') || e.p.cutoff !== 0.4) { console.log('SEQ TEST FAILED'); process.exitCode = 1; }
 }
+// RETRIG (per sequence): a key press restarts the sequence at step 1; off = plays to the clock as before
+{
+  const { KnobSeq } = require('./seq.js');
+  const steps = [1, -1, 0.5, 0, 0,0,0,0,0,0,0,0,0,0,0,0];
+  const go = (rt, drift) => {
+    const e = new PolivoksEngine(SR), q = new KnobSeq(SR, e); const out = new Float32Array(128);
+    q.msg({ t: 'p', id: 'cutoff', v: 0.5 }); q.setBpm(120);
+    q.setSeq('cutoff', { on: true, rt, len: 4, div: 1, depth: 0.5, slew: 0, drift, steps }, [0, 1]);
+    const blocks = Math.round(0.3 * SR / 128); for (let b = 0; b < blocks; b++) q.render(out, 128);   // 0.3 s in = 2.4 16ths: step 3
+    const before = e.p.cutoff; q.msg({ t: 'on', n: 60 });
+    const at = []; for (const ms of [5, 140, 260]) { while (q.time < 0.3 + ms / 1000) q.render(out, 128); at.push(e.p.cutoff.toFixed(3)); }
+    return { before: before.toFixed(3), at };
+  };
+  const off = go(false, 0), on = go(true, 0), dr = go(true, 20);
+  console.log('retrig off:', off.before, '->', off.at.join(' '), '| on:', on.before, '->', on.at.join(' '), '| on + drift 20%:', dr.before, '->', dr.at.join(' '));
+  // at 120 BPM a 16th is 125 ms: with RETRIG the key gives step 1 (1.000) at once, step 2 (0.000) at 140 ms, step 3 (0.750) at 260 ms
+  if (on.at.join() !== '1.000,0.000,0.750' || dr.at[0] !== '1.000' || off.at[0] === '1.000') { console.log('RETRIG TEST FAILED'); process.exitCode = 1; }
+}
 // stereo echo (an added effect after the synth, fx.js)
 {
   const { TapeEcho, FxRack, SoftClip } = require('./fx.js');
