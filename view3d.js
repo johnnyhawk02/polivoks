@@ -446,7 +446,7 @@ let title = null, titleU = null, crtPics = [];
     const PADX = w * 0.07, PADY = h * 0.13; ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     const m = ctx.measureText('FILTH'), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
-    ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale((w - 2 * PADX) / iw, (h - 2 * PADY) / ih);
+    ctx.save(); ctx.translate(w / 2, h * 0.43); ctx.scale((w - 2 * PADX) / iw, (h * 0.86 - 2 * PADY) / ih);   // raised a little to leave the preset's name room underneath
     ctx.fillStyle = PAPER; ctx.fillText('FILTH', -iw / 2 + m.actualBoundingBoxLeft, ih / 2 - m.actualBoundingBoxDescent); ctx.restore();
     const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
@@ -454,7 +454,7 @@ let title = null, titleU = null, crtPics = [];
   // (so a file uploaded there shows up with no code change); offline it uses the last list seen, or the two
   // built in.  They go through the same phosphor, scanlines and LFO wobble as the lettering, stretched to
   // fill the screen like FILTH is, so the whole drawing shows; light parts glow.
-  const CRT_IMAGES = ['crt/walker.jpg', 'crt/smiley.jpg'], pics = [];
+  const CRT_IMAGES = ['crt/smiley.jpg', ...[1, 2, 3, 4, 5, 6, 7, 8].map((i) => 'crt/typo-' + i + '.jpg'), 'crt/walker.jpg'], pics = [];
   const picLayer = (img, blur) => {
     const [c, ctx] = canvas(w, h); if (blur) ctx.filter = `blur(${blur}px)`;
     ctx.drawImage(img, 0, 0, w, h); ctx.filter = 'none';
@@ -462,6 +462,8 @@ let title = null, titleU = null, crtPics = [];
     for (let i = 0; i < p.length; i += 4) { const l = (p[i] * .3 + p[i + 1] * .59 + p[i + 2] * .11); p[i] = p[i + 1] = p[i + 2] = 255; p[i + 3] = l; }   // brightness → the alpha the shader reads
     ctx.putImageData(d, 0, 0); const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
   };
+  const loaded = new Set(), load = (src) => { if (loaded.has(src)) return; loaded.add(src); const im = new Image(); im.onload = () => pics.push({ t: picLayer(im, 0), g: picLayer(im, 9), src }); im.src = src; };
+  { let last = null; try { last = JSON.parse(localStorage.getItem('filth-crt-list')); } catch (e) {} for (const s of (last && last.length ? last : CRT_IMAGES)) load(s); }   // at once, so a tap works straight away
   (async () => {
     let list = null;
     try {
@@ -469,11 +471,19 @@ let title = null, titleU = null, crtPics = [];
       const r = await fetch('https://api.github.com/repos/johnnyhawk02/polivoks/contents/crt', { signal: ac.signal });
       if (r.ok) { list = (await r.json()).filter((f) => f.type === 'file' && /\.(jpe?g|png|webp|gif)$/i.test(f.name)).map((f) => 'crt/' + f.name).sort(); try { localStorage.setItem('filth-crt-list', JSON.stringify(list)); } catch (e) {} }
     } catch (e) {}
-    if (!list || !list.length) try { list = JSON.parse(localStorage.getItem('filth-crt-list')); } catch (e) {}
-    for (const src of (list && list.length ? list : CRT_IMAGES)) { const im = new Image(); im.onload = () => pics.push({ t: picLayer(im, 0), g: picLayer(im, 9) }); im.src = src; }
+    for (const src of list || []) load(src);   // pictures uploaded since the last visit
+    if (list) for (let i = pics.length - 1; i >= 0; i--) if (!list.includes(pics[i].src)) pics.splice(i, 1);   // and ones taken out of the folder
   })();
   crtPics = pics;
-  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, tImg: { value: null }, tImgG: { value: null }, tImg2: { value: null }, tImg2G: { value: null }, wts: { value: new THREE.Vector3(1, 0, 0) }, flip: { value: 0 }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
+  // the current preset's name, small along the bottom of the screen; redrawn when it changes
+  const nameLayer = (name) => {
+    const [c, ctx] = canvas(w, h), fsz = Math.round(h * 0.075);
+    ctx.font = `600 ${fsz}px ${MONO}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = PAPER; ctx.fillText(name.toUpperCase(), w / 2, h * 0.835, w * 0.6);
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+  };
+  let nameNow = null; ticks.push(() => { const n = A.preName || ''; if (n === nameNow) return; nameNow = n; const old = titleU.tName.value; titleU.tName.value = nameLayer(n); if (old) old.dispose(); });
+  titleU = { tText: { value: layer(0) }, tGlow: { value: layer(9) }, tImg: { value: null }, tImgG: { value: null }, tImg2: { value: null }, tImg2G: { value: null }, tName: { value: null }, wts: { value: new THREE.Vector3(1, 0, 0) }, flip: { value: 0 }, amt: { value: 0 }, lvl: { value: 0 }, size: { value: new THREE.Vector2(w, h) },
     // the screen's outline inside the bezel, in -1..1 across the plate: half-size, then bow
     ph: { value: new THREE.Color(1, .5, .1) },   // phosphor colour (CRT COLOUR in OPTIONS)
     scr: { value: new THREE.Vector4((HX - BEZ) / (w / 2), (HY - BEZ) / (h / 2), BX / (w / 2), BY / (h / 2)) } };
@@ -481,7 +491,7 @@ let title = null, titleU = null, crtPics = [];
     uniforms: titleU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tText, tGlow, tImg, tImgG, tImg2, tImg2G; uniform vec3 wts; uniform float amt, lvl, flip; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
+      uniform sampler2D tText, tGlow, tImg, tImgG, tImg2, tImg2G, tName; uniform vec3 wts; uniform float amt, lvl, flip; uniform vec2 size; uniform vec4 scr; uniform vec3 ph; varying vec2 vUv;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
         return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
@@ -503,7 +513,10 @@ let title = null, titleU = null, crtPics = [];
         vec2 d = vec2(fbm(px), fbm(px + 17.3)) - .5;
         vec2 uv = uv0 + d * (amt + flip * size.y * .9) / size;   // the LFO wobble, plus a burst while the screen flips
         float t = texture2D(tText, uv).a, g = texture2D(tGlow, uv).a;
-        if (wts.x < 1.) { t = t * wts.x + texture2D(tImg, uv).a * wts.y + texture2D(tImg2, uv).a * wts.z; g = g * wts.x + texture2D(tImgG, uv).a * wts.y + texture2D(tImg2G, uv).a * wts.z; }   // pictures crossfading with FILTH
+        // pictures crossfading with FILTH; a picture is very dark (just visible) while the synth is silent and
+        // comes up with the sound, on the same quick-to-light, slow-to-fade level as the lettering's glow
+        if (wts.x < 1.) { float pk = .1 + .9 * lvl; t = t * wts.x + (texture2D(tImg, uv).a * wts.y + texture2D(tImg2, uv).a * wts.z) * pk; g = g * wts.x + (texture2D(tImgG, uv).a * wts.y + texture2D(tImg2G, uv).a * wts.z) * pk; }
+        t = max(t, texture2D(tName, uv).a * .85);              // the preset's name along the bottom, over FILTH or a picture
         float scan = .7 + .3 * sin(uv0.y * size.y * 1.6);     // scanlines
         float vig = smoothstep(1.35, .35, length(cuv));
         vec3 c = ph * (t * (.8 + .45 * lvl) + g * (.35 + 1.1 * lvl)) * scan * vig + ph * .035 * vig;
