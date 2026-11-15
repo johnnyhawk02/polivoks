@@ -316,17 +316,17 @@ if (respEl) {
 
 // a small red LED up and right of every knob: lit while its STEP, ENV or LFO is on (the page marks
 // the knob's label with .seq then); like the CLIP LED, a lamp and a soft halo
-const ledGeoS = new THREE.CylinderGeometry(3.6, 3.6, 3, 24); ledGeoS.rotateX(Math.PI / 2);
+const ledGeoS = new THREE.CylinderGeometry(5, 5, 3, 24); ledGeoS.rotateX(Math.PI / 2);   // big enough to read at a glance on a phone
 const ledHaloTex = (() => { const [c, x] = canvas(64, 64), g = x.createRadialGradient(32, 32, 3, 32, 32, 32);
   g.addColorStop(0, 'rgba(255,40,20,1)'); g.addColorStop(1, 'rgba(255,20,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
-const ledHaloGeo = new THREE.PlaneGeometry(26, 26), LED_OFF = new THREE.Color(0x3a0008), LED_ON = new THREE.Color(0xff3020);
+const ledHaloGeo = new THREE.PlaneGeometry(40, 40), LED_OFF = new THREE.Color(0x3a0008), LED_ON = new THREE.Color(0xff3020);
 function knobLed(c, cx, cy) {
   const lab = c.el.querySelector('.lab'); if (!lab) return;
   const x = cx + KR + 13, y = cy - KR - 6;
   const lm = new THREE.MeshBasicMaterial({ color: LED_OFF }), led = new THREE.Mesh(ledGeoS, lm); led.position.copy(pos(x, y, 1.5)); upper.add(led);
   const hm = new THREE.MeshBasicMaterial({ map: ledHaloTex, transparent: true, opacity: 0, depthWrite: false }), halo = new THREE.Mesh(ledHaloGeo, hm); halo.position.copy(pos(x, y, 3.2)); upper.add(halo);
   let last = null;
-  ticks.push(() => { const on = lab.classList.contains('seq'); if (on === last) return; last = on; lm.color.copy(on ? LED_ON : LED_OFF); hm.opacity = on ? 0.55 : 0; });
+  ticks.push(() => { const on = lab.classList.contains('seq'); if (on === last) return; last = on; lm.color.copy(on ? LED_ON : LED_OFF); hm.opacity = on ? 0.75 : 0; });
 }
 // knobs, selectors, switches
 const levers = new Set();

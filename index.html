@@ -206,8 +206,8 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <!-- 19 columns × 3 rows of equal cells; each box spans whole cells -->
     <div class="box" id="g-mod" style="grid-area:1/1/2/4;--n:3;--m:1"><h2>LFO</h2></div>
     <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"><h2>MASTER</h2></div>
-    <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:6;--m:1"><h2>VCO I</h2></div>
-    <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
+    <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:5;--m:1"><h2>VCO I</h2></div>
+    <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:5;--m:1"><h2>VCO II</h2></div>
     <div class="box" id="g-mix" style="grid-area:3/15/4/18;--n:3;--m:1"><h2>MIXER</h2></div>
     <div class="box" id="g-echo" style="grid-area:3/4/4/10;--n:6;--m:1"><h2>ECHO</h2></div>
     <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTHER</h2></div>
@@ -1652,9 +1652,9 @@ const L = {
   'g-perf': [at(knob('tune', 'НАСТРОЙКА', 'bip', 0), 1, 1), at(knob('glide', 'ГЛИССАНДО', 'mm', 0), 2, 1), at(sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1), 3, 1),
     at(knob('volume', 'ГРОМКОСТЬ', '06', .7), 1, 2), at(knob('drive', 'DRIVE', '06', 0, { added: true }), 2, 2), at({ kind: 'led', label: 'CLIP' }, 3, 2)],
   'g-o1': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 1),
-    knob('o1pw', 'PULSE W.', '06', 0), knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0)],
+    knob('o1pw', 'PULSE W.', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0)],
   'g-o2': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 2),
-    knob('o2pw', 'PULSE W.', '06', 0), knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0)],
+    knob('o2pw', 'PULSE W.', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0)],
   'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0)],
   // FILTER and AMPLIFIER share their bottom two rows: MOD, depth, envelope mode, then A D S R
   // FILTER: cutoff, resonance, type, then the two modulation amounts;
@@ -1664,7 +1664,8 @@ const L = {
   ],
   // ENV 2 AMOUNT and the filter's MOD are still in the circuit but off the panel: they are set from
   // MODULATE with CUTOFF picked (its ENV 2 and LFO sliders), and saved, loaded and sequenced as before
-  'g-hide': [knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0)],
+  // likewise each VCO's MOD (LFO to pitch): set from MODULATE with that VCO's PITCH picked (its LFO source)
+  'g-hide': [knob('fEnv', 'ОГИБАЮЩАЯ', '06', .45), knob('fMod', 'МОДУЛЯЦИЯ', '06', 0), knob('o1mod', 'МОДУЛЯЦИЯ', '06', 0), knob('o2mod', 'МОДУЛЯЦИЯ', '06', 0)],
   'g-fe': [knob('fA', 'АТАКА', 'mm', .05), knob('fD', 'ЗАТУХАНИЕ', 'mm', .45), knob('fS', 'ПЬЕДЕСТАЛ', '06', .3), knob('fR', 'ПОСЛЕЗВУЧ.', 'mm', .35)],
   // ENV 1 is the amplifier's envelope (hardwired to the VCA), ENV 2 the filter's (its depth is ENV 2 AMOUNT);
   // the VCA's own MOD and HOLD sit in a small box of their own
@@ -1741,7 +1742,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.89.0';
+const VERSION = '1.90.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1896,7 +1897,7 @@ for (const gid in L) {
 // FILTER, MIXER and AMPLIFIER sit on their own grid: equal columns across
 // the box and their own, shorter row height, rows from the top, so the knobs
 // are closer together vertically.  Any spare height falls at the bottom.
-for (const gid of ['g-f', 'g-fe', 'g-a']) document.getElementById(gid).classList.add('own');
+for (const gid of ['g-f', 'g-fe', 'g-a', 'g-o1', 'g-o2']) document.getElementById(gid).classList.add('own');
 applyLang();
 pwActive();
 document.getElementById('resetbtn').onclick = () => {
@@ -1909,23 +1910,25 @@ document.getElementById('resetbtn').onclick = () => {
 // A performance feature on top of the model (see seq.js): every knob can
 // carry a step sequence that moves it ± around where it is set.
 const SEQ_STORE = 'polivoks-seq-v1';
+const circOff = (id) => { const o = {}; for (const k in (CIRC_IDS[id] || {})) o[k + 'On'] = false; return o; };
+const CIRC_IDS = { cutoff: { e: 1, l: 1 }, o1pitch: { l: 1 }, o2pitch: { l: 1 } };
 const SEQ_DEF = () => ({ on: false, len: 8, div: 1, depth: 0.5, slew: 0.03, drift: 0, steps: new Array(16).fill(0), eOn: false, eDepth: 0.3, lOn: false, lDepth: 0.2, e2On: false, e2Depth: 0.3, vOn: false, vDepth: 0.3 });
 let seqSaved = {}; try { seqSaved = JSON.parse(localStorage.getItem(SEQ_STORE) || '{}'); } catch (e) {}
 const seqs = {};
 let bpm = seqSaved.bpm || 96, extBpm = 0, lastPos = null;
 // RATE: how many 16th notes one step lasts, from 1/16 up to 8 bars
 const DIVS = [1, 2, 4, 8, 16, 32, 64, 128], DIVN = ['1/16', '1/8', '1/4', '1/2', '1 BAR', '2 BARS', '4 BARS', '8 BARS'];
-const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id], id === 'cutoff' ? { eOn: false, lOn: false } : {}));   // cutoff's ENV 2 / LFO are the circuit's (CIRC)
+const seqOf = (id) => seqs[id] || (seqs[id] = Object.assign(SEQ_DEF(), (seqSaved.k || {})[id], circOff(id)));   // a source that is the circuit's own amount (CIRC) is never a generic one too
 // a knob is moved when any of its three lanes is on: ENV, STEP (the sequence) or LFO
 const seqAct = (s) => !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn));
 const saveSeq = () => { try { localStorage.setItem(SEQ_STORE, JSON.stringify({ bpm, k: seqs })); } catch (e) {} };
 const KNOBS = S.filter((c) => c.kind === 'knob');
 const seqMsg = (c) => { const s = seqOf(c.id); return { t: 'seq', id: c.id, s: Object.assign({}, s, { steps: s.steps.slice() }), range: c.scale === 'bip' ? [-1, 1] : [0, 1] }; };
 // with CUTOFF picked, its ENV 2 and LFO sources are the circuit's own ENV 2 AMOUNT (fEnv) and filter MOD (fMod)
-const CIRC = { e: 'fEnv', l: 'fMod' }, circMemo = { fEnv: 0.45, fMod: 0.3 };
-const circOf = (k) => edC && edC.id === 'cutoff' ? S.find((c) => c.id === CIRC[k]) : null;
-const cutMarked = () => ['fEnv', 'fMod'].some((id) => state[id] > 0.005);
-const markOf = (c) => seqAct(seqs[c.id]) || (c.id === 'cutoff' && cutMarked());
+// CUTOFF: ENV 2 = ENV 2 AMOUNT (fEnv), LFO = filter MOD (fMod); VCO I / II PITCH: LFO = that VCO's MOD
+const CIRC = { cutoff: { e: 'fEnv', l: 'fMod' }, o1pitch: { l: 'o1mod' }, o2pitch: { l: 'o2mod' } }, circMemo = { fEnv: 0.45, fMod: 0.3, o1mod: 0.1, o2mod: 0.1 };
+const circOf = (k) => edC && CIRC[edC.id] && CIRC[edC.id][k] ? S.find((c) => c.id === CIRC[edC.id][k]) : null;
+const markOf = (c) => seqAct(seqs[c.id]) || Object.values(CIRC[c.id] || {}).some((id) => state[id] > 0.005);
 function pushSeq(c) { const s = seqOf(c.id); send(seqMsg(c)); c.seqMark(markOf(c)); if (!seqAct(s)) c.showMod(null); saveSeq(); }
 for (const c of KNOBS) if ((seqSaved.k || {})[c.id]) c.seqMark(seqAct(seqOf(c.id)));
 function onSeqPos(d) {
@@ -1982,7 +1985,7 @@ const dice = {
   // a tidy rhythm on two or three filter/envelope knobs, everything else off
   groove() {
     seqsOff();
-    const pool = ['cutoff', 'fEnv', 'res', 'fD', 'aD', 'o1mod', 'mix2', 'fMod'].sort(() => Math.random() - .5);
+    const pool = ['cutoff', 'res', 'fD', 'aD', 'mix2', 'fS', 'o1pw'].sort(() => Math.random() - .5);
     const n = 2 + Math.floor(rnd(0, 2)), len = pick([8, 16]);
     for (const id of pool.slice(0, n)) {
       const s = seqOf(id); pick([RND.euclid, RND.steps, RND.walk])(s);
@@ -2097,7 +2100,7 @@ function drawSeq() {
     q(cl).classList.toggle('lit', on); q(cl).closest('.sq-lane').classList.toggle('off', !on);
     q(vc).value = Math.round(c.v * 100); q(vc + 'v').textContent = Math.round(c.v * 100) + '%';
   }
-  { const c = S.find((x) => x.id === 'cutoff'); if (c) c.seqMark(markOf(c)); }
+  for (const id in CIRC) { const c = S.find((x) => x.id === id); if (c) c.seqMark(markOf(c)); }
   for (const id in pickO) pickO[id].textContent = (seqAct(seqs[id]) ? '● ' : '') + pickO[id].dataset.n;
   knobSel.value = edC.id;
   q('.sq-len').textContent = s.len; q('.sq-div').textContent = DIVN[DIVS.indexOf(s.div)];
@@ -2298,7 +2301,7 @@ function loadPre(i) {
   for (const c of KNOBS) {
     const was = seqs[c.id], now = p.s && p.s[c.id];
     if (!was && !now) continue;
-    seqs[c.id] = Object.assign(SEQ_DEF(), now || {}, { steps: ((now && now.steps) || new Array(16).fill(0)).slice() }, c.id === 'cutoff' ? { eOn: false, lOn: false } : {});
+    seqs[c.id] = Object.assign(SEQ_DEF(), now || {}, { steps: ((now && now.steps) || new Array(16).fill(0)).slice() }, circOff(c.id));
     pushSeq(c);
   }
   if (p.bpm) { bpm = p.bpm; send({ t: 'bpm', v: bpm }); saveSeq(); }
