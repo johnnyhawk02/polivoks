@@ -1,0 +1,477 @@
+[
+ {
+  "id": "lfoRate",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.45,
+  "v": 0.45,
+  "label": "ЧАСТОТА"
+ },
+ {
+  "id": "lfoRange",
+  "kind": "sw",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ДИАПАЗОН"
+ },
+ {
+  "id": "lfoMode",
+  "kind": "sel",
+  "n": 4,
+  "def": 0,
+  "v": 0,
+  "label": "РЕЖИМ"
+ },
+ {
+  "id": "tune",
+  "kind": "knob",
+  "scale": "bip",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "НАСТРОЙКА"
+ },
+ {
+  "id": "glide",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ГЛИССАНДО"
+ },
+ {
+  "id": "voice",
+  "kind": "sw",
+  "n": 0,
+  "def": 1,
+  "v": 1
+ },
+ {
+  "id": "volume",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.7,
+  "v": 0.7,
+  "label": "ГРОМКОСТЬ"
+ },
+ {
+  "id": "o1range",
+  "kind": "sel",
+  "n": 5,
+  "def": 2,
+  "v": 2,
+  "label": "ДИАПАЗОН"
+ },
+ {
+  "id": "o1wave",
+  "kind": "sel",
+  "n": 3,
+  "def": 1,
+  "v": 1,
+  "label": "ФОРМА"
+ },
+ {
+  "id": "o1pw",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "PULSE W."
+ },
+ {
+  "id": "o1fm",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ЧМ"
+ },
+ {
+  "id": "o1pitch",
+  "kind": "knob",
+  "scale": "bip",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ВЫСОТА"
+ },
+ {
+  "id": "o1fine",
+  "kind": "knob",
+  "scale": "bip",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ТОЧНО"
+ },
+ {
+  "id": "o2range",
+  "kind": "sel",
+  "n": 5,
+  "def": 2,
+  "v": 2,
+  "label": "ДИАПАЗОН"
+ },
+ {
+  "id": "o2wave",
+  "kind": "sel",
+  "n": 3,
+  "def": 2,
+  "v": 2,
+  "label": "ФОРМА"
+ },
+ {
+  "id": "o2pw",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "PULSE W."
+ },
+ {
+  "id": "o2fm",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ЧМ"
+ },
+ {
+  "id": "o2pitch",
+  "kind": "knob",
+  "scale": "bip",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ВЫСОТА"
+ },
+ {
+  "id": "o2fine",
+  "kind": "knob",
+  "scale": "bip",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ТОЧНО"
+ },
+ {
+  "id": "mix1",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.65,
+  "v": 0.65,
+  "label": "ГЕНЕРАТОР I"
+ },
+ {
+  "id": "mix2",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.5,
+  "v": 0.5,
+  "label": "ГЕНЕРАТОР II"
+ },
+ {
+  "id": "mixN",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ШУМ"
+ },
+ {
+  "id": "drive",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "DRIVE"
+ },
+ {
+  "id": "cutoff",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.59,
+  "v": 0.59,
+  "label": "ЧАСТОТА СРЕЗА"
+ },
+ {
+  "id": "res",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.5,
+  "v": 0.5,
+  "label": "РЕЗОНАНС"
+ },
+ {
+  "id": "fMode",
+  "kind": "sw",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "ТИП"
+ },
+ {
+  "id": "fEnv",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.45,
+  "v": 0.45,
+  "label": "ОГИБАЮЩАЯ"
+ },
+ {
+  "id": "fMod",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "МОДУЛЯЦИЯ"
+ },
+ {
+  "id": "o1mod",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "МОДУЛЯЦИЯ"
+ },
+ {
+  "id": "o2mod",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "МОДУЛЯЦИЯ"
+ },
+ {
+  "id": "chorus",
+  "kind": "sel",
+  "n": 4,
+  "def": 0,
+  "v": 0,
+  "label": "CHORUS"
+ },
+ {
+  "id": "eSync",
+  "kind": "sw",
+  "n": 0,
+  "def": 1,
+  "v": 1
+ },
+ {
+  "id": "rFreeze",
+  "kind": "sw",
+  "n": 0,
+  "def": 0,
+  "v": 0
+ },
+ {
+  "id": "fA",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.05,
+  "v": 0.05,
+  "label": "АТАКА"
+ },
+ {
+  "id": "fD",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.45,
+  "v": 0.45,
+  "label": "ЗАТУХАНИЕ"
+ },
+ {
+  "id": "fS",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.3,
+  "v": 0.3,
+  "label": "ПЬЕДЕСТАЛ"
+ },
+ {
+  "id": "fR",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.35,
+  "v": 0.35,
+  "label": "ПОСЛЕЗВУЧ."
+ },
+ {
+  "id": "fEgMode",
+  "kind": "sw",
+  "n": 0,
+  "def": 0,
+  "v": 0
+ },
+ {
+  "id": "aA",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.02,
+  "v": 0.02,
+  "label": "АТАКА"
+ },
+ {
+  "id": "aD",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.5,
+  "v": 0.5,
+  "label": "ЗАТУХАНИЕ"
+ },
+ {
+  "id": "aS",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.7,
+  "v": 0.7,
+  "label": "ПЬЕДЕСТАЛ"
+ },
+ {
+  "id": "aR",
+  "kind": "knob",
+  "scale": "mm",
+  "n": 0,
+  "def": 0.35,
+  "v": 0.35,
+  "label": "ПОСЛЕЗВУЧ."
+ },
+ {
+  "id": "aEgMode",
+  "kind": "sw",
+  "n": 0,
+  "def": 0,
+  "v": 0
+ },
+ {
+  "id": "aMod",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "МОДУЛЯЦИЯ"
+ },
+ {
+  "id": "vcaHold",
+  "kind": "sw",
+  "n": 0,
+  "def": 0,
+  "v": 0
+ },
+ {
+  "id": "eTime",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.5,
+  "v": 0.5,
+  "label": "TIME"
+ },
+ {
+  "id": "eFb",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.35,
+  "v": 0.35,
+  "label": "FEEDBACK"
+ },
+ {
+  "id": "eMix",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.25,
+  "v": 0.25,
+  "label": "MIX"
+ },
+ {
+  "id": "eTone",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.45,
+  "v": 0.45,
+  "label": "TONE"
+ },
+ {
+  "id": "eSpread",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.8,
+  "v": 0.8,
+  "label": "SPREAD"
+ },
+ {
+  "id": "rSize",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.6,
+  "v": 0.6,
+  "label": "SIZE"
+ },
+ {
+  "id": "rDecay",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.5,
+  "v": 0.5,
+  "label": "DECAY"
+ },
+ {
+  "id": "rGrav",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "GRAVITY"
+ },
+ {
+  "id": "rDark",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0.6,
+  "v": 0.6,
+  "label": "DARK"
+ },
+ {
+  "id": "rMix",
+  "kind": "knob",
+  "scale": "06",
+  "n": 0,
+  "def": 0,
+  "v": 0,
+  "label": "MIX"
+ }
+]
