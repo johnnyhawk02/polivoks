@@ -225,7 +225,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="box" id="g-perf" style="grid-area:2/1/4/4;--n:3;--m:2"><h2>MASTER</h2></div>
     <div class="box" id="g-o1" style="grid-area:1/4/2/10;--n:6;--m:1"><h2>VCO I</h2></div>
     <div class="box" id="g-o2" style="grid-area:2/4/3/10;--n:6;--m:1"><h2>VCO II</h2></div>
-    <div class="box" id="g-mix" style="grid-area:3/4/4/7;--n:3;--m:1"><h2>MIXER</h2></div>
+    <div class="box" id="g-mix" style="grid-area:3/4/4/8;--n:4;--m:1"><h2>MIXER</h2></div>
     <div class="box" id="g-f" style="grid-area:1/10/2/15;--n:5;--m:1"><h2>FILTHER</h2></div>
     <div class="box" id="g-a" style="grid-area:2/10/3/15;--n:5;--m:1"><h2>ENV 1</h2></div>
     <div class="box" id="g-fe" style="grid-area:3/10/4/15;--n:5;--m:1"><h2>ENV 2</h2></div>
@@ -233,7 +233,7 @@ try { localStorage.removeItem('polivoks-view'); } catch (e) {}
     <div class="ttl" style="grid-area:1/15/3/20"><span id="ttlw">FILTH</span></div>
     <!-- the title's wobble: a fixed noise displacement whose depth is the modulator's output -->
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="wobf" x="-10%" y="-25%" width="120%" height="150%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="7"/><feDisplacementMap id="wobd" in="SourceGraphic" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
-    <div class="box" id="g-vca" style="grid-area:3/7/4/10;--n:3;--m:1"><h2>VCA</h2></div>
+    <div class="box" id="g-vca" style="grid-area:3/8/4/10;--n:2;--m:1"><h2>VCA</h2></div>
   </div>
   <div id="g-hide" hidden></div>
   <div class="panel low" id="low">
@@ -1891,12 +1891,14 @@ const gap = { kind: 'spacer' };
 const L = {
   'g-mod': [knob('lfoRate', 'ЧАСТОТА', 'mm', .45), sw('lfoRange', 'БЫСТР.', 'МЕДЛ.', 0, 'ДИАПАЗОН'), sel('lfoMode', 'РЕЖИМ', [{i:'tri'},{i:'sq'},{i:'sh'},{i:'nz'}], 0)],
   'g-perf': [at(knob('tune', 'НАСТРОЙКА', 'bip', 0), 1, 1), at(knob('glide', 'ГЛИССАНДО', 'mm', 0), 2, 1), at(sw('voice', '1-ГОЛ.', '2-ГОЛ.', 1), 3, 1),
-    at(knob('volume', 'ГРОМКОСТЬ', '06', .7), 1, 2), at(knob('drive', 'DRIVE', '06', 0, { added: true }), 2, 2), at({ kind: 'led', label: 'CLIP' }, 3, 2)],
+    at(knob('volume', 'ГРОМКОСТЬ', '06', .7), 1, 2), at({ kind: 'led', label: 'CLIP' }, 3, 2)],
   'g-o1': [sel('o1range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o1wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 1),
     knob('o1pw', 'PULSE W.', '06', 0), knob('o1fm', 'ЧМ', '06', 0), knob('o1pitch', 'ВЫСОТА', 'bip', 0), knob('o1fine', 'ТОЧНО', 'bip', 0, { added: true })],
   'g-o2': [sel('o2range', 'ДИАПАЗОН', [{t:"32'"},{t:"16'"},{t:"8'"},{t:"4'"},{t:"2'"}], 2), sel('o2wave', 'ФОРМА', [{i:'tri'},{i:'saw'},{i:'sq'}], 2),
     knob('o2pw', 'PULSE W.', '06', 0), knob('o2detune', 'РАССТРОЙКА', 'bip', 0), knob('o2pitch', 'ВЫСОТА', 'bip', 0), knob('o2fine', 'ТОЧНО', 'bip', 0, { added: true })],
-  'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0)],
+  'g-mix': [knob('mix1', 'ГЕНЕРАТОР I', '06', .65), knob('mix2', 'ГЕНЕРАТОР II', '06', .5), knob('mixN', 'ШУМ', '06', 0),
+    // DRIVE (added) on the mixer's right: it sets how hard the mixed sum hits the filter's input
+    knob('drive', 'DRIVE', '06', 0, { added: true })],
   // FILTER and AMPLIFIER share their bottom two rows: MOD, depth, envelope mode, then A D S R
   // FILTER: cutoff, resonance, type, then the two modulation amounts;
   // its envelope (A D S R and mode) has its own box, FILTER ENVELOPE, underneath
@@ -1912,7 +1914,7 @@ const L = {
   // ENV 1 is the amplifier's envelope (hardwired to the VCA), ENV 2 the filter's (its depth is ENV 2 AMOUNT);
   // the VCA's own MOD and HOLD sit in a small box of their own
   'g-a': [knob('aA', 'АТАКА', 'mm', .02), knob('aD', 'ЗАТУХАНИЕ', 'mm', .5), knob('aS', 'ПЬЕДЕСТАЛ', '06', .7), knob('aR', 'ПОСЛЕЗВУЧ.', 'mm', .35), sw('aEgMode', 'ЦИКЛ.', 'ОДНОКР.', 0)],
-  'g-vca': [at(knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), 1, 1), at(sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), 3, 1)],
+  'g-vca': [at(knob('aMod', 'МОДУЛЯЦИЯ', '06', 0), 1, 1), at(sw('vcaHold', 'ОГИБ.', 'ВКЛ.', 0), 2, 1)],
   // added effects, not on the Polivoks, in one box: the Juno-60's chorus (OFF, I, II, I+II), then the
   // echo's TIME (its seven ticks are the SYNC note values), FEEDBACK and MIX, and MORE, which opens the
   // FX window for the deeper settings (FREE/SYNC, TONE, SPREAD: kept off the panel in g-hide, still saved,
