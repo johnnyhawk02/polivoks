@@ -237,9 +237,7 @@ function paintCtl(ctx, c) {
   const r = rel(c.el, panel);
   if (c.kind === 'knob') {
     const s = rel(svg, panel), cx = s.x + s.w / 2, cy = s.y + 40, n = c.scale === 'bip' ? 5 : 7;
-    // the value ring's track: a dark groove from min to max, ticks just outside it
-    ctx.strokeStyle = 'rgba(11,11,11,.55)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(cx, cy, KR + 5.2, -Math.PI / 2 + ang(0), -Math.PI / 2 + ang(1)); ctx.stroke(); ctx.lineCap = 'butt';
+    // ticks round the knob (no groove arc: Johnny, v2.13.0)
     ctx.strokeStyle = INK; ctx.lineWidth = 1.1;
     for (let i = 0; i < n; i++) { const a = ang(i / (n - 1)); ctx.beginPath(); ctx.moveTo(cx + Math.sin(a) * (KR + 8.5), cy - Math.cos(a) * (KR + 8.5)); ctx.lineTo(cx + Math.sin(a) * (KR + 11), cy - Math.cos(a) * (KR + 11)); ctx.stroke(); }
     const g = ctx.createRadialGradient(cx, cy, KR, cx, cy, KR + 5); g.addColorStop(0, 'rgba(0,0,0,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -431,7 +429,7 @@ for (const c of CTL) {
 // The name, printed flat on the panel in the display lettering, filling its three cells next to
 // CHORUS (the CRT that showed it is gone since v2.12.0).  Tapping it opens OPTIONS.
 function paintTitle(ctx) {
-  const r = rel(panel.querySelector('.ttl'), panel), word = 'FILTH', PADX = 6, PADY = r.h * 0.2;
+  const r = rel(panel.querySelector('.ttl'), panel), word = 'FILTH', PADX = r.w * 0.09, PADY = r.h * 0.3;   // clear of CHORUS and the panel's edge
   ctx.font = `400 100px ${DISPLAY}`; if ('letterSpacing' in ctx) ctx.letterSpacing = '2px'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   const m = ctx.measureText(word), iw = m.actualBoundingBoxLeft + m.actualBoundingBoxRight, ih = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
   const k = Math.min((r.w - 2 * PADX) / iw, (r.h - 2 * PADY) / ih);   // as big as the cells allow, its own proportions kept
@@ -470,10 +468,9 @@ function paintLower(ctx) {
       text(ctx, e.textContent.toUpperCase(), left ? r.x : r.x + r.w / 2, r.y + r.h / 2, `600 ${fs(e)}px ${MONO}`, INK, left ? 'left' : 'center', .5); ctx.restore();
     } else text(ctx, e.textContent.replace(/ /g, ' ').trim(), r.x, r.y + r.h / 2, `600 ${fs(e)}px ${MONO}`, INK, 'left', .7);
   }
-  for (const m of low.querySelectorAll('.mknob')) {   // depth knobs: the groove of their value ring and a centre tick
+  for (const m of low.querySelectorAll('.mknob')) {   // depth knobs: a centre tick
     const r = rel(m, low), cx = r.x + r.w / 2, cy = r.y + r.h / 2, R = (KR + 5.2) * 0.62;
-    ctx.globalAlpha = fade(m); ctx.strokeStyle = 'rgba(11,11,11,.55)'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI / 2 + ang(0), -Math.PI / 2 + ang(1)); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.globalAlpha = fade(m);   // no groove arc (Johnny, v2.13.0), only the centre tick
     if (/Depth$/.test(m.dataset.m)) { ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(cx, cy - R - 3); ctx.lineTo(cx, cy - R - 6); ctx.stroke(); }   // ENV / LFO: a centre tick (bipolar)
   }
   ctx.globalAlpha = 1;
@@ -517,7 +514,13 @@ for (const el of low.querySelectorAll('button')) {
 // a lit one turned over (black lettering on white)
 for (const el of panel.querySelectorAll('button')) {
   const r = rel(el, panel); if (!r.w) continue;
-  const draw = (ctx, w, h) => { const lit = el.classList.contains('lit'); if (lit) { ctx.fillStyle = PAPER; ctx.fillRect(0, 0, w, h); } text(ctx, el.textContent.toUpperCase(), w / 2, h / 2 + .5, `400 ${fs(el)}px ${DISPLAY}`, lit ? INK : PAPER); };
+  // a black key with a red LED at its left, lit while it is on (as the lower panel's on keys), its word in white
+  const draw = (ctx, w, h) => {
+    const lit = el.classList.contains('lit'), r = Math.min(4.5, h * 0.19), lx = 7 + r, cy = h / 2;
+    if (lit) { const g = ctx.createRadialGradient(lx, cy, 1, lx, cy, r * 3); g.addColorStop(0, 'rgba(255,50,30,.3)'); g.addColorStop(1, 'rgba(255,20,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, lx + r * 3, h); }
+    ctx.fillStyle = lit ? '#ff3020' : '#3a0008'; ctx.beginPath(); ctx.arc(lx, cy, r, 0, 7); ctx.fill();
+    text(ctx, el.textContent.toUpperCase(), (lx + r + w) / 2, cy + .5, `400 ${fs(el)}px ${DISPLAY}`, PAPER);
+  };
   const p = plate(r.w, r.h, 9, draw, { bevel: true }); p.position.copy(pos(r.x, r.y, 0)); upper.add(p);
   p.userData.btn = el; hits.push(p);
   let last = el.className; ticks.push(() => { if (el.className !== last) { last = el.className; p.userData.redraw(draw); } });

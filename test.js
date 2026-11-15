@@ -498,3 +498,39 @@ console.log('--- stability sweep ---');
     if (worst > 0.05) { console.log('DETUNE MIGRATION FAILED'); process.exitCode = 1; }
   }
 }
+// ---- REVERB (an added effect after the echo: fx.js BlackHole, an 8-line modulated FDN) ----
+{
+  const { BlackHole, REV_RT } = require('./fx.js');
+  console.log('--- REVERB (added: Blackhole-style FDN after the echo) ---');
+  let seed = 7; const nz = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff - 0.5; };
+  const B = 128, dB = (v) => 20 * Math.log10(v + 1e-12);
+  const run = (set, secs, inp, each) => {
+    const r = new BlackHole(SR); for (const k in set) { r.set(k, set[k]); r.ps[k] = set[k]; }
+    const n = Math.round(secs * SR / B) * B, L = new Float32Array(n), R = new Float32Array(n);
+    for (let i = 0; i < n; i++) L[i] = R[i] = inp(i);
+    const t0 = process.hrtime.bigint();
+    for (let i = 0; i < n; i += B) { if (each) each(r, i); r.process(L.subarray(i, i + B), R.subarray(i, i + B), B); }
+    return { L, R, cpu: Number(process.hrtime.bigint() - t0) / 1e6 / (secs * 10) };
+  };
+  const win = (x, W) => { const o = []; for (let i = 0; i + W <= x.length; i += W) { let s = 0; for (let j = i; j < i + W; j++) s += x[j] * x[j]; o.push(dB(Math.sqrt(s / W))); } return o; };
+  // MIX 0: untouched and no work
+  { const r = new BlackHole(SR), L = new Float32Array(4800).map(nz), x = L.slice(), R = L.slice(); r.process(L, R, 4800);
+    const same = L.every((v, i) => v === x[i]) && R.every((v, i) => v === x[i]); console.log('MIX 0 leaves the sound bit-identical:', same); if (!same) process.exitCode = 1; }
+  // RT60 with DARK 0 (one band): slope from -5 to -25 dB below the peak, wet only
+  for (const dec of [0.3, 0.5]) {
+    const set = REV_RT(dec), o = run({ rMix: 1, rDecay: dec, rDark: 0 }, set * 0.9 + 1, (i) => i < 0.2 * SR ? nz() : 0), lv = win(o.L, 0.05 * SR);
+    const ip = lv.indexOf(Math.max(...lv)), i5 = lv.findIndex((v, i) => i > ip && v < lv[ip] - 5), i25 = lv.findIndex((v, i) => i > ip && v < lv[ip] - 25);
+    const rt = (i25 - i5) * 0.05 * 3; console.log(`DECAY ${dec}: RT60 set ${set.toFixed(1)} s, measured ${rt.toFixed(1)} s | CPU ${o.cpu.toFixed(2)} % of realtime`);
+    if (!(Math.abs(rt / set - 1) < 0.2)) { console.log('REVERB RT60 OFF'); process.exitCode = 1; }
+  }
+  // FREEZE: holds, stays bounded for 2 minutes with input still coming
+  { let bad = 0, pk = 0; const o = run({ rMix: 1 }, 120, (i) => i < 0.3 * SR ? nz() : nz() * 0.5, (r, i) => { if (i === 0.3 * SR - (0.3 * SR) % B) r.set('rFreeze', 1); });
+    for (const v of o.L) { if (!isFinite(v)) bad++; pk = Math.max(pk, Math.abs(v)); }
+    const lv = win(o.L, SR); console.log(`FREEZE 120 s: NaN ${bad}, peak ${pk.toFixed(2)}, level at 1 s / 60 s / 119 s ${lv[1].toFixed(1)} / ${lv[60].toFixed(1)} / ${lv[119].toFixed(1)} dB`);
+    if (bad || pk > 2 || lv[119] < lv[1] - 12) { console.log('REVERB FREEZE FAILED'); process.exitCode = 1; } }
+  // GRAVITY: a short hit swells up instead of dying away
+  for (const g of [0, 1]) { const o = run({ rMix: 1, rGrav: g }, 3.5, (i) => i < 0.05 * SR ? nz() : 0), lv = win(o.L, 0.25 * SR); console.log(`GRAVITY ${g}: level per 1/4 s ${lv.map((v) => v.toFixed(0)).join(' ')}`); }
+  // stability: random settings, sequenced SIZE, loud input
+  { let bad = 0, pk = 0; const o = run({ rMix: 1 }, 20, (i) => (nz() * 2) * (Math.floor(i / 9600) % 3 === 0), (r, i) => { if (i % 24000 === 0) for (const k of ['rSize', 'rDecay', 'rGrav', 'rDark']) r.set(k, Math.random()); });
+    for (const v of o.L) { if (!isFinite(v)) bad++; pk = Math.max(pk, Math.abs(v)); } console.log(`random settings, loud bursts, 20 s: NaN ${bad}, peak ${pk.toFixed(2)}`); if (bad) process.exitCode = 1; }
+}
