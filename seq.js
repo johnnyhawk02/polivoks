@@ -12,7 +12,7 @@ class KnobSeq {
     this.sr = sr; this.e = engine; this.report = report || null;
     this.base = {};      // knob settings as turned on the panel
     this.range = {};     // id -> [lo, hi]
-    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth }; drift = % faster (+) or slower (−) than the clock
+    this.seq = {};       // id -> { on, len, div, depth, slew, drift, steps[16], eOn, eDepth, lOn, lDepth, e2On, e2Depth, vOn, vDepth, kOn, kDepth }; drift = % faster (+) or slower (−) than the clock
                          // mod sources: eDepth × the filter envelope (ENV 2 on the panel, 0…1), e2Depth × the amp envelope (ENV 1), lDepth × the LFO (±1), vDepth × key velocity (0…1), each ± of the knob's travel
     this.cur = {};       // slewed step value, −1..+1
     this.val = {};       // value last sent to the engine
@@ -26,7 +26,7 @@ class KnobSeq {
   }
   extActive() { return this.extT >= 0 && this.time - this.extT < 0.5; }
   param(id, v) { this.base[id] = v; const s = this.seq[id]; if (!KnobSeq.act(s)) this.e.setParam(id, v); }
-  static act(s) { return !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn)); }   // the knob is moved by any of its sources
+  static act(s) { return !!(s && (s.on || s.eOn || s.lOn || s.e2On || s.vOn || s.kOn)); }   // the knob is moved by any of its sources
   setSeq(id, s, range) {
     const was = KnobSeq.act(this.seq[id]), wasOn = this.seq[id] && this.seq[id].on;
     this.seq[id] = s; if (range) this.range[id] = range;
@@ -72,6 +72,8 @@ class KnobSeq {
       if (s.eOn) c += (s.eDepth || 0) * (this.e.envN || 0);
       if (s.e2On) c += (s.e2Depth || 0) * (this.e.env2N || 0);
       if (s.vOn) c += (s.vDepth || 0) * (this.e.vel == null ? 1 : this.e.vel);
+      // KEY: the last key played, 0 at middle C (60), ±1 two octaves either side (a performance source, not circuit)
+      if (s.kOn) c += (s.kDepth || 0) * Math.max(-1, Math.min(1, ((this.e.key == null ? 60 : this.e.key) - 60) / 24));
       if (s.lOn) c += (s.lDepth || 0) * Math.max(-1, Math.min(1, (this.e.lfoV || 0) / 1.43));   // triangle swings ±1.43 V
       const r = this.range[id] || [0, 1], b = id in this.base ? this.base[id] : r[0];
       const v = Math.max(r[0], Math.min(r[1], b + c * (r[1] - r[0])));

@@ -194,6 +194,7 @@ const leverGeo = new THREE.BoxGeometry(14, 12, 9); leverGeo.translate(0, 0, 4.5)
 const dotGeo = new THREE.SphereGeometry(3.4, 16, 12);
 const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });   // knob value rings: lit, like the pointers
 const haloMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
+ringMat.visible = haloMat.visible = false;   // Johnny: no white value arc round the knobs (the pointer shows the value)
 const hits = [];                      // things the pointer can grab
 const ticks = [];                     // per-frame checks: each returns nothing, redraws what changed
 const hitBox = (w, h, d, x, y, z, parent) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ visible: false })); m.position.copy(pos(x, y, z)); parent.add(m); hits.push(m); return m; };
@@ -242,11 +243,11 @@ function paintCtl(ctx, c) {
     const down = c.id === 'fMode' ? !c.v : !!c.v;
     [...c.el.querySelectorAll('.t')].forEach((t, i) => {
       const q = rel(t, panel), on = (i === 1) === down, font = `600 ${fs(t)}px ${MONO}`;
-      if (on) { ctx.font = font; const w = ctx.measureText(t.textContent).width + 10; ctx.fillStyle = INK; ctx.fillRect(q.x + q.w / 2 - w / 2, q.y - 1, w, q.h + 2); }
+      if (on) { ctx.font = font; const w = ctx.measureText(t.textContent).width + 10; ctx.fillStyle = INK; ctx.fillRect(q.x + q.w / 2 - w / 2, q.y + 1, w, q.h - 2); }   // inside the word's own line, clear of the slot
       ctx.globalAlpha = on ? 1 : 0.4; text(ctx, t.textContent, q.x + q.w / 2, q.y + q.h / 2, font, on ? PAPER : INK, 'center', .6); ctx.globalAlpha = 1;
     });
     const q = rel(c.el.querySelector('.slot'), panel);
-    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(q.x - 1, q.y - 1, q.w + 2, q.h + 2);
+    ctx.fillStyle = INK; ctx.fillRect(q.x - 1, q.y - 1, q.w + 2, q.h + 2);   // a solid black slot
     ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(q.x + 1, q.y + 1, q.w - 2, q.h - 2);
   }
 }
@@ -653,11 +654,17 @@ function openList(el) {
 // sliders
 for (const el of lowEls.ranges) {
   const r = rel(el, low), min = +el.min || 0, max = +el.max || 100;
-  const t = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 7, 24), mat.ink.clone()); t.rotation.x = Math.PI / 2; t.castShadow = true; lower.add(t);
+  // a fader: a black slot sunk along the track and a raised black cap with a white line across it, like the
+  // switch levers (flat, no bevels); the cap rides the slot
   const vert = el.classList.contains('vert');
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(vert ? 6 : r.w + 10, vert ? r.h + 10 : 6, 1.5), mat.ink.clone()); slot.position.copy(pos(r.x + r.w / 2, r.y + r.h / 2, 0.75)); lower.add(slot);
+  const t = new THREE.Group(), capM = mat.ink.clone(), lineM = mat.lit.clone();
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(vert ? 24 : 13, vert ? 13 : 24, 9), capM); cap.position.z = 4.5; cap.castShadow = true;
+  const line = new THREE.Mesh(new THREE.BoxGeometry(vert ? 20 : 2.4, vert ? 2.4 : 20, 0.6), lineM); line.position.z = 9.1;
+  t.add(cap, line); lower.add(t); t.material = [capM, lineM, slot.material];
   const hit = vert ? hitBox(30, r.h + 16, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower) : hitBox(r.w + 16, 26, 14, r.x + r.w / 2, r.y + r.h / 2, 3, lower); hit.userData.range = { el, r, min, max, vert };
   let last = null, n = 0;
-  ticks.push(() => { if (++n % 5 === 0) fadeMat(t.material, fade(el)); if (el.value !== last) { last = el.value; { const u = (el.value - min) / (max - min); t.position.copy(vert ? pos(r.x + r.w / 2, r.y + (1 - u) * r.h, 3.5) : pos(r.x + u * r.w, r.y + r.h / 2, 3.5)); } renderer.shadowMap.needsUpdate = true; } });
+  ticks.push(() => { if (++n % 5 === 0) fadeMat(t.material, fade(el)); if (el.value !== last) { last = el.value; { const u = (el.value - min) / (max - min); t.position.copy(vert ? pos(r.x + r.w / 2, r.y + (1 - u) * r.h, 0) : pos(r.x + u * r.w, r.y + r.h / 2, 0)); } renderer.shadowMap.needsUpdate = true; } });
 }
 // step bars of the knob being sequenced
 const gridEl = low.querySelector('.sq-grid');
