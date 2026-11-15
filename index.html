@@ -1329,8 +1329,8 @@ if (typeof module !== 'undefined') module.exports = { TapeEcho, FxRack, Level, S
 //     the screaming zone and is lowered when the cutoff is low
 //   - the echo stays synced, on musical note values, with modest repeats
 // Level knobs (VOLUME, PHONES) and the output switch are never touched.
-// makeTone(rand) returns { kind, k: { id: value }, seqs: { id: sequence } }: a value
-// for every other control and very gentle sequences on the filter, pulse width and pitch.
+// makeTone(rand) returns { kind, k: { id: value }, seqs: { id: sequence }, mods: { id: sources } }: a value
+// for every other control, very gentle sequences on the filter, pulse width and pitch, and a few gentle mod sources.
 // ============================================================================
 // PITCH knob positions for exact intervals (inverse of pitchOct in dsp.js)
 const TONE_PITCH = { 0: 0, 3: 0.257, 4: 0.34216, 5: 0.42689, 7: 0.59465, 12: 1, '-5': -0.42689, '-7': -0.59465, '-12': -1 };
@@ -1448,8 +1448,18 @@ function makeTone(rand, amount) {
   // with each other).  One unit of depth is 4 semitones, so 0.005 to 0.012 is about 2 to 5 cents
   // at the subtle setting and never more than about 12 cents.
   if (R() < 0.6) mk('tune', Math.min(0.03, mid(0.005, 0.012) * fac), -1, 1, [16, 32, 64]);
+  // ---- mod sources (MODULATE), subtle and scaled by AMOUNT like the sequences.  The filter
+  // envelope and the LFO jobs above already go through the circuit's own amounts (CUTOFF's ENV 2
+  // and LFO, each VCO PITCH's LFO); on top of those, now and then:
+  //   VEL → CUTOFF: harder keys a little brighter (half the time)
+  //   ENV 2 (filter envelope) → RESONANCE: the peak follows the filter's sweep (a quarter of the time)
+  //   ENV 1 (amp envelope) → PULSE W.: the pulse narrows as the note fades (a third of pulse oscillators)
+  const mods = {}, r2 = (v) => Math.round(v * 1000) / 1000;
+  if (R() < 0.5) mods.cutoff = { vOn: true, vDepth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
+  if (R() < 0.25) mods.res = { eOn: true, eDepth: r2(Math.min(0.2, mid(0.03, 0.08) * fac)) };
+  for (const n of ['o1', 'o2']) if (k[n + 'wave'] === 2 && R() < 0.33) mods[n + 'pw'] = { e2On: true, e2Depth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
   for (const id in k) k[id] = Math.round(k[id] * 1e5) / 1e5;
-  return { kind, k, seqs };
+  return { kind, k, seqs, mods };
 }
 
 if (typeof module !== 'undefined') module.exports = { makeTone, TONE_PITCH, TONE_CENT, TONE_KINDS };
@@ -1742,7 +1752,7 @@ function wobSet(on) {
 document.getElementById('wobbtn').onclick = () => wobSet(!WOB.on);
 wobSet(WOB.on);
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m), wobble: wobSet, draw: wobDraw };   // for headless checks
-const VERSION = '1.90.0';
+const VERSION = '1.91.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -1974,14 +1984,22 @@ const knobById = (id) => KNOBS.find((c) => c.id === id);
 const SAFE = (c) => c.id !== 'volume' && c.id !== 'phones' && c.id !== 'drive';   // never throw the level around
 // echo level knobs: PATCH keeps them in a tame range and MESS leaves them alone
 const ECHO_RANGE = { eFb: [.1, .55], eMix: [0, .4], eTone: [.2, .85] };
-function seqsOff() { for (const id in seqs) if (seqAct(seqs[id])) { Object.assign(seqs[id], { on: false, eOn: false, lOn: false, e2On: false, vOn: false }); pushSeq(knobById(id)); } }
+// seqsOff: every step sequence stops (GROOVE, MESS); with mods too, every mod source as well (TONE, PATCH)
+function seqsOff(mods) { for (const id in seqs) if (seqAct(seqs[id])) { Object.assign(seqs[id], mods ? { on: false, eOn: false, lOn: false, e2On: false, vOn: false } : { on: false }); pushSeq(knobById(id)); } }
+// knobs on the panel (not the circuit amounts kept off it), for the randomisers' picks
+const VIS = () => KNOBS.filter((c) => !c.el.closest('#g-hide') && SAFE(c));
+const MODS = [['lOn', 'lDepth'], ['e2On', 'e2Depth'], ['eOn', 'eDepth'], ['vOn', 'vDepth']];   // LFO, ENV 1, ENV 2, VEL
 // TONE MOD slider: how deep TONE's modulations and filter sequences go (virtually nothing ... moderate)
 let toneAmt = 0.35; try { const v = parseFloat(localStorage.getItem('polivoks-tone-amt')); if (v >= 0 && v <= 1) toneAmt = v; } catch (e) {}
 const tDepth = document.getElementById('rnd-tdepth'); tDepth.value = Math.round(toneAmt * 100);
 tDepth.oninput = () => { toneAmt = tDepth.value / 100; try { localStorage.setItem('polivoks-tone-amt', toneAmt); } catch (e) {} };
 const dice = {
   // small moves of every knob around where it is
-  nudge() { for (const c of KNOBS) if (SAFE(c)) c.set(c.v + rnd(-.08, .08) * (c.scale === 'bip' ? .5 : 1)); },
+  nudge() {
+    for (const c of KNOBS) if (SAFE(c)) c.set(c.v + rnd(-.08, .08) * (c.scale === 'bip' ? .5 : 1));
+    // and the depth of every mod source that is on, a little either way
+    for (const id in seqs) { const s = seqs[id]; let t = false; for (const [on, d] of MODS) if (s[on]) { s[d] = q2(s[d] + rnd(-.05, .05)); t = true; } if (t) pushSeq(knobById(id)); }
+  },
   // a tidy rhythm on two or three filter/envelope knobs, everything else off
   groove() {
     seqsOff();
@@ -2001,21 +2019,28 @@ const dice = {
       else if (c.kind === 'sw' && c.id !== 'outSel') c.set(Math.random() < .5 ? 0 : 1);
     }
     if (state.mix1 < .3 && state.mix2 < .3) knobById('mix1').set(.6);
+    // mod sources: all off (sequences stay), then one to three panel knobs (not the echo levels) get one source each (LFO, ENV 1, ENV 2 or VEL), ± 10…40 %
+    for (const id in seqs) { const s = seqs[id]; if (MODS.some(([on]) => s[on])) { for (const [on] of MODS) s[on] = false; pushSeq(knobById(id)); } }
+    for (const c of VIS().filter((c) => c.id !== 'eFb' && c.id !== 'eMix').sort(() => Math.random() - .5).slice(0, 1 + Math.floor(rnd(0, 3)))) {
+      const [on, d] = pick(MODS); const s = seqOf(c.id); if (CIRC[c.id] && ((on === 'eOn' && CIRC[c.id].e) || (on === 'lOn' && CIRC[c.id].l))) continue;
+      s[on] = true; s[d] = q2((Math.random() < .5 ? -1 : 1) * rnd(.1, .4)); pushSeq(c);
+    }
   },
   // a playable new sound (tone.js): a pluck, bass, lead, keys or pad from
   // musical ranges with gentle modulation plus a few very subtle filter
   // sequences; other sequences off, a new made-up name
   tone() {
-    seqsOff();
-    const { k, seqs: ts } = makeTone(null, toneAmt);
+    seqsOff(true);
+    const { k, seqs: ts, mods } = makeTone(null, toneAmt);
     for (const c of S) if (c.id in k && c.id !== 'voice') c.set(k[c.id]);   // MONO/DUO stays as it is
-    for (const id in ts) { const c = knobById(id); seqs[id] = Object.assign({}, ts[id], { steps: ts[id].steps.slice() }); pushSeq(c); }
+    for (const id in ts) { const c = knobById(id); seqs[id] = Object.assign(seqOf(id), ts[id], { steps: ts[id].steps.slice() }); pushSeq(c); }
+    for (const id in mods || {}) { Object.assign(seqOf(id), mods[id]); pushSeq(knobById(id)); }
     preName = freshName(); preI = -1; savePre(); drawPre();
   },
   // four to eight knobs on chaotic, out-of-step sequences
   mess() {
     seqsOff();
-    const pool = KNOBS.filter((c) => SAFE(c) && c.id !== 'eFb' && c.id !== 'eMix').sort(() => Math.random() - .5);
+    const pool = VIS().filter((c) => c.id !== 'eFb' && c.id !== 'eMix').sort(() => Math.random() - .5);
     for (const c of pool.slice(0, 4 + Math.floor(rnd(0, 5)))) { const s = seqOf(c.id); RND.chaos(s); s.on = true; pushSeq(c); }
   },
 };

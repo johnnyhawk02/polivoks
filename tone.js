@@ -16,8 +16,8 @@
 //     the screaming zone and is lowered when the cutoff is low
 //   - the echo stays synced, on musical note values, with modest repeats
 // Level knobs (VOLUME, PHONES) and the output switch are never touched.
-// makeTone(rand) returns { kind, k: { id: value }, seqs: { id: sequence } }: a value
-// for every other control and very gentle sequences on the filter, pulse width and pitch.
+// makeTone(rand) returns { kind, k: { id: value }, seqs: { id: sequence }, mods: { id: sources } }: a value
+// for every other control, very gentle sequences on the filter, pulse width and pitch, and a few gentle mod sources.
 // ============================================================================
 // PITCH knob positions for exact intervals (inverse of pitchOct in dsp.js)
 const TONE_PITCH = { 0: 0, 3: 0.257, 4: 0.34216, 5: 0.42689, 7: 0.59465, 12: 1, '-5': -0.42689, '-7': -0.59465, '-12': -1 };
@@ -135,8 +135,18 @@ function makeTone(rand, amount) {
   // with each other).  One unit of depth is 4 semitones, so 0.005 to 0.012 is about 2 to 5 cents
   // at the subtle setting and never more than about 12 cents.
   if (R() < 0.6) mk('tune', Math.min(0.03, mid(0.005, 0.012) * fac), -1, 1, [16, 32, 64]);
+  // ---- mod sources (MODULATE), subtle and scaled by AMOUNT like the sequences.  The filter
+  // envelope and the LFO jobs above already go through the circuit's own amounts (CUTOFF's ENV 2
+  // and LFO, each VCO PITCH's LFO); on top of those, now and then:
+  //   VEL → CUTOFF: harder keys a little brighter (half the time)
+  //   ENV 2 (filter envelope) → RESONANCE: the peak follows the filter's sweep (a quarter of the time)
+  //   ENV 1 (amp envelope) → PULSE W.: the pulse narrows as the note fades (a third of pulse oscillators)
+  const mods = {}, r2 = (v) => Math.round(v * 1000) / 1000;
+  if (R() < 0.5) mods.cutoff = { vOn: true, vDepth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
+  if (R() < 0.25) mods.res = { eOn: true, eDepth: r2(Math.min(0.2, mid(0.03, 0.08) * fac)) };
+  for (const n of ['o1', 'o2']) if (k[n + 'wave'] === 2 && R() < 0.33) mods[n + 'pw'] = { e2On: true, e2Depth: r2(Math.min(0.25, mid(0.04, 0.1) * fac)) };
   for (const id in k) k[id] = Math.round(k[id] * 1e5) / 1e5;
-  return { kind, k, seqs };
+  return { kind, k, seqs, mods };
 }
 
 if (typeof module !== 'undefined') module.exports = { makeTone, TONE_PITCH, TONE_CENT, TONE_KINDS };
