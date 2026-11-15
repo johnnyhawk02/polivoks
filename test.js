@@ -345,3 +345,37 @@ console.log('--- stability sweep ---');
   console.log('mod wheel vibrato, peak to peak (cents): off', w[0].toFixed(1), ', half', w[1].toFixed(1), ', full', w[2].toFixed(1), '(formula full', (2400 * wheelOct(1, -1.428)).toFixed(1) + ')');
   if (w[0] > 15 || w[2] < 350 || w[2] > 650 || w[1] > w[2]) { console.log('MOD WHEEL FAILED'); process.exitCode = 1; }
 }
+// FINE TUNE (an addition): ±1 semitone on each VCO
+{
+  const { fineOct } = require('./dsp.js');
+  const note = (id, v) => { const mix = id === 'o1fine' ? { mix1: 0.6, mix2: 0 } : { mix1: 0, mix2: 0.6, o2wave: 1 };
+    const { out } = run(Object.assign({}, open, mix, { [id]: v }), 1, [57]); return freqOf(out, SR); };
+  console.log('--- FINE TUNE (an addition, 10 MΩ EST) ---\nformula -1/-0.5/0/0.5/1 (cents):', [-1, -0.5, 0, 0.5, 1].map((d) => (1200 * fineOct(d)).toFixed(1)).join(' '));
+  for (const id of ['o1fine', 'o2fine']) {
+    const f0 = note(id, 0), c = [-1, 0.5, 1].map((v) => 1200 * Math.log2(note(id, v) / f0));
+    console.log(id, 'measured -1/+0.5/+1 (cents):', c.map((x) => x.toFixed(1)).join(' '));
+    if (Math.abs(c[0] + 100) > 3 || Math.abs(c[2] - 100) > 3 || Math.abs(c[1] - 50) > 3) { console.log('FINE TUNE FAILED'); process.exitCode = 1; }
+  }
+}
+// ENVELOPE LOOP (the original's ⋀⋀ envelope mode): attack/decay repeat while a key is held
+{
+  const peaks = (mode, sus) => {
+    const e = new PolivoksEngine(SR); e.setParam('power', 1); e.powerLevel = 1;
+    const s0 = Object.assign({}, open, { vcaHold: 0, aA: 0.1, aD: 0.3, aS: sus, aEgMode: mode });
+    for (const k in s0) { e.setParam(k, s0[k]); e.ps[k] = s0[k]; }
+    e.noteOn(57); const b = new Float32Array(48); let n = 0, hi = false, first = -1, last = -1, relAt = -1, late = 0;
+    for (let i = 0; i < SR * 4; i += 48) {
+      if (i === SR * 2) e.noteOff(57);
+      e.render(b, 48); const v = e.env2N;
+      if (!hi && v > 0.99) { hi = true; n++; if (first < 0) first = i; last = i; }
+      if (hi && v < 0.9) hi = false;
+      if (i >= SR * 2 && relAt < 0 && v < 0.2) relAt = i;
+      if (i >= SR * 2 && !hi && v > 0.99) late++;
+    }
+    return { n, period: n > 1 ? (last - first) / (n - 1) / SR : 0, rel: (relAt - SR * 2) / SR, late };
+  };
+  const once = peaks(0, 0), loop = peaks(1, 0), loopS = peaks(1, 0.5);
+  console.log('--- ENVELOPE LOOP (ENV 1, A 0.1 D 0.3, key held 2 s) ---');
+  console.log('ONCE: peaks', once.n, '| LOOP S 0: peaks', loop.n, 'period', loop.period.toFixed(3), 's | LOOP S 0.5: peaks', loopS.n, 'period', loopS.period.toFixed(3), 's | LOOP key up: falls to 20 % in', loop.rel.toFixed(3), 's, peaks after key up', loop.late);
+  if (once.n !== 1 || loop.n < 3 || loopS.n <= loop.n || !(loop.rel >= 0 && loop.rel < 1.5) || loop.late) { console.log('ENVELOPE LOOP FAILED'); process.exitCode = 1; }
+}
