@@ -2194,7 +2194,7 @@ let engineMode = '', node = null, ctx = null, analyser = null, powered = false;
 let lfoV = 0, outRms = 0, vcoI = [0, 0, 0, 0];   // the modulator's output in volts, posted by the engine ~60 times a second
 
 window.filthTest = { lfo: () => lfoV, rms: () => outRms, mode: () => engineMode, send: (m) => send(m) };   // for headless checks
-const VERSION = '2.17.0';
+const VERSION = '2.18.0';
 document.getElementById('ver').textContent = VERSION;
 // notes played before the audio engine is up wait here and go in once it is
 const early = [];
@@ -2703,7 +2703,7 @@ let fmMod = true; try { const v = filthStore.getItem(FMMOD_STORE); if (v) fmMod 
 const BEND_STORE = 'polivoks-bend', BENDS = [1, 2, 3, 5, 7, 12];
 let bendSt = 12; try { const b = +filthStore.getItem(BEND_STORE); if (BENDS.includes(b)) bendSt = b; } catch (e) {}
 const optsEl = document.createElement('div'); optsEl.id = 'opts';
-optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTIONS</h2><button class="btn x" aria-label="Close">✕</button>
+optsEl.innerHTML = `<div class="win" role="dialog" aria-label="Options"><h2>OPTIONS${window.filthPlugin ? ' · v' + VERSION : ''}</h2><button class="btn x" aria-label="Close">✕</button>
   <div class="f"><span>TEMPO</span><div class="row" id="opt-tempo"></div></div>
   <div class="f"><span>PANEL COLOUR</span><div class="row"><input type="range" class="hue" min="0" max="359" id="opt-hue" aria-label="Panel colour"><b class="val" id="opt-huev"></b></div></div>
   <div class="f"><span>SATURATION</span><div class="row"><input type="range" min="0" max="100" id="opt-sat" aria-label="Panel saturation"><b class="val" id="opt-satv"></b></div></div>
