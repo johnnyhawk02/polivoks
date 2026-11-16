@@ -133,6 +133,12 @@ private:
   void timerCallback() override;
   std::optional<juce::WebBrowserComponent::Resource> resource(const juce::String& url);
   void send(const char* event, const std::string& json);
+  // the window always has the panel's own proportions and the panel fills it, no border (Johnny,
+  // v2.18.0); it is resized only by the grip in the page's bottom-right corner (bridge.js)
+  void pageResize(const juce::String& json);
+  juce::Point<int> sizeFor(double w, double h) const;
+  double aspect = 1964.0 / 830.0;   // the 3D panel's width / height; the page reports its own (filthPanel)
+  int dragW0 = 0, dragH0 = 0;
   FilthProcessor& proc;
   std::unique_ptr<juce::ZipFile> zip;
   std::string initJson; int gen = 0, dbg = 0;

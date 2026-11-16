@@ -62,6 +62,9 @@ document.body.appendChild(corner);
 const optKey = document.createElement('button'); optKey.textContent = 'OPTIONS';
 Object.assign(optKey.style, { position: 'fixed', left: '12px', bottom: '6px', font: `600 11px ${MONO}`, letterSpacing: '.1em', color: 'rgba(255,255,255,.5)', background: 'none', border: '0', padding: '2px 0', cursor: 'pointer' });
 optKey.onclick = () => A.openOptions(); document.body.appendChild(optKey);
+// the plugin's window is the panel itself, edge to edge (v2.18.0): no corner notes or vignette over it
+// (OPTIONS is the FILTH title; the version is in the OPTIONS window)
+if (window.filthPlugin) vignette.hidden = corner.hidden = optKey.hidden = true;
 
 const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
@@ -649,6 +652,15 @@ function fit() {
   for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) pts.push(new THREE.Vector3(x, y, z));
   box.getCenter(target); target.z = 0;
   camera.near = 20; camera.far = 400000; camera.updateProjectionMatrix();
+  if (window.filthPlugin) {
+    // the plugin (Johnny, v2.18.0): its window has the panel's own proportions, so the panel's face
+    // fills it edge to edge with no border; framed to cover, so a pixel of rounding crops, never shows a gap
+    const t = Math.tan(camera.fov * Math.PI / 360), pw = box.max.x - box.min.x, ph = box.max.y - box.min.y;
+    if (window.filthPlugin.panel && pw / ph !== fit.sent) window.filthPlugin.panel(fit.sent = pw / ph);
+    dist = Math.min(ph / 2 / t, pw / 2 / (t * camera.aspect)) * 0.999;
+    camera.position.set(target.x, target.y, box.max.z + dist); camera.lookAt(target.x, target.y, box.max.z); camera.updateMatrixWorld();
+    return;
+  }
   for (dist = 300; dist < 200000; dist *= 1.01) {
     camera.position.set(target.x, target.y, target.z + dist); camera.lookAt(target); camera.updateMatrixWorld();
     if (pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.985 && Math.abs(q.y) < 0.975; })) break;

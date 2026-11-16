@@ -324,21 +324,44 @@ FilthEditor::FilthEditor(FilthProcessor& p) : AudioProcessorEditor(p), proc(p) {
                   .withEventListener("filthMsg", [this](juce::var v) { proc.pageMessage(v.toString()); })
                   .withEventListener("filthStore", [this](juce::var v) { proc.pageStore(v.toString()); })
                   .withEventListener("filthReady", [](juce::var) {})
+                  .withEventListener("filthPanel", [this](juce::var v) {
+                    const double a = v.toString().getDoubleValue();
+                    if (a > 1.0 && a < 5.0 && std::abs(a - aspect) > 1e-4) { aspect = a; const auto s = sizeFor(getWidth(), getHeight()); setSize(s.x, s.y); } })
+                  .withEventListener("filthResize", [this](juce::var v) { pageResize(v.toString()); })
                   .withEventListener("filthShown", [this](juce::var) { if (!shownAt) shownAt = juce::Time::getMillisecondCounter(); })
                   .withResourceProvider([this](const juce::String& url) { return resource(url); });
   web = std::make_unique<WBC>(opts);
   addChildComponent(*web);   // shown once the page's splash is drawn (timerCallback): no white flash before it
   born = juce::Time::getMillisecondCounter();
   web->goToURL(WBC::getResourceProviderRoot());
-  const int w = proc.editorW, h = proc.editorH;   // (setResizeLimits resizes, and resized() records the size)
-  setResizable(true, true);
-  setResizeLimits(640, 400, 4096, 2560);
-  setSize(w, h);
+  // not resizable by the host's window edges, only by the page's corner grip, and always the panel's shape
+  setResizable(false, false);
+  const auto s = sizeFor(proc.editorW, proc.editorH);   // (resized() records the size)
+  setSize(s.x, s.y);
   gen = proc.stateGen.load();
   proc.editor = this;
   startTimerHz(60);
 }
 FilthEditor::~FilthEditor() { stopTimer(); proc.editor = nullptr; }
+// the size nearest (w, h) with the panel's proportions: the point on the panel's diagonal closest to
+// it, kept between 800 px wide and the screen the window is on
+juce::Point<int> FilthEditor::sizeFor(double w, double h) const {
+  double t = (w * aspect + h) / (aspect * aspect + 1), maxW = 4096;
+  if (isShowing())
+    if (auto* d = juce::Desktop::getInstance().getDisplays().getDisplayForRect(getScreenBounds()))
+      maxW = juce::jmin(maxW, (double)d->userBounds.getWidth(), d->userBounds.getHeight() * aspect);
+  const double W = juce::jlimit(juce::jmin(800.0, maxW), maxW, aspect * t);
+  return { juce::roundToInt(W), juce::roundToInt(W / aspect) };
+}
+// the corner grip: {"start":1} as it is pressed, then {"x":..,"y":..}, the size it is dragged to as a
+// fraction of the size it started at (fractions, so the page's and the window's pixels need not agree)
+void FilthEditor::pageResize(const juce::String& json) {
+  bool ok = false; const Json m = Json::parse(json.toStdString(), &ok);
+  if (!ok) return;
+  if (m.get("start") || !dragW0) { dragW0 = getWidth(); dragH0 = getHeight(); if (m.get("start")) return; }
+  const auto s = sizeFor(dragW0 * m.numOr("x", 1), dragH0 * m.numOr("y", 1));
+  if (s.x != getWidth() || s.y != getHeight()) setSize(s.x, s.y);
+}
 void FilthEditor::resized() { if (web) web->setBounds(getLocalBounds()); proc.editorW = getWidth(); proc.editorH = getHeight(); }
 
 static const char* mimeOf(const juce::String& path) {
